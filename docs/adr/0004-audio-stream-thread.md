@@ -7,3 +7,10 @@ while the identical call on the main thread worked. The audio backend therefore 
 event-loop thread and polls `stream.active` with `asyncio.sleep`. PortAudio does its own audio I/O on its own thread, so
 the event loop is not blocked during playback or recording. Cause assumed to be COM apartment state in worker threads; not
 investigated further.
+
+## Addendum: never import sounddevice in a BLE process
+
+Importing `sounddevice` initialises COM in STA mode on the importing thread. bleak's WinRT backend then fails with
+"Thread is configured for Windows GUI but callbacks are not working". `transport/audio_sd.py` therefore imports
+sounddevice lazily, only when an audio command runs. Consequence: BLE and Windows audio must not share a process.
+Phase 6 (voice assistant) must run audio in a subprocess or separate worker.

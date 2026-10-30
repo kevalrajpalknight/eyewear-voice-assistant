@@ -3,11 +3,17 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 import numpy as np
-import sounddevice as sd
 
 from aiglasses.transport.base import AudioEndpoint, Samples
 
 WASAPI = "Windows WASAPI"
+
+
+def _sd() -> Any:
+    """Import lazily: importing sounddevice puts the thread in COM STA mode, which breaks bleak."""
+    import sounddevice
+
+    return sounddevice
 
 
 def guess_profile(name: str) -> str:
@@ -53,6 +59,7 @@ def select_endpoints(
 
 async def _wait_for_stream() -> None:
     """Poll instead of blocking: WASAPI streams fail to start from asyncio worker threads."""
+    sd = _sd()
     stream = sd.get_stream()
     while stream.active:  # noqa: ASYNC110 (PortAudio exposes no awaitable)
         await asyncio.sleep(0.05)
@@ -63,9 +70,11 @@ class SoundDeviceAudio:
     """WASAPI shared-mode playback and recording through sounddevice."""
 
     def list_endpoints(self, name_hint: str) -> list[AudioEndpoint]:
+        sd = _sd()
         return select_endpoints(list(sd.query_devices()), list(sd.query_hostapis()), name_hint)
 
     async def play(self, samples: Samples, sample_rate: int, endpoint: AudioEndpoint) -> None:
+        sd = _sd()
         sd.play(
             samples,
             samplerate=sample_rate,
@@ -75,6 +84,7 @@ class SoundDeviceAudio:
         await _wait_for_stream()
 
     async def record(self, seconds: float, endpoint: AudioEndpoint) -> Samples:
+        sd = _sd()
         data = sd.rec(
             int(seconds * endpoint.sample_rate),
             samplerate=endpoint.sample_rate,

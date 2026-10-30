@@ -1,3 +1,5 @@
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -105,3 +107,9 @@ def test_audio_cli(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     rec = runner.invoke(cli.app, ["audio", "record", "--seconds", "0.2"])
     assert rec.exit_code == 0 and "peak" in rec.output
     assert (tmp_path / "captures" / "mic_test.wav").exists()
+
+
+def test_cli_import_does_not_load_sounddevice() -> None:
+    """sounddevice puts the thread in COM STA mode, which breaks bleak (see ADR 0004)."""
+    code = "import sys, aiglasses.cli.main; sys.exit('sounddevice' in sys.modules)"
+    assert subprocess.run([sys.executable, "-I", "-c", code], check=False).returncode == 0
