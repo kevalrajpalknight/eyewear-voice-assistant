@@ -13,7 +13,7 @@ uv run aiglasses gatt-dump       # logs/gatt_dump.json
 uv run aiglasses listen --duration 60
 uv run aiglasses capabilities    # what is CONFIRMED on this unit
 uv run aiglasses voice candidates   # offline: decode the logged voice bursts to logs/decode_candidates/
-uv run aiglasses capture analyze capturesugreport.zip   # Phase 3, see docs/CAPTURE.md
+uv run aiglasses capture analyze captures\bugreport.zip   # Phase 3, see docs/CAPTURE.md
 ```
 
 Turn Bluetooth on in Windows and make sure the glasses are awake and not connected to a phone.
