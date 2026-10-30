@@ -1,8 +1,10 @@
 import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Protocol
+
+import numpy as np
+import numpy.typing as npt
 
 from aiglasses.domain.models import GattService
 
@@ -51,11 +53,20 @@ class AudioEndpoint:
     name: str
     kind: str  # "output" | "input"
     sample_rate: int
+    index: int = -1
+    channels: int = 1
+    hostapi: str = ""
+    profile: str = "unknown"  # "a2dp" | "hfp" | "unknown" (guessed from the Windows endpoint name)
+
+
+Samples = npt.NDArray[np.float32]
 
 
 class AudioIO(Protocol):
-    def list_endpoints(self) -> list[AudioEndpoint]: ...
+    def list_endpoints(self, name_hint: str) -> list[AudioEndpoint]: ...
 
-    async def play_file(self, path: Path, endpoint: AudioEndpoint) -> None: ...
+    async def play(self, samples: Samples, sample_rate: int, endpoint: AudioEndpoint) -> None:
+        """Play (frames, channels) float32 samples; blocks until done."""
 
-    async def record(self, seconds: float, endpoint: AudioEndpoint, path: Path) -> None: ...
+    async def record(self, seconds: float, endpoint: AudioEndpoint) -> Samples:
+        """Record mono float32 samples at endpoint.sample_rate."""

@@ -1,9 +1,10 @@
 import asyncio
-from pathlib import Path
+
+import numpy as np
 
 from aiglasses.domain.errors import ConnectionFailedError
 from aiglasses.domain.models import GattService
-from aiglasses.transport.base import AudioEndpoint, NotifyHandler
+from aiglasses.transport.base import AudioEndpoint, NotifyHandler, Samples
 
 
 class FakeBleTransport:
@@ -93,14 +94,16 @@ class FakeWifiLink:
 class FakeAudioIO:
     def __init__(self, endpoints: list[AudioEndpoint] | None = None) -> None:
         self.endpoints = endpoints or []
-        self.played: list[Path] = []
-        self.recorded: list[Path] = []
+        self.played: list[tuple[Samples, int, AudioEndpoint]] = []
+        self.recorded: list[AudioEndpoint] = []
 
-    def list_endpoints(self) -> list[AudioEndpoint]:
-        return list(self.endpoints)
+    def list_endpoints(self, name_hint: str) -> list[AudioEndpoint]:
+        return [e for e in self.endpoints if name_hint.lower() in e.name.lower()]
 
-    async def play_file(self, path: Path, endpoint: AudioEndpoint) -> None:
-        self.played.append(path)
+    async def play(self, samples: Samples, sample_rate: int, endpoint: AudioEndpoint) -> None:
+        self.played.append((samples, sample_rate, endpoint))
 
-    async def record(self, seconds: float, endpoint: AudioEndpoint, path: Path) -> None:
-        self.recorded.append(path)
+    async def record(self, seconds: float, endpoint: AudioEndpoint) -> Samples:
+        self.recorded.append(endpoint)
+        frames = int(seconds * endpoint.sample_rate)
+        return np.full(frames, 0.1, dtype=np.float32)

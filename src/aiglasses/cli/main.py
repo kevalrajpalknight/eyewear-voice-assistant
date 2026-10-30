@@ -17,6 +17,8 @@ from aiglasses.hexfmt import ascii_of
 from aiglasses.logging_setup import setup_logging
 from aiglasses.research.gatt_dump import dump_gatt, write_dump
 from aiglasses.research.listen import Notification, listen
+from aiglasses.services.audio import AudioService
+from aiglasses.transport.audio_sd import SoundDeviceAudio
 from aiglasses.transport.ble_scan import is_candidate, scan
 
 app = typer.Typer(no_args_is_help=True, help="AIMB-G2 AI glasses toolkit.")
@@ -234,19 +236,72 @@ def media_pull() -> None:
     _stub("media pull", 4)
 
 
+def _audio(settings: Settings) -> AudioService:
+    return AudioService(SoundDeviceAudio(), settings.audio_name_hint)
+
+
 @audio_app.command("devices")
-def audio_devices() -> None:
-    _stub("audio devices", 2)
+def audio_devices(
+    all_endpoints: bool = typer.Option(False, "--all", help="Show every WASAPI endpoint"),
+) -> None:
+    """List the glasses' Windows audio endpoints (A2DP speaker, HFP microphone)."""
+    settings = Settings()
+    service = _audio(settings)
+    endpoints = service.endpoints("" if all_endpoints else None)
+    table = Table()
+    for col in ("Index", "Kind", "Profile (guessed)", "Name", "Rate", "Channels"):
+        table.add_column(col)
+    for e in endpoints:
+        table.add_row(
+            str(e.index), e.kind, e.profile, escape(e.name), str(e.sample_rate), str(e.channels)
+        )
+    console.print(
+        table if endpoints else "No matching endpoints. Pair the glasses in Windows Settings first."
+    )
 
 
 @audio_app.command("play")
-def audio_play() -> None:
-    _stub("audio play", 2)
+def audio_play(
+    file: Path = typer.Option(None, help="WAV/FLAC file to play (default: a test tone)"),
+    freq: float = typer.Option(440.0, help="Tone frequency in Hz"),
+    seconds: float = typer.Option(1.0, help="Tone length"),
+    volume: float = typer.Option(0.15, min=0.0, max=0.5, help="Tone volume (0-0.5)"),
+    endpoint: int = typer.Option(None, help="Endpoint index from `audio devices`"),
+) -> None:
+    """Play a short tone or file on the glasses speaker."""
+    service = _audio(Settings())
+
+    async def go() -> None:
+        if file:
+            target = await service.play_file(file, endpoint)
+        else:
+            target = await service.play_tone(freq, seconds, volume, endpoint)
+        console.print(
+            f"Played on {escape(target.name)} ({target.sample_rate} Hz, {target.channels} ch)"
+        )
+
+    _run(go())
 
 
 @audio_app.command("record")
-def audio_record() -> None:
-    _stub("audio record", 2)
+def audio_record(
+    seconds: float = typer.Option(5.0, help="Recording length"),
+    out: Path = typer.Option(None, help="Output WAV (default captures/mic_test.wav)"),
+    endpoint: int = typer.Option(None, help="Endpoint index from `audio devices`"),
+) -> None:
+    """Record from the glasses microphone (HFP, low bandwidth)."""
+    settings = Settings()
+    service = _audio(settings)
+
+    async def go() -> None:
+        console.print(f"Recording {seconds:.0f}s from the glasses microphone. Speak now...")
+        stats = await service.record(
+            seconds, out or settings.captures_dir / "mic_test.wav", endpoint
+        )
+        console.print(f"Saved {stats.path} ({stats.sample_rate} Hz mono, {stats.seconds:.1f}s)")
+        console.print(f"peak {stats.peak:.4f}, rms {stats.rms:.5f} (near 0 means silence)")
+
+    _run(go())
 
 
 @wifi_app.command("up")

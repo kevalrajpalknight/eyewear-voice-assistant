@@ -9,16 +9,16 @@ Evidence: `aiglasses scan`, `gatt-dump` and `listen` runs against unit AIMB-G2_2
 |---|---|---|
 | Custom service 0xAE00 with AE01 (write-no-resp) and AE02 (notify) | **DENIED as stated** | No 0xAE00 service exists. The unit has 0xAE30 (AE01, AE02, AE03, AE04, AE05, AE10) and 0xAE3A (AE3B, AE3C). The AE01 write-no-response and AE02 notify characteristics do exist, under 0xAE30. |
 | Jieli-style control channel | **INFERRED (plausible)** | AE-prefixed custom UUIDs with write-no-response + notify pairs match the Jieli pattern; Jieli JL7018F is claimed by the spec sheet (unverified). |
-| RCSP framing (`FE DC BA ... EF` or `FE EF AA 55 | len | payload | sum16`) | **INCONCLUSIVE** | No frame has been observed. The only notification seen (below) starts with `bc 73`, matching neither header. Nothing has been written, so no response frames exist to inspect. |
+| RCSP framing (`FE DC BA ... EF` or `FE EF AA 55 | len | payload | sum16`) | **DENIED on the one channel that has spoken, INCONCLUSIVE elsewhere** | All 294 notifications seen so far (all on `de5bf729`) start with `0xBC`, not either RCSP header. The 0xAE30 / 0xAE3A / Nordic UART channels have produced no traffic yet, so RCSP on them is untested. |
 
-The answer needs the Phase 3 capture of the official app.
+The command side still needs the Phase 3 capture of the official app.
 
 ## Advertising (CONFIRMED)
 
 - Name `AIMB-G2_<last 2 MAC bytes>`; MAC `D0:4B:1B:C3:23:24`.
 - No service UUIDs advertised; service data `0x3802` = own MAC bytes; manufacturer ID `0x1234`, empty payload.
 - The unit stops advertising after a while or while another central is connected; toggling glasses Bluetooth makes it advertise again.
-- Windows lists it under "New devices" as an Audio device, i.e. it also advertises Classic Bluetooth audio. Not paired or tested yet.
+- Windows lists it under "New devices" as an Audio device, i.e. it also advertises Classic Bluetooth audio. CONFIRMED after the user paired it in Windows: it then exposes an A2DP speaker and an HFP microphone (see CAPABILITIES.md). BLE keeps working while Classic is connected.
 
 ## GATT (CONFIRMED, MTU 517, connects without pairing; full data in `logs/gatt_dump.json`)
 
@@ -38,12 +38,26 @@ The answer needs the Phase 3 capture of the official app.
 - INFERRED: System ID `24 23 c3 00 00 1b 4b d0` encodes the MAC bytes in reverse order (24 23 C3 ... 1B 4B D0 = D0:4B:1B:C3:23:24, with 00 00 filling the manufacturer-defined bytes).
 - CONFIRMED: 8 of 9 notify/indicate characteristics accept the standard CCCD enable.
 
-## Notifications
+## Notifications (all observed on `de5bf729`, handle 143)
 
-- CONFIRMED (earlier prototype run, 60 s window): one notification on `de5bf729` (h143): `bc7303005231054700`, shortly after subscribing. Meaning unknown.
-- CONFIRMED (CLI run, 15 s, no user input): no notifications. So the earlier packet is not a handshake sent on every subscribe; it may be an event or periodic status. UNVERIFIED which.
-- UNVERIFIED: button, touch and wake-word traffic. Neither listen session was run with confirmed physical input.
+- CONFIRMED: 291 notifications in one 60 s session (Windows Classic Bluetooth was connected and music was playing at the time; trace in `logs/trace.jsonl`) plus 1 in an earlier session. All of them fit this layout, with zero exceptions:
+
+  `BC | cmd (1 byte) | length (uint16 little-endian) | payload (length bytes) | 2-byte trailer`
+
+  This is INFERRED as the frame format; the field meanings below are guesses.
+- CONFIRMED observed commands:
+
+  | cmd | length | Count | Example (hex) | Notes |
+  |---|---|---|---|---|
+  | 0x73 | 8 | 1 | `bc73 0800 50c70101 00000000 0001` | Seen about 27 s into the session. |
+  | 0x73 | 2 | 2 | `bc73 0200 c080 0301`, `bc73 0200 c6d0 0a01` | One right before the 0x59 burst, one right after it. Possibly start/stop markers (INFERRED). |
+  | 0x59 | 40 | 288 | `bc59 2800 0f8d4b41 110be84a...` | A burst of about 288 frames in about 6 s (roughly 48 per second). |
+  | 0x73 | 3 | 1 (earlier session) | `bc73 0300 523105 4700` | |
+
+- INFERRED: the 0x59 burst is a stream of encoded audio from the glasses (fixed 40-byte payloads, repeating identical frames with zero padding like codec frames of silence, constant `4b 41` bytes in each frame). Not confirmed; the codec, and whether this is microphone audio, are unknown. What triggered it is also unknown (the user needs to say what they did at that moment).
+- INFERRED: trailer meaning unknown; values seen (`0001`, `0301`, `0a01`, `4700`) look like counters or flags, not a CRC.
+- UNVERIFIED: button/touch traffic. No physical input has been logged yet.
 
 ## Frame format and commands
 
-None known. `protocol/commands.yaml` is empty until the Phase 3 capture.
+No write command is known. The notification layout above is the only framing evidence. `protocol/commands.yaml` stays empty until the Phase 3 capture.

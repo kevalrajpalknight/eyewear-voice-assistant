@@ -39,9 +39,7 @@ def test_capabilities_lists_confirmed_rows() -> None:
     assert "ble_scan" in result.output and "UNVERIFIED" in result.output
 
 
-@pytest.mark.parametrize(
-    "args", [["photo"], ["wifi", "up"], ["audio", "devices"], ["capture", "analyze"]]
-)
+@pytest.mark.parametrize("args", [["photo"], ["wifi", "up"], ["capture", "analyze"]])
 def test_unbuilt_commands_exit_2(args: list[str]) -> None:
     result = runner.invoke(cli.app, args)
     assert result.exit_code == 2

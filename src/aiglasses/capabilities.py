@@ -12,7 +12,7 @@ CAPABILITIES: dict[Capability, Confidence] = {
     Capability.VIDEO: Confidence.UNVERIFIED,
     Capability.MEDIA_DOWNLOAD: Confidence.UNVERIFIED,
     Capability.WIFI_HOTSPOT: Confidence.UNVERIFIED,
-    Capability.AUDIO_PLAYBACK: Confidence.UNVERIFIED,
+    Capability.AUDIO_PLAYBACK: Confidence.INFERRED,
     Capability.AUDIO_RECORD: Confidence.UNVERIFIED,
     Capability.EVENTS: Confidence.UNVERIFIED,
 }

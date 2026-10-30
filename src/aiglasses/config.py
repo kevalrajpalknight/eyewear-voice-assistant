@@ -16,6 +16,7 @@ class Settings(BaseSettings):
 
     device_address: str | None = None
     name_prefix: str = "AIMB-G2_"
+    audio_name_hint: str = "AIMB-G2"
     scan_timeout: float = 15.0
     connect_timeout: float = 20.0
     io_timeout: float = 10.0
