@@ -3,12 +3,14 @@ from contextlib import asynccontextmanager
 
 from aiglasses.capabilities import CAPABILITIES
 from aiglasses.config import Settings
-from aiglasses.domain.errors import NotSupportedError
 from aiglasses.domain.models import Capability, Confidence, GlassesEvent
 from aiglasses.protocol.registry import allowlist_from, load_commands
 from aiglasses.safety import WriteGuard
 from aiglasses.services import AudioService, CameraService, DeviceService, EventService
 from aiglasses.transport.base import AudioIO, BleTransport
+from aiglasses.transport.bleak_transport import BleakTransport
+from aiglasses.transport.retry import connect_with_retry
+from aiglasses.transport.tracing import TracingTransport
 
 
 class Glasses:
@@ -22,6 +24,7 @@ class Glasses:
         audio: AudioIO | None = None,
         dry_run: bool = True,
     ) -> None:
+        self.transport = transport
         self.config = config
         self.guard = WriteGuard(
             transport,
@@ -50,9 +53,19 @@ class Glasses:
         audio: AudioIO | None = None,
         dry_run: bool = True,
     ) -> AsyncIterator["Glasses"]:
+        """Connect (saved address, else name prefix), retrying with backoff; always disconnects."""
         if transport is None:
-            raise NotSupportedError("BleakTransport arrives in Phase 1; pass a transport")
-        await transport.connect()
+            transport = TracingTransport(
+                BleakTransport(
+                    address=config.device_address,
+                    name_prefix=config.name_prefix,
+                    scan_timeout=config.scan_timeout,
+                    connect_timeout=config.connect_timeout,
+                    io_timeout=config.io_timeout,
+                ),
+                config.log_dir / "trace.jsonl",
+            )
+        await connect_with_retry(transport, attempts=config.connect_attempts)
         try:
             yield cls(transport, config, audio=audio, dry_run=dry_run)
         finally:

@@ -8,6 +8,9 @@ Python core library and CLI for AIMB-G2 AI glasses. Personal interoperability pr
 uv sync
 uv run aiglasses --help
 uv run aiglasses scan            # find the glasses, saves address to config.toml
+uv run aiglasses info            # device name / hardware / firmware (read-only)
+uv run aiglasses gatt-dump       # logs/gatt_dump.json
+uv run aiglasses listen --duration 60
 uv run aiglasses capabilities    # what is CONFIRMED on this unit
 ```
 
@@ -28,6 +31,4 @@ refused. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Status
 
-Phase 0 (scaffold) complete. See [docs/CAPABILITIES.md](docs/CAPABILITIES.md) and [docs/PROTOCOL.md](docs/PROTOCOL.md).
-
-`enumerate.py`, `listen.py` and `common.py` at the repo root are the original prototypes; Phase 1 replaces them.
+Phases 0 (scaffold) and 1 (read-only BLE core) complete. See [docs/CAPABILITIES.md](docs/CAPABILITIES.md) and [docs/PROTOCOL.md](docs/PROTOCOL.md).

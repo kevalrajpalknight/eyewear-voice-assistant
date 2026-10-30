@@ -1,14 +1,22 @@
 import asyncio
+from collections.abc import Awaitable
+from pathlib import Path
+from typing import TypeVar
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from aiglasses.capabilities import CAPABILITIES
 from aiglasses.config import Settings, save_device_address
 from aiglasses.domain.errors import GlassesError
 from aiglasses.domain.models import Confidence
+from aiglasses.glasses import Glasses
+from aiglasses.hexfmt import ascii_of
 from aiglasses.logging_setup import setup_logging
+from aiglasses.research.gatt_dump import dump_gatt, write_dump
+from aiglasses.research.listen import Notification, listen
 from aiglasses.transport.ble_scan import is_candidate, scan
 
 app = typer.Typer(no_args_is_help=True, help="AIMB-G2 AI glasses toolkit.")
@@ -27,6 +35,23 @@ for name, sub in (
     app.add_typer(sub, name=name)
 
 console = Console()
+T = TypeVar("T")
+
+
+def _run(coro: Awaitable[T]) -> T:
+    """Run a coroutine; library errors and Ctrl+C become clean exits (cleanup runs in finally)."""
+
+    async def runner() -> T:
+        return await coro
+
+    try:
+        return asyncio.run(runner())
+    except GlassesError as exc:
+        console.print(f"[red]{escape(str(exc))}[/]")
+        raise typer.Exit(1) from exc
+    except KeyboardInterrupt as exc:
+        console.print("[yellow]Interrupted; disconnected.[/]")
+        raise typer.Exit(130) from exc
 
 
 def _stub(feature: str, phase: int) -> None:
@@ -46,11 +71,7 @@ def scan_cmd(
 ) -> None:
     """Scan for BLE devices and optionally save the glasses address to config.toml."""
     settings = Settings()
-    try:
-        results = asyncio.run(scan(timeout or settings.scan_timeout))
-    except GlassesError as exc:
-        console.print(f"[red]{exc}[/]")
-        raise typer.Exit(1) from exc
+    results = _run(scan(timeout or settings.scan_timeout))
 
     table = Table(show_lines=True)
     for col in (
@@ -111,20 +132,74 @@ def capabilities() -> None:
 
 @app.command()
 def info() -> None:
-    """Device information."""
-    _stub("info", 1)
+    """Device name, hardware and firmware (read-only)."""
+
+    async def go() -> None:
+        settings = Settings()
+        async with Glasses.connect(settings) as g:
+            d = await g.device.info()
+        console.print(f"name: {escape(str(d.name))}")
+        console.print(f"address: {d.address}")
+        console.print(f"hardware: {escape(str(d.hardware))}")
+        console.print(f"firmware: {escape(str(d.firmware))}")
+        console.print(f"serial: {d.serial or '(empty)'}")
+
+    _run(go())
 
 
 @app.command("gatt-dump")
-def gatt_dump() -> None:
-    """Dump GATT services to JSON."""
-    _stub("gatt-dump", 1)
+def gatt_dump(
+    out: Path = typer.Option(None, help="Output file (default logs/gatt_dump.json)"),
+) -> None:
+    """Dump all services, characteristics and readable values to JSON (read-only)."""
+
+    async def go() -> None:
+        settings = Settings()
+        async with Glasses.connect(settings) as g:
+            data = await dump_gatt(g.transport)
+        path = out or settings.log_dir / "gatt_dump.json"
+        write_dump(path, data)
+        chars = sum(len(s["characteristics"]) for s in data["services"])
+        console.print(
+            f"{len(data['services'])} services, {chars} characteristics, MTU {data['mtu']}"
+        )
+        console.print(f"Saved {path}")
+
+    _run(go())
 
 
-@app.command()
-def listen() -> None:
-    """Listen for notifications."""
-    _stub("listen", 1)
+@app.command("listen")
+def listen_cmd(
+    duration: float = typer.Option(None, help="Seconds to listen (default from config)"),
+) -> None:
+    """Subscribe to all notify/indicate characteristics and print what arrives (no writes)."""
+
+    def show(n: Notification) -> None:
+        stamp = f"{n.ts % 86400:.3f}"
+        console.print(
+            f"{stamp} h={n.handle} {n.uuid[:8]} {n.data.hex()} '{escape(ascii_of(n.data))}'"
+        )
+
+    async def go() -> None:
+        settings = Settings()
+        seconds = duration or settings.listen_seconds
+        async with Glasses.connect(settings) as g:
+            console.print(f"Listening {seconds:.0f}s. Press buttons, tap, say the wake word...")
+            result = await listen(g.transport, seconds, on_notification=show)
+        console.print(f"{len(result.subscribed)} subscribed, {len(result.skipped)} skipped")
+        for uuid, why in result.skipped.items():
+            console.print(f"[yellow]skipped {uuid}: {escape(why)}[/]")
+        table = Table(title="Raw summary")
+        for col in ("UUID", "Count", "Distinct payloads (hex)"):
+            table.add_column(col)
+        by_uuid: dict[str, list[bytes]] = {}
+        for n in result.notifications:
+            by_uuid.setdefault(n.uuid, []).append(n.data)
+        for uuid, payloads in by_uuid.items():
+            table.add_row(uuid, str(len(payloads)), "\n".join(sorted({p.hex() for p in payloads})))
+        console.print(table if by_uuid else "No notifications received.")
+
+    _run(go())
 
 
 @app.command()

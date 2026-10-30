@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     name_prefix: str = "AIMB-G2_"
     scan_timeout: float = 15.0
     connect_timeout: float = 20.0
+    io_timeout: float = 10.0
+    connect_attempts: int = 4
+    listen_seconds: float = 60.0
     log_dir: Path = Path("logs")
     captures_dir: Path = Path("captures")
 

@@ -39,11 +39,13 @@ packages = ["src/aiglasses"]
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
-extend-exclude = ["common.py", "enumerate.py", "listen.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "ASYNC", "SIM", "RUF"]
 ignore = ["UP042"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["typer.Option"]
 
 [tool.mypy]
 strict = true
@@ -53,5 +55,6 @@ plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 addopts = "--cov=aiglasses --cov-report=term-missing"

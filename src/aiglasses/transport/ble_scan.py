@@ -1,4 +1,6 @@
 from bleak import BleakScanner
+from bleak.backends.device import BLEDevice
+from bleak.backends.scanner import AdvertisementData
 from bleak.exc import BleakBluetoothNotAvailableError
 
 from aiglasses.domain.errors import BluetoothUnavailableError
@@ -15,20 +17,21 @@ def is_candidate(result: ScanResult, name_prefix: str) -> bool:
     return result.service_data.get(MAC_SERVICE_UUID) == mac
 
 
+def to_scan_result(dev: BLEDevice, adv: AdvertisementData) -> ScanResult:
+    return ScanResult(
+        address=dev.address,
+        name=dev.name or adv.local_name,
+        rssi=adv.rssi,
+        service_uuids=list(adv.service_uuids),
+        manufacturer_data=dict(adv.manufacturer_data),
+        service_data=dict(adv.service_data),
+    )
+
+
 async def scan(timeout: float) -> list[ScanResult]:
     try:
         found = await BleakScanner.discover(timeout=timeout, return_adv=True)
     except BleakBluetoothNotAvailableError as exc:
         raise BluetoothUnavailableError(str(exc)) from exc
-    results = [
-        ScanResult(
-            address=dev.address,
-            name=dev.name or adv.local_name,
-            rssi=adv.rssi,
-            service_uuids=list(adv.service_uuids),
-            manufacturer_data=dict(adv.manufacturer_data),
-            service_data=dict(adv.service_data),
-        )
-        for dev, adv in found.values()
-    ]
+    results = [to_scan_result(dev, adv) for dev, adv in found.values()]
     return sorted(results, key=lambda r: r.rssi, reverse=True)

@@ -3,5 +3,8 @@
 name_prefix = "AIMB-G2_"
 scan_timeout = 15.0
 connect_timeout = 20.0
+io_timeout = 10.0
+connect_attempts = 4
+listen_seconds = 60.0
 log_dir = "logs"
 captures_dir = "captures"

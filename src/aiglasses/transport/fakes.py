@@ -1,28 +1,70 @@
+import asyncio
 from pathlib import Path
 
+from aiglasses.domain.errors import ConnectionFailedError
+from aiglasses.domain.models import GattService
 from aiglasses.transport.base import AudioEndpoint, NotifyHandler
 
 
 class FakeBleTransport:
-    def __init__(self, reads: dict[str, bytes] | None = None) -> None:
+    def __init__(
+        self,
+        reads: dict[str, bytes] | None = None,
+        services: list[GattService] | None = None,
+        *,
+        fail_connects: int = 0,
+        subscribe_errors: dict[str, Exception] | None = None,
+    ) -> None:
         self.reads = {k.lower(): v for k, v in (reads or {}).items()}
         self.writes: list[tuple[str, bytes, bool]] = []
+        self.read_log: list[str] = []
         self.connected = False
+        self.connect_calls = 0
+        self._fail_connects = fail_connects
+        self._services = services or []
+        self._subscribe_errors = {k.lower(): v for k, v in (subscribe_errors or {}).items()}
         self._handlers: dict[str, NotifyHandler] = {}
+        self._disconnected = asyncio.Event()
+
+    @property
+    def mtu(self) -> int:
+        return 23
+
+    @property
+    def disconnected(self) -> asyncio.Event:
+        return self._disconnected
 
     async def connect(self) -> None:
+        self.connect_calls += 1
+        if self.connect_calls <= self._fail_connects:
+            raise ConnectionFailedError("fake connect failure")
+        self._disconnected = asyncio.Event()
         self.connected = True
 
     async def disconnect(self) -> None:
         self.connected = False
 
+    def drop_link(self) -> None:
+        self.connected = False
+        self._disconnected.set()
+
+    def services(self) -> list[GattService]:
+        return list(self._services)
+
+    def connection_info(self) -> dict[str, object]:
+        return {"address": "00:00:00:00:00:00", "fake": True}
+
     async def read(self, char: str) -> bytes:
+        self.read_log.append(char.lower())
         return self.reads[char.lower()]
 
     async def write(self, char: str, data: bytes, *, response: bool = False) -> None:
         self.writes.append((char.lower(), data, response))
 
     async def subscribe(self, char: str, handler: NotifyHandler) -> None:
+        error = self._subscribe_errors.get(char.lower())
+        if error is not None:
+            raise error
         self._handlers[char.lower()] = handler
 
     def emit(self, char: str, data: bytes) -> None:

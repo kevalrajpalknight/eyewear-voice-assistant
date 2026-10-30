@@ -35,6 +35,27 @@ class ScanResult:
 
 
 @dataclass(frozen=True)
+class GattDescriptor:
+    uuid: str
+    handle: int
+
+
+@dataclass(frozen=True)
+class GattCharacteristic:
+    uuid: str
+    handle: int
+    properties: list[str]
+    descriptors: list[GattDescriptor] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class GattService:
+    uuid: str
+    handle: int
+    characteristics: list[GattCharacteristic] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class DeviceInfo:
     name: str | None
     address: str

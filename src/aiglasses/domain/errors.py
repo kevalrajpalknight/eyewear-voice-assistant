@@ -14,6 +14,18 @@ class BluetoothUnavailableError(GlassesError):
     """The host Bluetooth radio is missing or powered off."""
 
 
+class ConnectionFailedError(GlassesError):
+    """The link could not be established (phone still connected, out of range, busy)."""
+
+
+class PairingRequiredError(GlassesError):
+    """The operation needs bonding. Never pair without asking the user first."""
+
+
+class GlassesTimeoutError(GlassesError):
+    """A BLE operation did not complete in time."""
+
+
 class WriteBlockedError(GlassesError):
     """WriteGuard refused a BLE write."""
 
