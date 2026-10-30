@@ -81,7 +81,7 @@ To check what is inside the zip before analyzing (PowerShell):
 
 ```powershell
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-[IO.Compression.ZipFile]::OpenRead("capturesugreport.zip").Entries | Where-Object Name -like "*snoop*" | Select-Object FullName, Length
+[IO.Compression.ZipFile]::OpenRead("captures\bugreport.zip").Entries | Where-Object Name -like "*snoop*" | Select-Object FullName, Length
 ```
 
 If nothing is listed, or the file is not a plain btsnoop (a `.cfa` or pcapng file, or empty), send me the list of file names and
