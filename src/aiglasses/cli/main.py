@@ -30,12 +30,14 @@ media_app = typer.Typer(help="Media on the glasses.")
 audio_app = typer.Typer(help="Bluetooth audio.")
 wifi_app = typer.Typer(help="Glasses Wi-Fi link.")
 capture_app = typer.Typer(help="Official-app capture analysis.")
+voice_app = typer.Typer(help="Offline experiments on the voice stream.")
 for name, sub in (
     ("video", video_app),
     ("media", media_app),
     ("audio", audio_app),
     ("wifi", wifi_app),
     ("capture", capture_app),
+    ("voice", voice_app),
 ):
     app.add_typer(sub, name=name)
 
@@ -182,6 +184,42 @@ def _start_mark_reader(transport: TracingTransport) -> None:
                 console.print(f"[cyan]marked: {escape(label)}[/]")
 
     threading.Thread(target=read, daemon=True).start()
+
+
+@voice_app.command("candidates")
+def voice_candidates(
+    trace: Path = typer.Option(None, help="trace.jsonl (default logs/trace.jsonl)"),
+    burst: int = typer.Option(-1, help="Burst index; -1 is the latest"),
+    out_dir: Path = typer.Option(None, help="Default logs/decode_candidates"),
+) -> None:
+    """Try several decodings of one 0x59 voice burst and write one WAV per attempt (offline)."""
+    from aiglasses.protocol.bcframe import crc16_modbus
+    from aiglasses.protocol.voice import voice_bursts
+    from aiglasses.research.trace import load_frames
+    from aiglasses.research.voice_decode import run_candidates
+
+    settings = Settings()
+    path = trace or settings.log_dir / "trace.jsonl"
+    bursts = voice_bursts(load_frames(path))
+    if not bursts:
+        console.print("[red]No voice bursts in the trace.[/]")
+        raise typer.Exit(1)
+    packets = bursts[burst]
+    console.print(f"{len(bursts)} bursts; using #{burst % len(bursts)} with {len(packets)} packets")
+    sbc_hits = sum(1 for p in packets if p[0] in (0x9C, 0xAD))
+    console.print(f"SBC/mSBC sync byte (0x9C/0xAD) at packet start: {sbc_hits}/{len(packets)}")
+    bodies = [crc16_modbus(p).to_bytes(2, "little") + p for p in packets]
+    target_dir = out_dir or settings.log_dir / "decode_candidates"
+    results = run_candidates(bodies, f"burst{burst % len(bursts)}", target_dir)
+    table = Table(title="Decode attempts")
+    for col in ("Attempt", "Frames ok", "Errors", "Seconds", "RMS", "Peak", "File / note"):
+        table.add_column(col)
+    for r in results:
+        table.add_row(
+            r.name, str(r.decoded_frames), str(r.errors), f"{r.seconds:.2f}", f"{r.rms:.1f}",
+            f"{r.peak:.0f}", escape(str(r.path) if r.path else r.note),
+        )  # fmt: skip
+    console.print(table)
 
 
 @app.command("listen")

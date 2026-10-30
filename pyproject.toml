@@ -21,8 +21,14 @@ dependencies = [
 [project.scripts]
 aiglasses = "aiglasses.cli.main:app"
 
+[project.optional-dependencies]
+research = [
+    "av>=17.1.0",
+]
+
 [dependency-groups]
 dev = [
+    "av>=17.1.0",
     "mypy>=1.13",
     "nox>=2024.10",
     "pre-commit>=4.0",
