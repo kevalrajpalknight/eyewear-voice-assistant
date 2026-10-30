@@ -2,7 +2,7 @@ import csv
 from datetime import datetime, timezone
 from pathlib import Path
 
-from aiglasses.research.capture import FROM_GLASSES, TO_GLASSES, Analysis, reactions
+from aiglasses.research.capture import FROM_GLASSES, TO_GLASSES, Analysis, find_known, reactions
 
 
 def write_reports(
@@ -56,5 +56,12 @@ def write_reports(
     for event, writes in reactions(analysis.rows):
         reply = ", ".join(f"{w.target}={w.hex}" for w in writes) or "(no writes)"
         lines.append(f"- {event.decoded} ({FROM_GLASSES}): {reply}")
+    lines += ["", "## Known values found", ""]
+    for hit in find_known(analysis.rows):
+        kind = "STRONG" if hit.strong else "weak"
+        lines.append(
+            f"- [{kind}] {hit.name} at byte {hit.offset}: {hit.row.direction} "
+            f"{hit.row.target} t+{hit.row.ts - first:.2f}s `{hit.row.hex}`"
+        )
     md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return md_path, csv_path

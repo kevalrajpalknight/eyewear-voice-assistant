@@ -21,6 +21,8 @@ class Capability(str, Enum):
     WIFI_HOTSPOT = "wifi_hotspot"
     AUDIO_PLAYBACK = "audio_playback"
     AUDIO_RECORD = "audio_record"
+    DEVICE_AUDIO_RECORDING = "device_audio_recording"
+    AI_TRANSLATION = "ai_translation"
     EVENTS = "events"
 
 

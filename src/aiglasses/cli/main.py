@@ -389,6 +389,7 @@ def capture_analyze(
     from aiglasses.research.capture import (
         TO_GLASSES,
         analyze_records,
+        find_known,
         load_handle_names,
         reactions,
         segment,
@@ -434,6 +435,13 @@ def capture_analyze(
         for event, writes in reactions(analysis.rows):
             reply = ", ".join(f"{w.target}={w.hex}" for w in writes) or "(no writes)"
             console.print(f"after {escape(event.decoded)}: {escape(reply)}")
+        for hit in find_known(analysis.rows):
+            kind = "STRONG" if hit.strong else "weak"
+            direction = "->" if hit.row.direction == TO_GLASSES else "<-"
+            console.print(
+                f"known value [{kind}] {escape(hit.name)} at byte {hit.offset} in {direction} "
+                f"{escape(hit.row.target)} +{hit.row.ts - first:.2f}s: {hit.row.hex}"
+            )
         md_path, csv_path = write_reports(analysis, segs, labels, out_dir or settings.captures_dir)
         console.print(f"Wrote {md_path} and {csv_path}")
 

@@ -12,6 +12,7 @@ from aiglasses.research.capture import (
     FROM_GLASSES,
     TO_GLASSES,
     analyze_records,
+    find_known,
     load_handle_names,
     reactions,
     segment,
@@ -146,3 +147,22 @@ def test_capture_analyze_command(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     assert "labels not applied" in mismatch.output
     missing = CliRunner().invoke(cli.app, ["capture", "analyze", str(tmp_path / "x.log")])
     assert missing.exit_code != 0
+
+
+def test_find_known_values() -> None:
+    mac = bytes.fromhex("D04B1BC32324")
+    info = build_bc_frame(0x73, b"fw 9.40.00 ok") + b""
+    packets = [
+        (0.0, False, le_connection_complete(LE, GLASSES)),
+        (1.0, False, acl(LE, 4, att_op(0x1B, 144, info))),
+        (2.0, False, acl(LE, 4, att_op(0x1B, 144, build_bc_frame(0x73, b"\x01d")))),
+        (3.0, True, acl(LE, 4, att_op(0x12, 142, mac[::-1] + b"2512271030"))),
+        (4.0, True, acl(LE, 4, att_op(0x12, 142, b"\x00" * 30 + b"d"))),  # long: weak ignored
+    ]
+    analysis = analyze_records(parse_btsnoop(btsnoop_file(packets)), GLASSES, {})
+    found = {(h.name.split(" (")[0].split(" '")[0], h.strong) for h in find_known(analysis.rows)}
+    assert ("firmware text", True) in found
+    names = [h.name for h in find_known(analysis.rows)]
+    assert any(n.startswith("MAC reversed") for n in names)
+    assert "app version text '2512271030'" in names
+    assert sum(1 for n in names if n.startswith("battery")) == 1

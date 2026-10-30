@@ -271,3 +271,38 @@ def reactions(rows: list[Row], window: float = 5.0) -> list[tuple[Row, list[Row]
                 writes.append(later)
         result.append((row, writes))
     return result
+
+
+@dataclass(frozen=True)
+class KnownHit:
+    row: Row
+    name: str
+    strong: bool  # weak patterns (short byte strings) are noisy and need a small payload
+    offset: int
+
+
+_MAC = bytes.fromhex("D04B1BC32324")
+KNOWN_PATTERNS: list[tuple[str, bytes, bool]] = [
+    ("firmware text '9.40.00'", b"9.40.00", True),
+    ("app version text '2512271030'", b"2512271030", True),
+    ("app version as BCD 25 12 27 10 30", bytes.fromhex("2512271030"), True),
+    ("MAC D0:4B:1B:C3:23:24 (display order)", _MAC, True),
+    ("MAC reversed (little-endian)", _MAC[::-1], True),
+    ("firmware as bytes 09 28 00", bytes([9, 40, 0]), False),
+    ("battery 100% (0x64)", b"\x64", False),
+]
+WEAK_MAX_LEN = 16
+
+
+def find_known(rows: list[Row]) -> list[KnownHit]:
+    """Search captured values for known facts: battery, firmware, MAC, app version."""
+    hits: list[KnownHit] = []
+    for row in rows:
+        value = bytes.fromhex(row.hex)
+        for name, pattern, strong in KNOWN_PATTERNS:
+            if not strong and len(value) > WEAK_MAX_LEN:
+                continue
+            offset = value.find(pattern)
+            if offset >= 0:
+                hits.append(KnownHit(row, name, strong, offset))
+    return hits

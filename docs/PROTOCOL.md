@@ -95,3 +95,20 @@ Previous notes saying the touch pad sends nothing were wrong: the 14-byte events
 ## Commands (writes)
 
 None known. `protocol/commands.yaml` stays empty until the Phase 3 capture.
+
+## Facts reported by the official app (user observation, 2026-10-31)
+
+- CONFIRMED (app home screen): device AIMB-G2_2324, D0:4B:1B:C3:23:24, FW 9.40.00, a line `wifi: 2512271030`, status Connected, battery 100%.
+- Quick Functions: Take photo, Record video, Recording (audio only), Smart image recognition. Function settings: AI translation,
+  "Learn to take photos and videos". Tabs: Home, AI, Album.
+- INFERRED: `2512271030` looks like a build timestamp (2025-12-27 10:30), probably of the Wi-Fi/camera side firmware, since it is shown on the
+  "wifi:" line. These values are searched for automatically in `capture analyze`.
+- INFERRED: the Album tab is the likely trigger for the glasses' 2.4 GHz Wi-Fi (the phone is on 5 GHz and must switch networks).
+
+## Handle numbers
+
+bleak on Windows reports each characteristic's **declaration** handle. The ATT value handle is one higher (for example
+`de5bf729` is listed as 143 but is read and notified on ATT handle 144; its CCCD is 145, which matches the dump). Phone
+captures show ATT handles, so `capture analyze` maps value handle = dump handle + 1. INFERRED from the attribute layout; to be
+confirmed by the first capture.
+

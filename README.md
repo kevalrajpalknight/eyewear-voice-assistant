@@ -12,6 +12,8 @@ uv run aiglasses info            # device name / hardware / firmware (read-only)
 uv run aiglasses gatt-dump       # logs/gatt_dump.json
 uv run aiglasses listen --duration 60
 uv run aiglasses capabilities    # what is CONFIRMED on this unit
+uv run aiglasses voice candidates   # offline: decode the logged voice bursts to logs/decode_candidates/
+uv run aiglasses capture analyze capturesugreport.zip   # Phase 3, see docs/CAPTURE.md
 ```
 
 Turn Bluetooth on in Windows and make sure the glasses are awake and not connected to a phone.
@@ -31,4 +33,4 @@ refused. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Status
 
-Phases 0 (scaffold) and 1 (read-only BLE core) complete. See [docs/CAPABILITIES.md](docs/CAPABILITIES.md) and [docs/PROTOCOL.md](docs/PROTOCOL.md).
+Phases 0 (scaffold), 1 (read-only BLE core) and 2 (Bluetooth audio) complete; Phase 3 tooling is ready and waits for your phone capture. See [docs/CAPABILITIES.md](docs/CAPABILITIES.md) and [docs/PROTOCOL.md](docs/PROTOCOL.md).
