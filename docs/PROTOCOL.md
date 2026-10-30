@@ -56,7 +56,11 @@ The command side still needs the Phase 3 capture of the official app.
 
 - INFERRED: the 0x59 burst is a stream of encoded audio from the glasses (fixed 40-byte payloads, repeating identical frames with zero padding like codec frames of silence, constant `4b 41` bytes in each frame). Not confirmed; the codec, and whether this is microphone audio, are unknown. What triggered it is also unknown (the user needs to say what they did at that moment).
 - INFERRED: trailer meaning unknown; values seen (`0001`, `0301`, `0a01`, `4700`) look like counters or flags, not a CRC.
-- UNVERIFIED: button/touch traffic. No physical input has been logged yet.
+- CONFIRMED (test session 18:55 UTC, user did the front click, rear click, rear double click, swipes and touch double-tap without labelled timings): besides the 0x59 burst (239 frames, about 5 s, framed by `0x73` messages `c080 0301` and `c6d0 0a01`), only three further events arrived, all on `de5bf729`:
+  - `bc73 0500 eca4020017 0200` about 19 s after connect.
+  - `bc73 0e00 3a99120100100f02000f0f03 0010 0a03` about 32 s after connect, and `bc73 0e00 0b3c120100101002000f0f03 0010 0a03` about 47 s after connect. Same layout; only bytes 0-1 and byte 6 differ (0x0f then 0x10, i.e. 15 then 16). INFERRED: byte 6 is a counter such as a media item number; bytes 0-1 may be a timestamp or id.
+  - Nothing at all arrived in the last 50 s of the 100 s session, which is when the touch pad swipes and double-tap were done. INFERRED: touch-pad music and volume controls do not use this BLE channel (probably Classic Bluetooth AVRCP, which Windows handles itself). Not yet verified by checking whether the music paused and the volume changed.
+- UNVERIFIED: which physical action produced which event. Needs a run with labelled marks (`aiglasses listen` now writes typed labels into the trace).
 
 ## Frame format and commands
 

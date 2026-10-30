@@ -1,4 +1,6 @@
 import asyncio
+import sys
+import threading
 from collections.abc import Awaitable
 from pathlib import Path
 from typing import TypeVar
@@ -20,6 +22,7 @@ from aiglasses.research.listen import Notification, listen
 from aiglasses.services.audio import AudioService
 from aiglasses.transport.audio_sd import SoundDeviceAudio
 from aiglasses.transport.ble_scan import is_candidate, scan
+from aiglasses.transport.tracing import TracingTransport
 
 app = typer.Typer(no_args_is_help=True, help="AIMB-G2 AI glasses toolkit.")
 video_app = typer.Typer(help="Video control.")
@@ -170,6 +173,17 @@ def gatt_dump(
     _run(go())
 
 
+def _start_mark_reader(transport: TracingTransport) -> None:
+    def read() -> None:
+        for line in sys.stdin:
+            label = line.strip()
+            if label:
+                transport.mark(label)
+                console.print(f"[cyan]marked: {escape(label)}[/]")
+
+    threading.Thread(target=read, daemon=True).start()
+
+
 @app.command("listen")
 def listen_cmd(
     duration: float = typer.Option(None, help="Seconds to listen (default from config)"),
@@ -187,6 +201,9 @@ def listen_cmd(
         seconds = duration or settings.listen_seconds
         async with Glasses.connect(settings) as g:
             console.print(f"Listening {seconds:.0f}s. Press buttons, tap, say the wake word...")
+            if isinstance(g.transport, TracingTransport):
+                console.print("Type a label (e.g. 'photo') and press Enter as you do each action.")
+                _start_mark_reader(g.transport)
             result = await listen(g.transport, seconds, on_notification=show)
         console.print(f"{len(result.subscribed)} subscribed, {len(result.skipped)} skipped")
         for uuid, why in result.skipped.items():

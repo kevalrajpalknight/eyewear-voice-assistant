@@ -36,6 +36,16 @@ class TracingTransport:
         with self._path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(entry) + "\n")
 
+    def mark(self, label: str) -> None:
+        """Write a user-typed label into the trace so actions can be matched to notifications."""
+        entry = {
+            "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+            "op": "mark",
+            "label": label,
+        }
+        with self._path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(entry) + "\n")
+
     @property
     def mtu(self) -> int:
         return self._inner.mtu

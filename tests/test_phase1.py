@@ -157,3 +157,10 @@ def test_map_bleak_error(message: str, expected: type[GlassesError]) -> None:
 def test_map_bleak_error_radio_off() -> None:
     err = BleakBluetoothNotAvailableError("off", reason=None)  # type: ignore[arg-type]
     assert isinstance(map_bleak_error(err, "scan"), BluetoothUnavailableError)
+
+
+async def test_mark_is_written_to_trace(tmp_path: Path) -> None:
+    trace = tmp_path / "trace.jsonl"
+    TracingTransport(FakeBleTransport(), trace).mark("photo")
+    entry = json.loads(trace.read_text().splitlines()[0])
+    assert entry["op"] == "mark" and entry["label"] == "photo" and "ts" in entry
