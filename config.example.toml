@@ -1,0 +1,7 @@
+# Copy to config.toml (gitignored). `aiglasses scan` writes device_address for you.
+# device_address = "D0:4B:1B:C3:23:24"
+name_prefix = "AIMB-G2_"
+scan_timeout = 15.0
+connect_timeout = 20.0
+log_dir = "logs"
+captures_dir = "captures"

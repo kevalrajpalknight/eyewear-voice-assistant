@@ -1,0 +1,5 @@
+# Entries are added only from observed captures of the official app (Phase 3).
+# Fields: name, characteristic (UUID), bytes (hex), direction (write|notify),
+#         status (CONFIRMED|INFERRED), source (capture id, required for CONFIRMED),
+#         safe_to_send (bool)
+commands: []
