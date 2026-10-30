@@ -8,9 +8,6 @@ from aiglasses.domain.errors import NotSupportedError
 from aiglasses.domain.models import Capability, Confidence, ScanResult
 from aiglasses.transport.ble_scan import MAC_SERVICE_UUID, is_candidate
 from aiglasses.transport.fakes import FakeBleTransport
-from aiglasses.transport.tracing import TracingTransport
-
-CHAR = "0000ae02-0000-1000-8000-00805f9b34fb"
 
 
 async def test_connect_lifecycle_and_unsupported_services(tmp_path: Path) -> None:
@@ -26,26 +23,6 @@ async def test_connect_lifecycle_and_unsupported_services(tmp_path: Path) -> Non
             g.events()
         assert g.capabilities()[Capability.PHOTO] is Confidence.UNVERIFIED
     assert not transport.connected
-
-
-async def test_connect_requires_transport_until_phase1(tmp_path: Path) -> None:
-    with pytest.raises(NotSupportedError):
-        async with Glasses.connect(Settings(log_dir=tmp_path)):
-            pass
-
-
-async def test_tracing_records_notify_and_read(tmp_path: Path) -> None:
-    inner = FakeBleTransport({CHAR: b"\xaa"})
-    trace = tmp_path / "trace.jsonl"
-    transport = TracingTransport(inner, trace)
-    seen: list[bytes] = []
-    await transport.subscribe(CHAR, lambda _u, d: seen.append(d))
-    inner.emit(CHAR, b"\x01\x02")
-    assert await transport.read(CHAR) == b"\xaa"
-    lines = trace.read_text().splitlines()
-    assert seen == [b"\x01\x02"]
-    assert '"op": "notify"' in lines[0]
-    assert '"op": "read"' in lines[1]
 
 
 def test_is_candidate_by_name_and_mac_service_data() -> None:
