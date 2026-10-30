@@ -42,6 +42,7 @@ for name, sub in (
     app.add_typer(sub, name=name)
 
 console = Console()
+LOG_ARGUMENT = typer.Argument(..., help="btsnoop_hci.log or an Android bugreport .zip")
 T = TypeVar("T")
 
 
@@ -375,5 +376,65 @@ def wifi_probe() -> None:
 
 
 @capture_app.command("analyze")
-def capture_analyze() -> None:
-    _stub("capture analyze", 3)
+def capture_analyze(
+    log: Path = LOG_ARGUMENT,
+    address: str = typer.Option(None, help="Glasses BLE address (default: config device_address)"),
+    gatt_dump: Path = typer.Option(None, help="GATT dump for handle names"),
+    gap: float = typer.Option(6.0, help="Quiet seconds that start a new action segment"),
+    actions: str = typer.Option(None, help="Comma-separated action names, in order"),
+    out_dir: Path = typer.Option(None, help="Where to write analysis.md/.csv (default captures)"),
+) -> None:
+    """Action-vs-bytes table for ATT and RFCOMM traffic to or from the glasses (read-only)."""
+    from aiglasses.research.btsnoop import read_btsnoop
+    from aiglasses.research.capture import (
+        TO_GLASSES,
+        analyze_records,
+        load_handle_names,
+        reactions,
+        segment,
+    )
+    from aiglasses.research.report import write_reports
+
+    settings = Settings()
+
+    async def go() -> None:
+        names = load_handle_names(gatt_dump or settings.log_dir / "gatt_dump.json")
+        analysis = analyze_records(read_btsnoop(log), address or settings.device_address, names)
+        segs = segment(analysis.rows, gap)
+        found = max(segs) + 1 if segs else 0
+        labels = [a.strip() for a in actions.split(",")] if actions else []
+        for warning in analysis.warnings:
+            console.print(f"[yellow]{escape(warning)}[/]")
+        if labels and len(labels) != found:
+            console.print(
+                f"[yellow]{found} segments but {len(labels)} actions; labels not applied. "
+                "Adjust --gap.[/]"
+            )
+            labels = []
+        table = Table(title=f"{len(analysis.rows)} events to/from the glasses")
+        for col in ("Seg", "Action", "Time", "Dir", "Ch", "Op", "Target", "Hex / decoded"):
+            table.add_column(col, overflow="fold")
+        first = analysis.rows[0].ts if analysis.rows else 0.0
+        for row, seg in zip(analysis.rows, segs, strict=True):
+            detail = row.decoded or row.hex
+            if row.count > 1:
+                detail += f" x{row.count} over {row.end_ts - row.ts:.1f}s"
+            table.add_row(
+                str(seg),
+                labels[seg] if labels else "",
+                f"+{row.ts - first:.2f}",
+                "->" if row.direction == TO_GLASSES else "<-",
+                row.channel,
+                row.op,
+                escape(row.target),
+                escape(detail),
+            )
+        console.print(table)
+        console.print(f"Connections: {analysis.connections}  L2CAP by PSM: {analysis.psm_counts}")
+        for event, writes in reactions(analysis.rows):
+            reply = ", ".join(f"{w.target}={w.hex}" for w in writes) or "(no writes)"
+            console.print(f"after {escape(event.decoded)}: {escape(reply)}")
+        md_path, csv_path = write_reports(analysis, segs, labels, out_dir or settings.captures_dir)
+        console.print(f"Wrote {md_path} and {csv_path}")
+
+    _run(go())

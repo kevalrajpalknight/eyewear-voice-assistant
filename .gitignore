@@ -15,3 +15,5 @@ trace*.jsonl
 .env
 config.toml
 .venv*/
+bugreport*.zip
+btsnoop*
