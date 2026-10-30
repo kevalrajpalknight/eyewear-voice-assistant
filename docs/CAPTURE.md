@@ -1,14 +1,22 @@
 # Capturing the official app (Phase 3)
 
 Goal: record what the Cyan Glasses app sends to the glasses, so we learn the real commands instead of guessing.
-This is passive. Nothing is written to the glasses by this project. Phone brand and model are still unknown, so the log
-locations below are the common ones and will be confirmed once you tell me the model.
+This is passive. Nothing is written to the glasses by this project. These steps are written for a **Samsung Galaxy S24 FE**
+(One UI). Items marked "(check)" are from general Samsung behaviour and not yet verified on your exact build; if one of them
+differs on your phone, tell me what you see.
 
 ## 0. What you need
 
 - Android phone with the Cyan Glasses app already working with the glasses.
 - USB cable and `adb` on the PC (`winget install Google.PlatformTools`, then open a new terminal and run `adb version`).
-- Phone: Settings > About phone > tap Build number 7 times, then enable USB debugging in Developer options.
+- Phone: Settings > About phone > Software information > tap **Build number** 7 times, then enable **USB debugging** in
+  Developer options (it appears at the bottom of Settings).
+- Samsung **Auto Blocker** (Settings > Security and privacy > Auto Blocker) can block USB commands (check). If `adb devices`
+  shows nothing or "unauthorized", turn Auto Blocker off for the capture and turn it back on afterwards. Approve the
+  "Allow USB debugging?" prompt on the phone.
+- Samsung's Wi-Fi switching can drop the glasses hotspot because it has no internet (check). Before the Album step, turn off
+  Settings > Connections > Wi-Fi > (three dots) Intelligent Wi-Fi > "Switch to mobile data" or similar, and note the setting
+  so you can restore it.
 
 ## 1. Free the glasses first (they accept one BLE connection)
 
@@ -20,8 +28,8 @@ If the PC stays connected, the phone cannot connect, or the capture will show th
 
 ## 2. Turn on HCI snoop logging
 
-1. Settings > System > Developer options > **Enable Bluetooth HCI snoop log**. Choose the fullest setting
-   (Android 14 offers "Enabled" and "Enabled Filtered"; pick **Enabled / Full**, not Filtered).
+1. Settings > Developer options > **Enable Bluetooth HCI snoop log** (on Samsung it is in the main Developer options list, near the
+   Bluetooth entries). Choose the fullest setting if there is a choice (**Enabled / Full**, not Filtered).
 2. Switch the phone's Bluetooth **off, then on**. Logging starts with the new Bluetooth session. Some phones need a restart.
 3. Do the action script below without turning Bluetooth off again.
 
@@ -62,15 +70,22 @@ adb bugreport captures\bugreport.zip
 This takes a few minutes. The log is inside the zip, normally at `FS/data/misc/bluetooth/logs/btsnoop_hci.log`
 (`btsnoop_hci.log.last` is the previous session). The analyzer finds it automatically.
 
-Vendor differences (to be confirmed for your model):
+On Samsung the snoop file is usually stored as `FS/data/log/bt/btsnoop_hci.log` inside the bugreport zip, and sometimes as
+`btsnoop_hci.log.last` or under `FS/data/misc/bluetooth/logs/` (check). The analyzer takes the largest file with "btsnoop"
+in its name, so you do not need to unzip anything.
 
-- Pixel and most stock Android: inside the bugreport zip as above.
-- Samsung: often `FS/data/log/bt/btsnoop_hci.log` inside the bugreport.
-- Xiaomi/Redmi/Poco: try `adb pull /sdcard/MIUI/debug_log/` or `adb pull /sdcard/btsnoop_hci.log`.
-- OnePlus/Oppo/Realme: the bugreport zip usually has it. If not, enable the snoop toggle again and restart the phone.
-- Rooted phones: `adb pull /data/misc/bluetooth/logs/btsnoop_hci.log captures\`.
+If `adb bugreport` is blocked or very slow, the alternative is on the phone: Developer options > **Take bug report** >
+Full report, then copy the finished `.zip` from the phone's storage to the PC over USB (file transfer mode).
 
-If the file is a `.cfa`, a pcapng, or empty, tell me the phone model and what you got.
+To check what is inside the zip before analyzing (PowerShell):
+
+```powershell
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[IO.Compression.ZipFile]::OpenRead("capturesugreport.zip").Entries | Where-Object Name -like "*snoop*" | Select-Object FullName, Length
+```
+
+If nothing is listed, or the file is not a plain btsnoop (a `.cfa` or pcapng file, or empty), send me the list of file names and
+sizes, not the file.
 
 ## 5. Analyze
 
