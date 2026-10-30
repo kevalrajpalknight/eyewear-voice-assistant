@@ -68,10 +68,11 @@ The command side still needs the Phase 3 capture of the official app.
   | Rear button single click (AI assistant), spoke a phrase | 1.8 s | `0x73 c080 0301` (start), then 289 `0x59` frames over 5.8 s (about 50 per second), then `0x73 c6d0 0a01` (end) |
   | Rear button double click (image recognition) | 4.6 s | `bc73 0500 4d64020015 0200` (cmd 0x73, len 5) |
   | Front button double click (start recording) | 11.3 s | Then a `0x73` len-2 event every exactly 3.000 s: payloads `875f`, `869c`, `475c`, `8755`, `8755`, `4695`, `0757` with trailers `0b2a`, `0b2e`, `0b2f`, `0b32`, `0b32`, `0b33`, `0b34` |
-  | Front button single click (stop recording) | not captured | The session ended while the glasses were still recording |
+  | Front button single click (stop recording) | about 2.7 s (next 3 s tick) | In a later session at 19:11 UTC: `bc73 0800 b0070108 00020000 0001` (cmd 0x73, len 8) arrived with the last heartbeat, and no further heartbeat came (the next one was due 3 s later). |
 
 - INFERRED: the `0x59` burst is the voice-assistant microphone stream. It correlates with the rear single click in the labelled run, and with the earlier unlabelled bursts. 40-byte frames at about 50 per second is 16 kbps, which fits a 16 kHz Opus voice codec (common in Jieli AI voice SDKs). The codec is not verified; the audio has not been decoded.
 - INFERRED: `0x73` with len 8 means photo taken, and with len 5 means image-recognition capture; both arrive about 4.5 s after the press, which would be the capture time. Not verified.
+- INFERRED: the four `0x73` len-8 events seen so far (photo, recording stop, and the connect-time ones) share the layout `xx xx 01 NN 00 TT 00 00 | 0001`. NN rose across sessions (01, 05, 07, 08) which looks like a running count of captured items; TT was 00 for photos and 02 for the recording stop, which may be a media type (photo vs video). Neither is verified.
 - INFERRED: the 3 s `0x73` len-2 events are a recording-in-progress heartbeat or status (the trailer rises slowly, but the meaning is unknown). Start of heartbeats was 11.3 s after the mark, so either the recording started late or the mark was typed early.
 - UNVERIFIED: touch pad (swipe, double-tap) traffic; nothing was captured for it in the 18:55 session.
 
