@@ -3,9 +3,9 @@
 | Capability | Status | How verified | Known limits |
 |---|---|---|---|
 | BLE scan | CONFIRMED | `aiglasses scan` on Windows 11 | Glasses stop advertising when idle; toggle their Bluetooth |
-| BLE connect | CONFIRMED | prototype `enumerate.py`, MTU 517 | No pairing needed; phone must be disconnected |
-| GATT dump | CONFIRMED | `logs/gatt_dump.json` (prototype) | Phase 1 ports it into the package |
-| Notifications | CONFIRMED | prototype `listen.py` (1 packet) | Content not decoded |
+| BLE connect | CONFIRMED | `aiglasses info`, MTU 517, uncached services | No pairing needed; phone must be disconnected; link is slow to establish (about 5 s) |
+| GATT dump | CONFIRMED | `aiglasses gatt-dump` -> `logs/gatt_dump.json` | 2A05 indicate needs bonding |
+| Notifications | CONFIRMED | `aiglasses listen`: 8 of 9 CCCD enables succeed | Content not decoded; one packet seen so far |
 | Device info | CONFIRMED | 0x180A read: hardware, firmware | Serial empty; no battery service |
 | Battery | UNVERIFIED | | Needs captured command |
 | Photo / video | UNVERIFIED | | Needs capture (Phase 3) |
