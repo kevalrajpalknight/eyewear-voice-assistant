@@ -218,3 +218,19 @@ def test_photo_cli_asks_first_and_never_answers_for_the_user(
     accepted = runner.invoke(cli.app, ["photo"], input="y\n")
     assert accepted.exit_code == 0, accepted.output
     assert "before: photos 6" in accepted.output and "photos added: 1" in accepted.output
+
+
+async def test_channel_counts_every_frame_type_with_first_and_last_time(tmp_path: Path) -> None:
+    device = Device()
+    g = glasses(device, tmp_path)
+    await g.channel.start()
+    assert g.channel.active
+    device.emit(GLASSES_NOTIFY, recorded("temperature"))
+    device.emit(GLASSES_NOTIFY, recorded("temperature"))
+    device.emit(GLASSES_NOTIFY, BATTERY_REPLY)
+    device.emit(GLASSES_NOTIFY, b"junk")
+    stats = g.channel.stats
+    assert (
+        stats["temperature"].count == 2 and stats["temperature"].first <= stats["temperature"].last
+    )
+    assert stats["cmd 0x42"].count == 1 and stats["invalid frame"].count == 1

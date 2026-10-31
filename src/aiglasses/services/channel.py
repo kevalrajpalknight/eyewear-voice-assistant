@@ -4,6 +4,7 @@ import asyncio
 import logging
 import time
 from collections.abc import AsyncIterator, Callable
+from dataclasses import dataclass
 
 from aiglasses.domain.errors import GlassesTimeoutError, ProtocolError
 from aiglasses.domain.models import GlassesEvent
@@ -18,6 +19,13 @@ log = logging.getLogger("aiglasses.channel")
 Matcher = Callable[[BcFrame], bool]
 
 
+@dataclass
+class FrameStat:
+    count: int
+    first: float
+    last: float
+
+
 class FrameChannel:
     """Subscribes lazily (a second subscription would break `listen`) and fans frames out."""
 
@@ -28,6 +36,7 @@ class FrameChannel:
         self._lock = asyncio.Lock()
         self._waiters: list[tuple[Matcher, asyncio.Future[BcFrame]]] = []
         self._queues: list[asyncio.Queue[GlassesEvent]] = []
+        self.stats: dict[str, FrameStat] = {}
 
     async def start(self) -> None:
         async with self._lock:
@@ -35,13 +44,28 @@ class FrameChannel:
                 await self._transport.subscribe(GLASSES_NOTIFY, self._on_data)
                 self._started = True
 
+    @property
+    def active(self) -> bool:
+        return self._started
+
+    def _count(self, label: str, moment: float) -> None:
+        stat = self.stats.get(label)
+        if stat is None:
+            self.stats[label] = FrameStat(1, moment, moment)
+        else:
+            stat.count += 1
+            stat.last = moment
+
     def _on_data(self, _uuid: str, data: bytes) -> None:
         try:
             frame = parse_bc_frame(data)
         except ProtocolError as exc:
             log.warning("ignoring a notification that is not a valid BC frame: %s", exc)
+            self._count("invalid frame", time.time())
             return
-        event = frame_to_event(frame, time.time())
+        now = time.time()
+        event = frame_to_event(frame, now)
+        self._count(event.kind if event is not None else f"cmd 0x{frame.cmd:02x}", now)
         if event is not None:
             for queue in list(self._queues):
                 queue.put_nowait(event)

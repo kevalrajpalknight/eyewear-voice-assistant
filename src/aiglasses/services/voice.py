@@ -12,6 +12,14 @@ VOICE_PACKET_BYTES = 40
 IDLE_END_SECONDS = 2.0
 
 
+@dataclass
+class VoiceWatch:
+    """Markers seen while waiting, filled in even when no burst arrives."""
+
+    start_marker_at: float | None = None  # event 03 01
+    end_marker_at: float | None = None  # event 0a 01
+
+
 @dataclass(frozen=True)
 class VoiceBurst:
     packets: list[bytes]
@@ -29,8 +37,10 @@ async def record_burst(
     wait_seconds: float,
     max_seconds: float = 60.0,
     idle_seconds: float = IDLE_END_SECONDS,
+    watch: VoiceWatch | None = None,
 ) -> VoiceBurst:
-    """Wait for the first voice frame, then collect until the end event, silence or the cap."""
+    """Start on the first voice frame (marker 03 01 only noted); stop at 0a 01, silence or cap."""
+    watch = watch if watch is not None else VoiceWatch()
     packets: list[bytes] = []
     started_at = 0.0
     deadline = time.monotonic() + wait_seconds
@@ -45,7 +55,11 @@ async def record_burst(
         event = await next_event(deadline - time.monotonic())
         if event is None:
             raise GlassesTimeoutError(f"no AI voice burst within {wait_seconds:.0f}s")
-        if event.kind == "voice_frame":
+        if event.kind == "ai_voice":
+            watch.start_marker_at = event.timestamp
+        elif event.kind == "ai_voice_end":
+            watch.end_marker_at = event.timestamp
+        elif event.kind == "voice_frame":
             packets.append(event.raw)
             started_at = event.timestamp
 
@@ -59,4 +73,5 @@ async def record_burst(
         if event.kind == "voice_frame":
             packets.append(event.raw)
         elif event.kind == "ai_voice_end":
+            watch.end_marker_at = event.timestamp
             return VoiceBurst(packets, started_at, "end event")

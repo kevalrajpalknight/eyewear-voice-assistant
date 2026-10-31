@@ -22,6 +22,8 @@ from aiglasses.logging_setup import setup_logging
 from aiglasses.research.gatt_dump import dump_gatt, write_dump
 from aiglasses.research.listen import Notification, listen
 from aiglasses.services.audio import AudioService
+from aiglasses.services.channel import FrameStat
+from aiglasses.services.voice import VoiceWatch
 from aiglasses.timefmt import both
 from aiglasses.transport.audio_sd import SoundDeviceAudio
 from aiglasses.transport.ble_scan import is_candidate, scan
@@ -269,12 +271,34 @@ def listen_cmd(
     _run(go())
 
 
+def _print_frame_summary(stats: dict[str, FrameStat], watch: VoiceWatch) -> None:
+    def moment(value: float | None) -> str:
+        return "not seen" if value is None else both(datetime.fromtimestamp(value, timezone.utc))
+
+    table = Table(title="Notification frames since connecting")
+    for col in ("Type", "Count", "First", "Last"):
+        table.add_column(col)
+    for label, stat in sorted(stats.items()):
+        first = datetime.fromtimestamp(stat.first, timezone.utc)
+        last = datetime.fromtimestamp(stat.last, timezone.utc)
+        table.add_row(label, str(stat.count), both(first), both(last))
+    console.print(table if stats else "No notification frames arrived at all.")
+    if "voice_frame" not in stats:
+        console.print("[yellow]No 0x59 voice frames arrived.[/]")
+    console.print(f"start marker (03 01): {moment(watch.start_marker_at)}")
+    console.print(f"end marker (0a 01): {moment(watch.end_marker_at)}")
+
+
 @ai_voice_app.command("record")
 def ai_voice_record(
     wait: float = typer.Option(60.0, help="Seconds to wait for you to hold the rear click"),
     out_dir: Path = typer.Option(None, help="Default captures/"),
 ) -> None:
-    """Wait for one AI voice burst (rear click), decode it and save a WAV. Sends nothing."""
+    """Wait for one AI voice burst, decode it and save a WAV. Sends nothing.
+
+    SINGLE-CLICK the rear button (do not hold), wait about 2 s, then speak. A LONG press starts an
+    audio-only recording on the glasses.
+    """
     from aiglasses.services.voice import record_burst
 
     settings = Settings()
@@ -282,8 +306,16 @@ def ai_voice_record(
 
     async def go() -> None:
         async with Glasses.connect(settings) as g:
-            console.print(f"Connected. Hold the rear click and speak within {wait:.0f}s ...")
-            burst = await record_burst(g.events(), wait_seconds=wait)
+            await g.channel.start()
+            console.print(
+                f"Connected; notifications active: {g.channel.active}. Within {wait:.0f}s "
+                "single-click the rear button (don't hold), wait about 2 s, then speak ..."
+            )
+            watch = VoiceWatch()
+            try:
+                burst = await record_burst(g.events(), wait_seconds=wait, watch=watch)
+            finally:
+                _print_frame_summary(g.channel.stats, watch)
         started = datetime.fromtimestamp(burst.started_at, timezone.utc)
         console.print(
             f"burst at {both(started)}: {len(burst.packets)} packets, "
