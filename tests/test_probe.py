@@ -99,19 +99,24 @@ async def test_unapproved_payload_is_refused(tmp_path: Path) -> None:
     assert transport.writes == []
 
 
-def test_device_info_and_camera_status_decoding() -> None:
+def test_device_info_decoding_with_the_real_reply() -> None:
+    real = (
+        "bc4329002d9c0015000b0000000000"
+        "414d303147315f392e34302e30305f323630313134414d303147315f56392e34"
+    )
+    sane, text = decode_reply("device_info_read", parse_bc_frame(bytes.fromhex(real)))
+    assert sane and "firmware='AM01G1_9.40.00_260114'" in text and "hardware='AM01G1_V9.4'" in text
+    assert "wifi firmware=''" in text
     strings = [b"9.40.00", b"V9.4", b"2512271030", b"wifi-hw"]
     header = b"\x00" + b"".join(len(s).to_bytes(2, "little") for s in strings)
     frame = parse_bc_frame(build_bc_frame(0x43, header + b"".join(strings)))
-    sane, text = decode_reply("device_info_read", frame)
-    assert sane and "wifi firmware='2512271030'" in text and "firmware='9.40.00'" in text
+    assert "wifi firmware='2512271030'" in decode_reply("device_info_read", frame)[1]
     truncated = parse_bc_frame(build_bc_frame(0x43, header + b"9.4"))
     assert not decode_reply("device_info_read", truncated)[0]
-    camera = parse_bc_frame(build_bc_frame(0x4A, bytes([1, 1, 2])))
-    assert decode_reply("camera_status_read", camera) == (
-        True,
-        "earphone camera open True, rotation True (raw 010102)",
-    )
+
+
+def test_camera_status_is_not_an_approved_probe() -> None:
+    assert "camera_status_read" not in probe.APPROVED_FRAMES
 
 
 def test_cli_dry_run_refusal_and_confirmation(

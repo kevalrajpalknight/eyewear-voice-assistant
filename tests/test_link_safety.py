@@ -186,3 +186,28 @@ async def test_photo_probe_uses_a_known_count_when_no_connect_frame_arrives(tmp_
         known_photo_count=4,
     )
     assert "photo count 4 -> 5" in result.verdict and "earlier frame" in result.verdict
+
+
+async def test_baseline_frame_is_never_mistaken_for_the_result(tmp_path: Path) -> None:
+    before = build_bc_frame(0x73, bytes([1, 4, 0, 0, 0, 1, 0, 1]))
+    control_reply = build_bc_frame(0x41, bytes([2, 1, 1, 0, 0]))
+    transport = Scripted([(0.02, control_reply)], baseline=before)  # no count event after the write
+    result = await run_probe(
+        transport, guard_for(transport, tmp_path), photo(), tmp_path / "a.jsonl"
+    )
+    assert "no media-count event arrived" in result.verdict and "4 -> " not in result.verdict
+    assert "connect-time frame" in result.verdict
+
+
+async def test_other_count_than_expected_is_reported_as_is(tmp_path: Path) -> None:
+    after = build_bc_frame(0x73, bytes([1, 6, 0, 0, 0, 1, 0, 1]))
+    control_reply = build_bc_frame(0x41, bytes([2, 1, 1, 0, 0]))
+    transport = Scripted([(0.02, control_reply), (0.1, after)])
+    result = await run_probe(
+        transport,
+        guard_for(transport, tmp_path),
+        photo(),
+        tmp_path / "a.jsonl",
+        known_photo_count=4,
+    )
+    assert "photo count 4 -> 6" in result.verdict

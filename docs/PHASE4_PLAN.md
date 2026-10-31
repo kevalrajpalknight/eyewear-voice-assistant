@@ -12,15 +12,15 @@ Everything in this plan is read from the official app's code (see docs/PROTOCOL.
 - Nothing is sent to anything except the glasses and, for HTTP, the IP the glasses report. The app's cloud servers are never contacted.
 - No video-start or audio-record-start until the user is present to stop the recording with the front button (there is no stop command).
 
-## Step 0: reads (battery done and CONFIRMED; the other two approved, one at a time)
+## Step 0: reads (battery and device info done and CONFIRMED; camera status skipped, see PROTOCOL.md)
 
-`aiglasses probe battery_read --send`, then `device_info_read`, then `camera_status_read`. Expected: a 0x42 frame with 0 to 100 and a charging flag; a 0x43 frame with four
+`aiglasses probe battery_read --send` and `device_info_read` are done. `camera_status_read` was skipped: it only describes an earphone-camera feature, not busy or recording state. Expected: a 0x42 frame with 0 to 100 and a charging flag; a 0x43 frame with four
 version strings (firmware `AM01G1_9.40.00_260114` as read over GATT, Wi-Fi firmware probably `2512271030`); a 0x4A frame. Promote a command to CONFIRMED only after a sane reply.
 
 ## Step 1: photo
 
 - Bytes for approval: `bc4103001050020101` (cmd 0x41, payload `02 01 01`) to `de5bf72a`, write without response.
-- Preconditions: step 0 done; the user is watching the glasses. `aiglasses probe photo --send` asks that question first, waits for the connect-time media-count event, checks the link right before the write, and compares the photo count before and after.
+- Preconditions: step 0 done; the user is watching the glasses at a harmless scene and does not touch the buttons or the Cyan app. `aiglasses probe photo --send --known-photos 4` asks the watching question first, waits up to 1.5 s for the connect-time media-count frame (if none arrives it uses the last known count and prints that source, it does not abort), checks the link right before the write, writes once, and listens 15 s. The result is reported as-is: the type-1 count event after the write plus what the user saw and heard; no forced verdict.
 - Expected: a shutter sound or light on the glasses; a 0x41 reply (type 1, error code 0); a 0x73 media-count event about 4 s later with the photo count up by one. No stop needed.
 - Rollback: none needed (the photo stays on the glasses; delete it with the app if wanted).
 

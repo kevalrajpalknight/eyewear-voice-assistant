@@ -24,13 +24,11 @@ BASELINE_WAIT_SECONDS = 1.5  # the glasses send media counts soon after connecti
 APPROVED_FRAMES: dict[str, str] = {
     "battery_read": "bc42020001b00000",
     "device_info_read": "bc43020001b00000",
-    "camera_status_read": "bc4a01007e8001",
     "photo": "bc4103001050020101",
 }
 EXPECTED_REPLY_CMD: dict[str, int] = {
     "battery_read": 0x42,
     "device_info_read": 0x43,
-    "camera_status_read": 0x4A,
     "photo": 0x41,
 }
 STATE_CHANGING = {"photo"}
@@ -75,10 +73,6 @@ def decode_reply(name: str, frame: BcFrame) -> tuple[bool, str]:
             return False, f"too short ({len(p)} bytes)"
         sane = 0 <= p[0] <= 100
         return sane, f"battery {p[0]}%, charging {p[1] == 1}"
-    if name == "camera_status_read":
-        if len(p) < 3:
-            return False, f"too short ({len(p)} bytes)"
-        return True, f"earphone camera open {p[1] == 1}, rotation {p[2] == 2} (raw {p.hex()})"
     if name == "photo":
         if len(p) < 4 or p[1] != 1:
             return False, f"unexpected control reply (raw {p.hex()})"
@@ -118,9 +112,9 @@ def _audit(path: Path, result: ProbeResult) -> None:
         fh.write(json.dumps(entry) + "\n")
 
 
-def _counts(result: ProbeResult) -> dict[str, int] | None:
-    """The most recent media-count event seen, as {photos, videos, audio}."""
-    for r in reversed(result.replies):
+def _counts(result: ProbeResult, start: int = 0) -> dict[str, int] | None:
+    """The most recent media-count event seen at or after index `start`: {photos, videos, audio}."""
+    for r in reversed(result.replies[start:]):
         if r.cmd == EVENT_CMD:
             try:
                 event = decode_event(parse_bc_frame(bytes.fromhex(r.hex)).payload)
@@ -197,6 +191,7 @@ async def run_probe(
         return result
 
     guard.approve(name, command.characteristic, command.payload)
+    write_index = len(result.replies)  # only events after this point count as the effect
     started = time.monotonic()
     await guard.write(command.characteristic, command.payload, response=False)
     result.sent = not guard.dry_run
@@ -213,12 +208,19 @@ async def run_probe(
         result.verdict = "a reply arrived but its contents were not sane"
     else:
         result.verdict = f"reply in {result.latency_seconds:.2f}s: {reply.decoded}"
-        after = _counts(result)
-        if name == "photo" and after is not None:
+        after = _counts(result, write_index)
+        if name == "photo":
             before = baseline["photos"] if baseline else None
-            result.verdict += (
-                f"; photo count {before if before is not None else '?'} -> {after['photos']}"
-                f" (before: {result.baseline_source})"
-            )
+            shown_before = before if before is not None else "?"
+            if after is None:
+                result.verdict += (
+                    f"; no media-count event arrived within {observe:.0f}s "
+                    f"(count before: {shown_before}, from {result.baseline_source})"
+                )
+            else:
+                result.verdict += (
+                    f"; photo count {shown_before} -> {after['photos']}"
+                    f" (before: {result.baseline_source})"
+                )
     _audit(audit_path, result)
     return result

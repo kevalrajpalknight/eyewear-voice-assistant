@@ -350,3 +350,19 @@ Reply: `bc4329002d9c0015000b0000000000414d303147315f392e34302e30305f323630313134
 - No connect-time media-count frame arrived in this run (it was seen in only one of the four runs so far), so the photo test cannot rely on it. The probe now accepts `--known-photos N` to use
   a count seen earlier (last seen: 4 photos at 12:10:14 IST) and says which source it used.
 Promoted to CONFIRMED in `commands.yaml`.
+
+
+### Camera status (0x4A, payload `01`): not sent, left INFERRED (decision 2026-10-31)
+Evidence from the decompiled app (names only):
+- **Query, not a setter (INFERRED).** `LargeDataHandler.earphoneCameraStatus` sends `[01]` and waits for the reply; the matching setter `earphoneCameraStatusSetting` sends `[02 xx yy]`. This follows the
+  app's convention that a first byte of 1 is a read and 2 is a write. No other use of the `[01]` form was found.
+- **Reply fields.** `EarphoneCameraStatusRsp` has two flags: "open" (byte 1 equals 1) and "rotation open" (byte 2 equals 2). They describe an earphone-camera feature, not recording or busy state.
+- **When the app uses it.** Callers (AI chat view model, the main and home screens, the settings screen) query it before taking a photo, video or audio recording only when the app's "earphone" flag is set,
+  which comes from the device's wear-function-support reply (0x47). For other devices the app sends the camera command directly. Our unit's flag has not been read.
+- **Where busy state really comes from.** The reply to the camera command itself carries an error code (255 = busy) and which activity the glasses are busy with (see "Replies to our requests").
+- **Verdict.** Probably a pure query, but it would not tell us whether the glasses are busy or recording, so it is not useful for the photo test. It is removed from the approved probes and stays INFERRED and not
+  sendable in `commands.yaml`. If we ever want to know whether this unit is an "earphone" model, the read is the wear-function-support request (0x47, `01 00`), which would need its own approval.
+
+## Open questions (low priority)
+- Where does `wifi: 2512271030` on the app's home screen come from? It is not in the device-info reply (the Wi-Fi strings there are empty). Candidates: another request or an event (not read yet), or a
+  value the app builds itself. Parked until we have a reason to chase it.

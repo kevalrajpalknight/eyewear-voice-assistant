@@ -23,7 +23,7 @@ commands:
     bytes: "bc4a01007e8001"
     direction: write
     status: INFERRED
-    source: apk-static (earphoneCameraStatus, cmd 0x4A, payload 01)
+    source: apk-static (earphoneCameraStatus, cmd 0x4A, payload 01); probably a pure query about an earphone-camera feature, not recording state; deliberately not approved or sent
     safe_to_send: false
   - name: photo
     characteristic: de5bf72a-d711-4e47-af26-65e3012a5dc7
