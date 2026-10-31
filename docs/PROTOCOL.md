@@ -390,7 +390,7 @@ A single click on the right front button while the glasses are on takes a photo 
 without a write from this tool. When waking the glasses, avoid clicking the front button while they are already on. Every run now records the counts it sees in `logs/media_counts.jsonl` and prints a
 note if the counts seen on connect differ from the last recorded ones.
 
-### Album read (`02 04`), proposed for approval (INFERRED, not sent)
+### Album read (`02 04`), `bc41020001130204` (CONFIRMED as a read, 2026-10-31)
 Frame `bc41020001130204` (cmd 0x41, payload `02 04`). Evidence that it is a pure read: the app sends it only inside its read-only connect sync (next to the battery request, the volume-settings read and the
 wear-support read) and when the Album tab opens; it carries no arguments; its reply handler only stores the counts, the file-list type and the "only access-point" flag and logs the total. Caveat: its
 first byte is 2, the value other commands use for writes, so side effects cannot be excluded from the app alone; the glasses firmware decides. Not approved or sent.
@@ -410,3 +410,11 @@ The group owner intent to use on the PC is 15 (maximum), so that the PC is group
 
 ### Media client rules (enforced in `research/glasses_http.py`)
 GET only, only the private IP the glasses reported, paths `/files/<name>` only, no redirects, 5 s connect timeout, size limit, JPEG marker check, saved under `captures/`.
+
+### Clean photo test, reads A and B (run by the user)
+- Read A at 07:37:57.212Z / 13:07:57.212 IST and read B at 07:39:33.947Z / 13:09:33.947 IST both returned `bc410b000b290204060000000100010000`: command 0x41, 11-byte payload (CRC ok),
+  type 4, **photos 6, videos 0, audio recordings 1**, file-list type 1, "only access-point import" 0. **A equals B**, and both equal the count after the earlier photo run (6, 0, 1 at 12:40:45 IST),
+  so nothing changed in the last 29 minutes (no stray photo). The layout matches the app's parser exactly (counts at payload bytes 2 to 7, file-list type at 8, flag at 9).
+- One attempt between A and B (13:08:45 IST) found no advertising glasses and was interrupted with Ctrl+C; no write was made in it.
+- `media_counts_read` promoted to CONFIRMED (read-only; replied with sane counts twice; no visible effect on the glasses).
+

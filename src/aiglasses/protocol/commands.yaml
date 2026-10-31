@@ -71,6 +71,6 @@ commands:
     characteristic: de5bf72a-d711-4e47-af26-65e3012a5dc7
     bytes: "bc41020001130204"
     direction: write
-    status: INFERRED
-    source: apk-static (glassesControl 02 04, the app's album-count request; probably a pure read, proposed for approval, not sent)
-    safe_to_send: false
+    status: CONFIRMED
+    source: probe runs 2026-10-31 07:37Z and 07:39Z (reply bc410b000b290204060000000100010000 twice = photos 6, videos 0, audio 1, equal to the earlier count event; no state change seen)
+    safe_to_send: true
