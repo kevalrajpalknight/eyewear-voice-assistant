@@ -25,6 +25,12 @@ Recorded by `bench/src/bench/models.py` in `bench/models_manifest.json` (and `be
 Native pieces on Windows: none to install by hand. `kokoro-onnx` pulls `espeakng-loader` 0.2.4, which bundles espeak-ng, and `phonemizer` 3.4.0. Both are GPL-licensed; fine for this personal,
 undistributed project, but they would matter if the assistant were ever shipped.
 
+## Addendum 2026-10-31: root `assistant` extra
+The echo loop runs from the root project, so `pyproject.toml` now has an optional `assistant` extra (`moonshine-voice==0.1.5`, `faster-whisper==1.2.1`, `ctranslate2==4.8.3`,
+`kokoro-onnx==0.6.1`, `onnxruntime==1.31.0`; the last two only on Python 3.11 or newer). `[tool.uv] constraint-dependencies` holds the new transitive packages (`huggingface-hub`, `hf-xet`,
+`httpx2`, `httpcore2`, `certifi`) to releases from 2026-10-17 or earlier; a script check of `uv.lock` found none of the 33 added packages newer than that. `uv lock` changed no existing package
+(BLE stack and winrt untouched). The models are still downloaded only by `bench/`; the echo loop reads `bench/models` and verifies sha256 against `bench/models_manifest.json` before loading.
+
 ## Consequences
 - If Gate A picks a model, the runtime dependency gets its own ADR and optional extra, again pinned at least 14 days old.
 - Downloads happen only through `python -m bench.models` (and Moonshine's own downloader), never at import time.

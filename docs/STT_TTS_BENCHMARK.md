@@ -20,11 +20,13 @@ After peak normalisation to -3 dBFS the times are the same within noise (0.24, 0
 
 Install effort on Windows: all four install with plain wheels (`uv sync`), no compiler, no extra native install. Moonshine ships its own DLLs; faster-whisper needs the `ctranslate2` wheel.
 
-### Accuracy: NOT MEASURED yet
-No word error rate is reported because there are no reference transcripts. Needed from the user: type the reference text for each recording into `bench/data/<name>.txt` (the harness
-reads it and computes WER with `jiwer` after lower-casing and stripping punctuation). Existing captures: `capture_a` (5.76 s) and `capture_b` (an earlier, much quieter burst, peak -39 dBFS;
-several engines return nothing for it and one returned 29 words, so its content is unknown and it should not be used until the user says what it contains). The plan asks for about 10 new
-sentences recorded with `aiglasses ai-voice record`; see "What I need from you" at the end.
+### Accuracy: NOT MEASURED yet (recorder and table are ready)
+No word error rate is reported yet. `capture_b` was excluded from all benchmarks on the user's instruction (its content is unknown) and deleted from `bench/data`; `capture_a` has no reference
+text, so it is skipped by the accuracy run. The accuracy data comes from `aiglasses bench-record`: it shows 12 sentences one at a time, the user reads each aloud and single-clicks the rear button,
+and the displayed sentence is saved as the reference (a take marked as misread goes to `excluded/` and the sentence is asked again). Kinds: about 2 s, about 10 s, two questions, two commands,
+numbers and times, a name, casual, two longer, a short reply. Every take's duration, frame count and end reason go to `bench/data/takes.jsonl`. Then `uv run python -m bench.table` in `bench/`
+runs the four engines on raw and peak-normalised input and prints WER (jiwer, lower-cased, punctuation removed, small numbers and ordinals converted to words on both sides), speed and RAM together.
+The table pipeline was validated on one synthetic Kokoro clip (not a real result).
 
 ## Transcribing while the glasses are still streaming (measured, Moonshine only)
 The audio was fed in 20 ms steps paced in real time, as the glasses send it, and compared with transcribing everything after the end marker.
@@ -65,7 +67,6 @@ Measured: hardware, STT speed/RAM/load, streaming versus batch for Moonshine, Ko
 Not measured: STT accuracy (needs your reference texts), voice quality (needs your ears), any network or LLM time, any playback over Bluetooth.
 
 ## What I need from you for Gate A
-1. Listen to the TTS WAVs and say whether bf_isabella at 1.05 sounds right, and fp32 versus int8.
-2. Run `ai-voice record` for about 10 different sentences (include one of ~2 s and one of ~10 s), type each reference text into `bench/data/<name>.txt` next to its WAV, and tell me the file names.
-   Then I rerun the accuracy table. Do not paste the recordings anywhere; they stay local.
-3. Choose the STT default after seeing the accuracy table. Current speed ranking: Moonshine tiny, Moonshine base, faster-whisper base.en, faster-whisper small.en.
+1. DONE (Gate A decisions, 2026-10-31): Kokoro int8, bf_isabella, speed 1.05 approved as the TTS default; fp32 stays an option. No streaming STT.
+2. Run `aiglasses bench-record` (about 12 sentences), then tell me; I run `bench.table` and report speed, accuracy and RAM together. Recordings stay local and gitignored.
+3. STT: Moonshine base is the provisional default, Moonshine tiny the fallback, faster-whisper base.en selectable. Final choice after the accuracy table.

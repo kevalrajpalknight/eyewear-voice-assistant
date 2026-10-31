@@ -18,6 +18,11 @@ Target: 2 to 5 s to the first spoken word (not 30 ms). "M" = measured on this PC
 - Typical (Moonshine base, full first sentence): 0.3 + 0.8 + 0.5 + 1.4 + 0.3 = about 3.3 s.
 - Pessimistic (faster-whisper small.en, slow LLM, Bluetooth): 2.1 + 1.2 + 0.8 + 1.5 + 0.4 = about 6 s.
 
+## First echo-loop measurement (offline, one 5.76 s recording, no sound output, 2026-10-31)
+Moonshine base, Kokoro int8, first clause of 6 words: STT 0.45 s (in the pipeline, including a worker-thread hop; the isolated benchmark gave 0.29 s), first audio chunk 1.02 s after STT,
+then the remaining clause 0.9 s of extra speech. So end marker to first audio chunk is about 1.5 s plus decode (about 0.02 s) plus playback start (not measured: PC speaker worker). One
+recording only; the live loop with the glasses will give the real table (`logs/assistant_turns.jsonl`).
+
 ## Where the time can be cut
 1. Cut the first TTS chunk at a clause boundary (comma, "and", about 4 words) instead of a full sentence: saves about 0.5 to 0.9 s. Synthesis speed is about 2x real time, so later chunks stay ahead of playback.
 2. Prefer Moonshine: it is 3 to 10 times faster than faster-whisper here. Streaming STT would save only about 50 ms (measured), so it is not planned.

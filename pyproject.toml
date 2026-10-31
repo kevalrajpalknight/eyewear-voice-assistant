@@ -25,6 +25,13 @@ aiglasses = "aiglasses.cli.main:app"
 research = [
     "av>=17.1.0",
 ]
+assistant = [
+    "moonshine-voice==0.1.5",
+    "faster-whisper==1.2.1",
+    "ctranslate2==4.8.3",
+    "kokoro-onnx==0.6.1; python_version >= '3.11'",
+    "onnxruntime==1.31.0; python_version >= '3.11'",
+]
 
 [dependency-groups]
 dev = [
@@ -72,3 +79,14 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 addopts = "--cov=aiglasses --cov-report=term-missing"
+
+[tool.uv]
+# New transitive packages of the `assistant` extra are held to releases at least 14 days old
+# (2026-10-17 or earlier). Existing locked packages, including the BLE stack, are left alone.
+constraint-dependencies = [
+    "huggingface-hub<=2.2.0",
+    "hf-xet<=1.7.0",
+    "httpx2<=2.13.1",
+    "httpcore2<=2.13.1",
+    "certifi<=2026.7.22",
+]

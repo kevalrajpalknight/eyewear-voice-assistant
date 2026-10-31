@@ -27,6 +27,15 @@ All interfaces take a `language` so Hindi can be added later; only English is im
 - Benchmark and latency budget: `docs/STT_TTS_BENCHMARK.md`, `docs/LATENCY_BUDGET.md`. Accuracy is not measured yet (needs the user's reference texts).
 - Gate A: STT default and voice choice.
 
+## Fast-track: echo loop (built 2026-10-31, before the rest of Phase B)
+`aiglasses assistant echo --output pc`: rear click -> `voice_requests()` -> STT -> clause splitter -> Kokoro -> PC speakers. No LLM, no network, nothing sent to the glasses.
+- The reply is split into clauses by `assistant/chunker.py` (first clause 3 to 6 words, about 1 to 2 s of speech; later clauses up to 10 words; cuts at sentence ends, commas and before conjunctions).
+- A new click (marker `03 01` or the first voice frame) calls `TurnRunner.interrupt()` at once: the speaker stops, generation is cancelled, a fresh turn starts. The PC speaker runs in its own process
+  (`assistant/audio_worker.py`) because sounddevice must not share a process with BLE (ADR 0004).
+- Per-turn latency log `logs/assistant_turns.jsonl`: decode, STT, first chunk, playback start, end-to-sound, with UTC and local stamps. No text and no audio unless `--debug`.
+- Optional extra `assistant` in the root project (pins in `pyproject.toml`, 14-day rule enforced with constraints for new transitive packages; existing locked packages, including the BLE stack, unchanged).
+- `--output null` runs everything without sound (latency check); `--wav FILE` runs one turn from a 16 kHz mono WAV without the glasses.
+
 ## Phase B: assistant core (fakes only)
 Pipeline: utterance -> STT -> LLM stream -> sentence/clause chunker -> TTS stream -> sink, speaking the first chunk while the LLM keeps streaming. Cancellation: a new rear click or stop cancels the
 playback and the generation and starts a fresh turn, with no orphaned tasks (one `TurnTask` owning its child tasks). Rolling history (configurable turns), persona prompt (concise, friendly, plain

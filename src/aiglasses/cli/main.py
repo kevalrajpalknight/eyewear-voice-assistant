@@ -37,6 +37,7 @@ wifi_app = typer.Typer(help="Glasses Wi-Fi link.")
 capture_app = typer.Typer(help="Official-app capture analysis.")
 voice_app = typer.Typer(help="Offline experiments on the voice stream.")
 ai_voice_app = typer.Typer(help="AI voice button (read-only).")
+assistant_app = typer.Typer(help="Voice assistant (reads the BLE voice stream; sends nothing).")
 apk_app = typer.Typer(help="Static analysis of the official app (read-only).")
 for name, sub in (
     ("video", video_app),
@@ -46,6 +47,7 @@ for name, sub in (
     ("capture", capture_app),
     ("voice", voice_app),
     ("ai-voice", ai_voice_app),
+    ("assistant", assistant_app),
     ("apk", apk_app),
 ):
     app.add_typer(sub, name=name)
@@ -287,6 +289,56 @@ def _print_frame_summary(stats: dict[str, FrameStat], watch: VoiceWatch) -> None
         console.print("[yellow]No 0x59 voice frames arrived.[/]")
     console.print(f"start marker (03 01): {moment(watch.start_marker_at)}")
     console.print(f"end marker (0a 01): {moment(watch.end_marker_at)}")
+
+
+@assistant_app.command("echo")
+def assistant_echo(
+    output: str = typer.Option("pc", help="pc = PC speakers, null = no sound (latency test)"),
+    stt: str = typer.Option("moonshine-base", help="moonshine-base | moonshine-tiny | fw-base.en"),
+    tts: str = typer.Option("int8", help="Kokoro variant: int8 | fp32"),
+    voice: str = typer.Option("bf_isabella"),
+    speed: float = typer.Option(1.05),
+    models_dir: Path = typer.Option(
+        Path("bench/models"), help="Where `python -m bench.models` put them"
+    ),
+    normalize: bool = typer.Option(False, help="Peak-normalise the input before STT"),
+    debug: bool = typer.Option(
+        False,
+        help="Keep transcripts (console and log) and save each input WAV under captures/debug",
+    ),
+    wav: Path = typer.Option(
+        None, help="Run ONE turn from a 16 kHz mono WAV instead of the glasses"
+    ),
+) -> None:
+    """Rear click -> speech to text -> speak it back. No LLM, no network, nothing sent."""
+    from aiglasses.assistant.session import run_echo
+
+    if output not in ("pc", "null"):
+        raise typer.BadParameter("--output must be pc or null")
+    _run(
+        run_echo(
+            Settings(),
+            models_dir=models_dir,
+            stt_name=stt,
+            tts_variant=tts,
+            voice=voice,
+            speed=speed,
+            output=output,
+            normalize=normalize,
+            debug=debug,
+            wav=wav,
+        )
+    )
+
+
+@app.command("bench-record")
+def bench_record(
+    out_dir: Path = typer.Option(Path("bench/data"), help="Local and gitignored"),
+) -> None:
+    """Guided recorder for the STT accuracy test: read a sentence, single-click the rear button."""
+    from aiglasses.assistant.session import SENTENCES, run_bench_record
+
+    _run(run_bench_record(Settings(), out_dir, SENTENCES))
 
 
 @ai_voice_app.command("record")

@@ -5,7 +5,6 @@ Usage: python -m bench.stt_bench ENGINE [--condition raw|normalized]
 """
 
 import json
-import re
 import statistics
 import sys
 import time
@@ -16,13 +15,10 @@ import psutil
 from bench.audio import load_mono, normalize_peak, peak_dbfs
 from bench.models import ROOT
 from bench.stt_engines import make_engine
+from bench.textnorm import clean
 
 DATA = ROOT / "data"
 REPEATS = 3
-
-
-def clean(text: str) -> str:
-    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9' ]+", " ", text.lower())).strip()
 
 
 def run(engine_key: str, condition: str) -> dict[str, object]:
@@ -33,6 +29,9 @@ def run(engine_key: str, condition: str) -> dict[str, object]:
     rows = []
     references, hypotheses = [], []
     for wav in sorted(DATA.glob("*.wav")):
+        reference = wav.with_suffix(".txt")
+        if not reference.exists() or not reference.read_text().strip():
+            continue  # only recordings with a reference text are benchmarked
         samples, rate = load_mono(wav)
         if rate != 16000:
             raise SystemExit(f"{wav.name}: expected 16 kHz, got {rate}")
@@ -50,12 +49,10 @@ def run(engine_key: str, condition: str) -> dict[str, object]:
             "file": wav.name, "audio_s": round(seconds, 2), "peak_dbfs": round(peak_dbfs(samples), 1),
             "wall_s": round(wall, 3), "rtf": round(wall / seconds, 3), "text": text,
         }  # fmt: skip
-        reference = wav.with_suffix(".txt")
-        if reference.exists() and reference.read_text().strip():
-            ref = clean(reference.read_text())
-            row["wer"] = round(jiwer.wer(ref, clean(text)), 3)
-            references.append(ref)
-            hypotheses.append(clean(text))
+        ref = clean(reference.read_text())
+        row["wer"] = round(jiwer.wer(ref, clean(text)), 3)
+        references.append(ref)
+        hypotheses.append(clean(text))
         rows.append(row)
     return {
         "engine": engine.name, "condition": condition, "load_s": round(load_seconds, 2),
