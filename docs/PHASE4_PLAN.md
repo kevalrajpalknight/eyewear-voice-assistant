@@ -72,3 +72,10 @@ widening of the allowed path and its own approval). Read-only. Saved to `capture
 ## Results log
 
 Fill in as steps are run (date, bytes, reply, visible effect, what was promoted to CONFIRMED).
+
+### 2026-10-31 clean photo test: passed
+Reads A and B (13:12:03 and 13:13:20 IST): 6 / 0 / 2 both. Photo `bc4103001050020101` at 13:14:56.405 IST: reply in 0.05 s, count event 1.9 s later (7 / 0 / 2), read C (13:15:44): 7 / 0 / 2.
+One shutter heard. One command added exactly one photo. Promoted to CONFIRMED: `photo` (n = 1; the earlier 4 to 6 jump unexplained) and `media_counts_read`. Reply `02 01 01 ff ff` stays INFERRED.
+The audio count rose 1 to 2 between 13:09 and 13:12 without a command from us. The glasses now hold 7 photos and 2 audio recordings (test data). No more photo commands for now.
+Step 2 is not approved and is blocked until 2026-11-07 (winrt pin date).
+

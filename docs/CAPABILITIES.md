@@ -9,7 +9,7 @@
 | Voice stream decoding | INFERRED | `aiglasses voice candidates` uses the app's exact settings (16 kHz mono, 40-byte Opus packets): 0 errors | Not yet confirmed by listening; very low level |
 | Device info | CONFIRMED | GATT 0x180A read, and `aiglasses probe device_info_read` (reply gives the same firmware and hardware strings) | Serial empty; Wi-Fi version strings empty in the reply; no standard battery service |
 | Battery | CONFIRMED | `aiglasses probe battery_read`: reply `bc4202002b706400` = 100 percent, not charging, 3 runs, user confirmed | Read-only request; not to be repeated needlessly |
-| Photo | CONFIRMED (reaction only) | `aiglasses probe photo`: shutter heard, control reply, media-count event 1.9 s later | "exactly +1 per command" is OPEN until a clean baseline; the reply `02 01 01 ff ff` is not understood (not "busy") |
+| Photo | CONFIRMED | Clean test 2026-10-31: read 6, photo command, read 7; one shutter; reply and count event | One clean trial (n = 1); the earlier 4 to 6 jump is unexplained; the reply `02 01 01 ff ff` is inferred to mean accepted |
 | Video | INFERRED | Start command read from the app (`02 01 02`); it may toggle start and stop | Only with the user present to stop it with the front button |
 | Media download | INFERRED | App code: plain HTTP on port 80, `/files/media.config` then `/files/<name>` | Needs Wi-Fi Direct up first; plan in docs/PHASE4_PLAN.md |
 | Wi-Fi link | INFERRED | Phone bug report: the app connects to the glasses over **Wi-Fi Direct** (phone is group owner, glasses join as client) | Not hotspot/SoftAP as first assumed; trigger and PC-side route untested. This PC's adapter supports Wi-Fi Direct device, group owner and client (read-only check) |

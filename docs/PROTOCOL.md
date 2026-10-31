@@ -418,3 +418,23 @@ GET only, only the private IP the glasses reported, paths `/files/<name>` only, 
 - One attempt between A and B (13:08:45 IST) found no advertising glasses and was interrupted with Ctrl+C; no write was made in it.
 - `media_counts_read` promoted to CONFIRMED (read-only; replied with sane counts twice; no visible effect on the glasses).
 
+### Clean photo test (2026-10-31, run by the user; times IST, +05:30): PASSED
+Verified against `logs/write_audit.jsonl` and `logs/media_counts.jsonl`: exactly six writes since 13:00, four album reads, one photo and one more album read.
+
+| Step | Time | Counts (photos / videos / audio) |
+|---|---|---|
+| Read A | 13:12:03 | 6 / 0 / 2 |
+| Read B | 13:13:20 | 6 / 0 / 2 (equal to A, so the photo step went ahead) |
+| Photo `bc4103001050020101` | 13:14:56.405 | reply `bc4105000c4c020101ffff` after 0.05 s; count event `bc73080097070107000000020001` 1.9 s later: 7 / 0 / 2 |
+| Read C | 13:15:44 | 7 / 0 / 2 |
+
+The user heard **one shutter sound**. Videos and audio were unchanged, so **one photo command added exactly one photo** (6 to 7).
+- `photo` is promoted to CONFIRMED (one clean trial; n = 1). The earlier 4 to 6 jump remains unexplained (probably a front-button click while waking the glasses, unproven).
+- `media_counts_read` is CONFIRMED (reply twice, then four more times, always consistent).
+- The meaning of the reply `02 01 01 ff ff` stays INFERRED ("accepted, nothing else running").
+- Before this run an earlier pair of reads (13:07:57 and 13:09:33) gave 6 / 0 / 1; the audio count then rose to 2 by 13:12:03 **without any command from us** (physical input, unconfirmed).
+
+### Always read the counts first
+Counts change with physical input as well as BLE commands (a front-button click takes a photo; recordings add audio or video). So the album read (`02 04`) is always done before any state-changing
+test, and the previous counts are kept in `logs/media_counts.jsonl`.
+
