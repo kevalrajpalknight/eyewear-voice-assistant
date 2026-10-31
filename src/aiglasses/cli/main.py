@@ -634,3 +634,15 @@ def probe_cmd(
         console.print("Next run: wait about 30 s; the glasses need time to advertise again.")
 
     _run(go())
+
+
+@wifi_app.command("preflight")
+def wifi_preflight() -> None:
+    """Report the PC's current Wi-Fi band and channel (read-only; the network name is not shown)."""
+    from aiglasses.research.wifi_preflight import advice, read_status
+
+    status = read_status()
+    console.print(f"state: {status.state}")
+    console.print(f"radio type: {status.radio_type or 'unknown'}")
+    console.print(f"band: {status.band or 'unknown'}  channel: {status.channel or 'unknown'}")
+    console.print(advice(status))

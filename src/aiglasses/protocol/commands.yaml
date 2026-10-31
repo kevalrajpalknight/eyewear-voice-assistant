@@ -65,7 +65,7 @@ commands:
     bytes: "bc4103001196020109"
     direction: write
     status: INFERRED
-    source: apk-static (glassesControl 02 01 09, sent by the app after a download completes; probably ends the Wi-Fi session)
+    source: apk-static (glassesControl 02 01 09, sent by the app after a download completes; probably ends the Wi-Fi session, but the glasses probably also delete imported files then; denylisted, not to be sent)
     safe_to_send: false
   - name: media_counts_read
     characteristic: de5bf72a-d711-4e47-af26-65e3012a5dc7

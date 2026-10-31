@@ -135,3 +135,11 @@ def test_cli_dry_run_refusal_and_confirmation(
     assert refused.exit_code == 2 and "not approved" in refused.output
     declined = runner.invoke(cli.app, ["probe", "battery_read", "--send"], input="n\n")
     assert declined.exit_code != 0
+
+
+def test_approved_frames_match_the_registry() -> None:
+    registry = {c.name: c.payload.hex() for c in load_commands()}
+    for name, frame in probe.APPROVED_FRAMES.items():
+        assert registry[name] == frame, name
+    assert probe.APPROVED_FRAMES["media_counts_read"] == "bc41020001130204"
+    assert "media_counts_read" not in probe.STATE_CHANGING

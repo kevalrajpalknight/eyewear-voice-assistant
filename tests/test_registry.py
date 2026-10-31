@@ -25,7 +25,10 @@ def test_packaged_registry_statuses_and_allowlist() -> None:
     assert [c.name for c in allowlist_from(commands)] == ["battery_read", "device_info_read"]
     for command in commands:
         frame = parse_bc_frame(command.payload)  # valid length and CRC
-        assert denied_reason(command.payload) is None, command.name
+        if command.name == "wifi_session_end":  # blocked on purpose, see PROTOCOL.md
+            assert denied_reason(command.payload) is not None
+        else:
+            assert denied_reason(command.payload) is None, command.name
         assert frame.cmd in (0x41, 0x42, 0x43, 0x4A)
         if command.status is Confidence.INFERRED:
             assert not command.safe_to_send

@@ -76,6 +76,8 @@ async def test_session_approval_allows_write() -> None:
         (0xFC, b"192.168.0.2", "OTA"),
         (0x41, b"\x02\x01\x0a", "factory reset"),
         (0x41, b"\x02\x01\x0e", "restart"),
+        (0x39, bytes([1]) + b"photo.jpg", "delete a file"),
+        (0x41, bytes([2, 1, 9]), "import session"),
     ],
 )
 async def test_byte_level_denylist_beats_approval(cmd: int, payload: bytes, why: str) -> None:

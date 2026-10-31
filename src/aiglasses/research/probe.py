@@ -25,11 +25,13 @@ APPROVED_FRAMES: dict[str, str] = {
     "battery_read": "bc42020001b00000",
     "device_info_read": "bc43020001b00000",
     "photo": "bc4103001050020101",
+    "media_counts_read": "bc41020001130204",
 }
 EXPECTED_REPLY_CMD: dict[str, int] = {
     "battery_read": 0x42,
     "device_info_read": 0x43,
     "photo": 0x41,
+    "media_counts_read": 0x41,
 }
 STATE_CHANGING = {"photo"}
 CONTROL_CMD = 0x41

@@ -25,6 +25,7 @@ DENY_COMMANDS: dict[int, str] = {
     0x80: "file transfer to the glasses",
     0x81: "file transfer to the glasses",
     0x82: "file transfer to the glasses",
+    0x39: "delete a file on the glasses",
     0xF2: "factory test",
     0xFC: "update over the SoC (OTA)",
 }
@@ -33,6 +34,9 @@ DENY_COMMANDS: dict[int, str] = {
 DENY_CONTROL_PREFIXES: dict[bytes, str] = {
     bytes([2, 1, 10]): "factory reset",
     bytes([2, 1, 14]): "restart the glasses",
+    bytes(
+        [2, 1, 9]
+    ): "end of an import session (the glasses probably delete imported files; not proven safe)",
 }
 
 

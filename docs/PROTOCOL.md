@@ -275,8 +275,8 @@ Commands 0x01 to 0x05 (firmware update), 0x25, 0x26, 0x30 to 0x35 and 0x80 to 0x
   announces "device end recording", otherwise "device start recording". So sending `02 01 02` while recording may end it. This reverses the earlier note that the command is not a toggle.
   Unverified. Audio-only recording (`02 01 08`) is similar by name only.
 - Rule unchanged: no recording command is sent unless the user is present and ready to stop the recording with a single click on the front button.
-- `02 01 09` is what the app sends right after a download finishes, just before it drops the Wi-Fi Direct group: probably "end the Wi-Fi/album session". It would be part of the rollback
-  and needs its own approval.
+- `02 01 09` is what the app sends right after a download finishes, just before it drops the Wi-Fi Direct group: probably "end the Wi-Fi/album session", but the glasses probably also
+  clear imported files then, so it is denylisted (see "Deleting files on the glasses").
 
 ### Voice codec settings used by the app (INFERRED, match our decode)
 No Ogg header, 16 kHz, mono, 40-byte packets; input is the frame payload (bytes after the 6-byte header). See "Voice stream" above.
@@ -395,3 +395,18 @@ Frame `bc41020001130204` (cmd 0x41, payload `02 04`). Evidence that it is a pure
 wear-support read) and when the Album tab opens; it carries no arguments; its reply handler only stores the counts, the file-list type and the "only access-point" flag and logs the total. Caveat: its
 first byte is 2, the value other commands use for writes, so side effects cannot be excluded from the app alone; the glasses firmware decides. Not approved or sent.
 
+
+### Deleting files on the glasses (investigated 2026-10-31, INFERRED)
+- **No delete from the app.** Every delete in the Cyan app's code is a local phone file or database delete. There is no HTTP DELETE and no call to a BLE delete command.
+- **A delete command exists in the SDK but is unused:** cmd 0x39 with payload `01` plus a UTF-8 file name (the SDK's file handler). It is on the byte-level denylist.
+- **End of import:** after a download the app sends `02 01 09` and drops the Wi-Fi group. Evidence that the glasses clear imported media: the app text "Insufficient memory, please import resources from the
+  APP album and try again", and our counts went from 8 photos and 2 videos (00:41 IST) to 0 videos and fewer photos after the phone's import. It is not known whether `02 01 09` or just ending the
+  Wi-Fi session causes it. `02 01 09` is therefore **denylisted** until proven safe and is not part of any rollback.
+- Wi-Fi Direct rollback relies on stopping the session on the PC and power-cycling the glasses.
+
+### PC Wi-Fi state before the Wi-Fi Direct step (read-only check, 2026-10-31)
+`aiglasses wifi preflight`: connected, 802.11ac, **5 GHz, channel 157**. The glasses are probably 2.4 GHz only, so before Step 2 the PC should be put on a 2.4 GHz network or disconnected from Wi-Fi.
+The group owner intent to use on the PC is 15 (maximum), so that the PC is group owner as the phone was.
+
+### Media client rules (enforced in `research/glasses_http.py`)
+GET only, only the private IP the glasses reported, paths `/files/<name>` only, no redirects, 5 s connect timeout, size limit, JPEG marker check, saved under `captures/`.
