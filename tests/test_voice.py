@@ -15,8 +15,11 @@ from aiglasses.protocol.voice import (
 from tests.helpers import build_bc_frame
 
 
-def test_crc16_modbus_standard_check_value() -> None:
-    assert crc16_modbus(b"123456789") == 0x4B37
+def test_crc16_modbus_matches_captured_frames() -> None:
+    # Captured from the unit: voice start marker (payload 03 01) and end marker (0a 01).
+    assert crc16_modbus(bytes.fromhex("0301")) == 0x80C0
+    assert crc16_modbus(bytes.fromhex("0a01")) == 0xD0C6
+    assert crc16_modbus(b"") == 0xFFFF
 
 
 def test_parse_roundtrip_and_known_real_frame() -> None:
@@ -85,7 +88,7 @@ def test_opus_roundtrip_on_synthetic_tone() -> None:
     wrapped = [parse_bc_frame(build_bc_frame(VOICE_CMD, p)).payload for p in packets]
     audio = OpusVoiceDecoder().decode(wrapped)
     samples = audio.samples.astype(np.float64)
-    assert audio.sample_rate in (16000, 48000)
+    assert audio.sample_rate == 16000
     assert samples.size >= audio.sample_rate * 0.8
     spectrum = np.abs(np.fft.rfft(samples * np.hanning(samples.size)))
     peak_hz = np.argmax(spectrum) * audio.sample_rate / samples.size

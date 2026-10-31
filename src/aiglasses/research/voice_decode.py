@@ -18,27 +18,49 @@ def to_int16(samples: np.ndarray) -> np.ndarray:
     return np.clip(samples.astype(np.float64) * 32767, -32768, 32767).astype(np.int16)
 
 
+APP_SAMPLE_RATE = (
+    16000  # the official app decodes with: no Ogg header, 16 kHz, mono, 40-byte packets
+)
+
+
+def decode_opus_16k(packets: Sequence[bytes]) -> tuple[np.ndarray, int, int]:
+    """Decode raw Opus packets and return (int16 samples at 16 kHz mono, frames decoded, errors).
+
+    FFmpeg's libopus always outputs 48 kHz, so the output is resampled to the app's 16 kHz.
+    """
+    import av
+
+    ctx: Any = av.CodecContext.create("libopus", "r")
+    ctx.sample_rate = APP_SAMPLE_RATE
+    ctx.layout = "mono"
+    ctx.open()
+    resampler: Any = av.AudioResampler(format="s16", layout="mono", rate=APP_SAMPLE_RATE)
+    chunks: list[np.ndarray] = []
+    decoded = errors = 0
+    for packet in packets:
+        try:
+            frames = ctx.decode(av.Packet(packet))
+        except Exception:  # the decoder rejected this packet
+            errors += 1
+            continue
+        for frame in frames:
+            decoded += 1
+            for out in resampler.resample(frame):
+                chunks.append(out.to_ndarray().reshape(-1))
+    for out in resampler.resample(None):
+        chunks.append(out.to_ndarray().reshape(-1))
+    samples = np.concatenate(chunks) if chunks else np.zeros(0, dtype=np.int16)
+    return to_int16(samples), decoded, errors
+
+
 class OpusVoiceDecoder:
-    """Decodes raw Opus packets (no Ogg container) with FFmpeg's libopus via PyAV."""
+    """Decodes the glasses' voice packets the way the official app does (see docs/PROTOCOL.md)."""
 
     name = "opus"
 
-    def __init__(self, sample_rate: int = 16000) -> None:
-        self._rate = sample_rate
-
     def decode(self, packets: Sequence[bytes]) -> DecodedAudio:
-        import av
-
-        ctx: Any = av.CodecContext.create("libopus", "r")
-        ctx.sample_rate = self._rate
-        ctx.layout = "mono"
-        ctx.open()
-        chunks: list[np.ndarray] = []
-        for packet in packets:
-            for frame in ctx.decode(av.Packet(packet)):
-                chunks.append(frame.to_ndarray().reshape(-1))
-        samples = np.concatenate(chunks) if chunks else np.zeros(0, dtype=np.int16)
-        return DecodedAudio(to_int16(samples), ctx.sample_rate)
+        samples, _decoded, _errors = decode_opus_16k(packets)
+        return DecodedAudio(samples, APP_SAMPLE_RATE)
 
 
 @dataclass(frozen=True)
@@ -52,7 +74,7 @@ class Candidate:
 CANDIDATES = [
     Candidate("opus_strip0_raw", "opus", 0),
     Candidate("opus_strip1", "opus", 1),
-    Candidate("opus_strip2_crc_removed", "opus", 2),
+    Candidate("opus_strip2_app_format", "opus", 2),
     Candidate("opus_strip3", "opus", 3),
     Candidate("opus_strip4", "opus", 4),
     Candidate("speex_strip2", "speex", 2),
@@ -74,10 +96,10 @@ class CandidateResult:
 def _decode_with_pyav(codec: str, packets: list[bytes]) -> tuple[np.ndarray, int, int, int]:
     import av
 
-    ctx: Any = av.CodecContext.create(codec, "r")
     if codec == "opus":
-        ctx.sample_rate = 16000
-        ctx.layout = "mono"
+        samples, decoded, errors = decode_opus_16k(packets)
+        return samples, APP_SAMPLE_RATE, decoded, errors
+    ctx: Any = av.CodecContext.create(codec, "r")
     ctx.open()
     chunks: list[np.ndarray] = []
     errors = 0
@@ -125,7 +147,7 @@ def run_candidates(bodies: list[bytes], label: str, out_dir: Path) -> list[Candi
         if samples.size:
             path = out_dir / f"{label}_{cand.name}_{rate}Hz_mono.wav"
             sf.write(path, samples, rate, subtype="PCM_16")
-            if cand.name == "opus_strip2_crc_removed":
+            if cand.name == "opus_strip2_app_format":
                 sf.write(
                     out_dir / f"{label}_{cand.name}_{rate}Hz_mono_PEAK-NORMALIZED.wav",
                     normalize_peak(samples),

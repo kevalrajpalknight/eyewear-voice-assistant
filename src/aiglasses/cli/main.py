@@ -569,3 +569,47 @@ def apk_methods(
             console.print(f"[bold]{escape(cls)}[/] ({len(names)})")
             console.print("  " + escape(", ".join(sorted(names))))
     console.print(f"{shown} matching classes")
+
+
+@app.command("probe")
+def probe_cmd(
+    name: str = typer.Argument(..., help="battery_read, device_info_read or camera_status_read"),
+    send: bool = typer.Option(False, "--send", help="Actually send. Without it nothing is sent."),
+) -> None:
+    """Send ONE approved read-only request and show the reply. Dry run unless --send."""
+    from aiglasses.protocol.registry import load_commands
+    from aiglasses.research.probe import APPROVED_FRAMES, REPLY_TIMEOUT_SECONDS, run_probe
+
+    if name not in APPROVED_FRAMES:
+        console.print(
+            f"[red]{escape(name)} is not approved. Approved reads: {sorted(APPROVED_FRAMES)}.[/]"
+        )
+        raise typer.Exit(2)
+    command = next((c for c in load_commands() if c.name == name), None)
+    if command is None or command.payload.hex() != APPROVED_FRAMES[name]:
+        console.print("[red]The registry entry does not match the approved bytes; refusing.[/]")
+        raise typer.Exit(2)
+    console.print(
+        f"{name}: write {command.payload.hex()} to {command.characteristic} (no response)"
+    )
+    if not send:
+        console.print("Dry run: nothing sent. Add --send to send once.")
+        return
+    typer.confirm(
+        "Is the Cyan app closed and your phone's Bluetooth off, and are you ready?", abort=True
+    )
+    settings = Settings()
+
+    async def go() -> None:
+        async with Glasses.connect(settings, dry_run=False) as g:
+            result = await run_probe(
+                g.transport, g.guard, command, settings.log_dir / "probe_audit.jsonl"
+            )
+        console.print(f"notifications active before the write: {result.notifications_active}")
+        console.print(f"sent: {result.sent} (once, timeout {REPLY_TIMEOUT_SECONDS:.0f}s)")
+        for r in result.replies:
+            mark = "reply" if r.expected else "other"
+            console.print(f"  {r.time[11:23]} [{mark}] {r.hex}  {escape(r.decoded)}")
+        console.print(f"verdict: {escape(result.verdict)}")
+
+    _run(go())

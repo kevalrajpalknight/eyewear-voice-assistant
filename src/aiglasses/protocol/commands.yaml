@@ -60,3 +60,10 @@ commands:
     status: INFERRED
     source: apk-static (glassesControl 02 01 04 02, the access-point variant of the Album import)
     safe_to_send: false
+  - name: wifi_session_end
+    characteristic: de5bf72a-d711-4e47-af26-65e3012a5dc7
+    bytes: "bc4103001196020109"
+    direction: write
+    status: INFERRED
+    source: apk-static (glassesControl 02 01 09, sent by the app after a download completes; probably ends the Wi-Fi session)
+    safe_to_send: false

@@ -50,37 +50,32 @@ bytes a "trailer"; that was wrong, they are the CRC.
 
 Commands seen: `0x73` (control/status events) and `0x59` (voice stream).
 
-## Voice stream, cmd 0x59 (frame layout CONFIRMED, audio content NOT yet confirmed)
+## Voice stream, cmd 0x59 (format matches the app exactly; audibility not yet confirmed)
 
-- CONFIRMED: payload is 40 bytes; a burst is 200 to 289 frames at 20 ms spacing (about 50 per second).
-- CONFIRMED: the payloads decode as Opus. `4b 41` at the start of most payloads is a valid Opus TOC byte pair (config 9 =
-  SILK wideband 20 ms, "code 3" with padding, 1 frame). Silence frames are a few bytes of data zero-padded to 40 bytes. FFmpeg's
-  libopus decoded 289 of 289 packets of the 19:04 burst with no errors, 960 samples (20 ms) per packet at 48 kHz.
-- CONFIRMED by elimination (`aiglasses voice candidates`, burst of 289 packets): only the CRC-removed 40-byte packet decodes
-  cleanly. Treating the CRC as part of the packet, or stripping 1, 3 or 4 bytes, fails (11 to 149 decode errors out of 289, or
-  clipped noise). Speex failed to open without a header. SBC/mSBC is excluded: 0 of 289 packets start with the sync bytes
-  0x9C/0xAD.
-- The decoded signal is very quiet: rms about 17 and peak 368 out of 32767 (about -52 dBFS rms). A peak-normalised copy is
-  written for listening. This matches the low level of the Windows microphone recording.
+- CONFIRMED (capture): payload is 40 bytes; a burst is 200 to 289 frames at 20 ms spacing (about 50 per second), bracketed by `0x73` markers `03 01` (start) and `0a 01` (end).
+- INFERRED (app code): 0x59 is the app's "GPT upload", the AI voice audio. The app decodes it with no Ogg header, 16 kHz, mono and 40-byte packets, feeding the decoder the bytes
+  after the 6-byte frame header, which is exactly our payload.
+- CONFIRMED (our decode): those exact settings decode 289 of 289 packets of the 19:04 burst with no errors (20 ms per packet; FFmpeg's libopus outputs 48 kHz and we resample to the
+  app's 16 kHz). Wrong offsets fail (11 to 149 errors out of 289, or clipped noise); Speex fails to open; SBC/mSBC is excluded (0 of 289 packets start with 0x9C/0xAD).
+  Packet start `4b 41` is a valid Opus TOC pair (SILK wideband 20 ms, padded frames).
+- The decoded signal is very quiet: rms about 17 and peak 368 out of 32767 (about -52 dBFS rms), like the Windows microphone recording.
 - UNVERIFIED: whether it contains intelligible speech. Listen to
-  `logs/decode_candidates/burst2_opus_strip2_crc_removed_48000Hz_mono_PEAK-NORMALIZED.wav` (and the unnormalised file).
-  Not to be called a success until a human hears speech.
-- INFERRED: the burst is bracketed by `0x73` markers with payload `0301` (start) and `0a01` (end). Rear single click starts it
-  (confirmed in the labelled 19:03 session).
+  `logs/decode_candidates/burst2_opus_strip2_app_format_16000Hz_mono_PEAK-NORMALIZED.wav` (and the unnormalised file). Not a success until a human hears speech.
 
-## Control events, cmd 0x73 (payload shown after the CRC is removed)
+## Events, cmd 0x73 (payload after the CRC; meanings from the app's code, matching our captures)
 
-| Payload | Meaning | Status |
+| Payload seen | Meaning | Status |
 |---|---|---|
-| `0301` | voice burst start | INFERRED (precedes every burst) |
-| `0a01` | voice burst end | INFERRED (follows every burst) |
-| `01 NN 00 00 00 00 00 01` (8 bytes) | front click (photo). NN was 05, 06, 07 on three photos | CONFIRMED trigger, NN as running count INFERRED |
-| `01 08 00 02 00 00 00 01` | stop recording. Same layout, NN=08, byte 3 = 02 | CONFIRMED trigger, "02 = video" INFERRED |
-| `02 00 NN 02 00` (5 bytes) | rear double click (image recognition). NN was 0x17, 0x16, 0x15, 0x16 | CONFIRMED trigger, NN meaning unknown |
-| `0b2a` ... `0b34` (2 bytes) | sent every exactly 3.000 s while recording; a slowly rising 16-bit value; stops when recording stops | CONFIRMED timing, meaning unknown |
-| `12 01 00 10 NN 02 00 0f 0f 03 00 10 0a 03` (14 bytes) | NN went 0x0f then 0x10 in the 18:55 session, after the front click, rear click and rear double click; INFERRED volume level from touch-pad swipes (UNVERIFIED) | UNVERIFIED |
+| `03 01` | AI voice start | INFERRED (app code; precedes every burst) |
+| `0a 01` | AI voice / recognition ended | INFERRED (app code; follows every burst) |
+| `01 07 00 00 00 00 00 01` | media counts after photo number 7: photos 7, videos 0, audio recordings 0, file-list type 1 | INFERRED (the app's own field names are image, video and record counts) |
+| `01 08 00 02 00 00 00 01` | counts at stop-recording: 8 photos, 2 videos | INFERRED, matches capture |
+| `02 00 NN 02 00` | image-recognition capture ready; the app then fetches a thumbnail. NN not decoded | INFERRED |
+| `0b TT` | temperature in degrees C, sent every 3 s while recording (0x2a to 0x34 = 42 to 52) | INFERRED, matches capture |
+| `12 ...` (14 bytes) | volume settings report; the current value went 15 to 16 after a volume swipe | INFERRED, matches capture |
 
-Previous notes saying the touch pad sends nothing were wrong: the 14-byte events are the likely touch-pad events.
+The touch pad is visible over BLE (at least for volume). Earlier notes that said it sends nothing were wrong, and the earlier readings of the counter, the "heartbeat" and the
+marker events are replaced by the table above. The full event-type list is under "APK findings".
 
 ## Photo/recording timing (CONFIRMED, labelled run at 19:03 UTC)
 
@@ -89,12 +84,13 @@ Previous notes saying the touch pad sends nothing were wrong: the 14-byte events
 | Front click (photo) | 4.3 s |
 | Rear click (AI assistant) | 1.8 s to burst start; burst 5.8 s |
 | Rear double click (image recognition) | 4.6 s |
-| Front double click (start recording) | heartbeat starts about 11 s later in one run (the mark may have been typed early) |
-| Front click (stop recording) | 8-byte event with the next 3 s tick, then no more heartbeats |
+| Front double click (start recording) | temperature events start (about 11 s later in one run; the mark may have been typed early) |
+| Front click (stop recording) | media-count event with the next 3 s tick, then no more temperature events |
 
 ## Commands (writes)
 
-None known. `protocol/commands.yaml` stays empty until the Phase 3 capture.
+No write has been captured or confirmed. Every known command comes from reading the app (INFERRED, see "APK findings" and `commands.yaml`). Three read-only requests
+(battery, device info, camera status) are approved for one-shot testing with `aiglasses probe`; results are recorded below once run.
 
 ## Facts reported by the official app (user observation, 2026-10-31)
 
@@ -249,8 +245,7 @@ Stop commands for video and audio recording were not found; the same command may
   group owner's address). Media is served over **plain HTTP on port 80**, no authentication seen: first `GET /files/media.config` (a text list of names), then
   `GET /files/<name>`. If the unit reports file-list type 2 instead, the list is `GET /storage/sd0/C/DCIM/1/vf_list.txt` (JSON with `file_list[].f` paths) and files are at
   `/<f>`. Logs are listed by `/files/log/log.list`. Our unit reports file-list type 1.
-- **Access-point mode:** the SSID is the same name (device name plus the address without colons). The app has a fixed default password for it; the value is deliberately not
-  recorded here. Using it on your own glasses is your decision; it is visible in the decompiled source (`MyBluetoothReceiver`).
+- **Access-point mode:** the SSID is the same name (device name plus the address without colons). It uses a fixed default password built into the app and is not recommended (see below).
 - Live preview uses the same Wi-Fi link with a media player; its URL has not been read yet.
 
 ### Voice stream and cloud
@@ -260,6 +255,30 @@ Stop commands for video and audio recording were not found; the same command may
 ### Byte-level denylist (implemented in `protocol/denylist.py`, beats any approval)
 Commands 0x01 to 0x05 (firmware update), 0x25, 0x26, 0x30 to 0x35 and 0x80 to 0x82 (file transfers), 0xF2 (factory test), 0xFC (OTA via SoC), and control payloads starting
 `02 01 0A` (factory reset) or `02 01 0E` (restart). Commands 0x4A and 0x54 are also used by file code with another meaning, so they are not denied; the allowlist covers them.
+
+### Replies to our requests (INFERRED, from how the app parses them)
+- **Battery (0x42):** payload `[percent 0 to 100][charging 1 or 0]`.
+- **Device info (0x43):** payload `[1 byte][len16 firmware][len16 hardware][len16 Wi-Fi firmware][len16 Wi-Fi hardware]` followed by the four UTF-8 strings. The `wifi: 2512271030`
+  line on the app's home screen is probably the Wi-Fi firmware version string.
+- **Camera status (0x4A):** payload `[1 byte][1 = earphone camera open][2 = rotation open]`. It concerns an earphone-camera feature; it is not a recording-state flag.
+- **Control (0x41) reply:** type 1 is a result `[function id][error code: 0 ok, 255 busy][what the glasses are busy with]`; type 4 is the media counts (photos, videos, audio, file-list type,
+  "only access-point import" flag); type 3 carries an IP (the app parses it oddly, so use the 0x73 type 8 event instead).
+- **What "busy" names:** 1 photo, 2 video, 4 Wi-Fi/album transfer, 5 firmware update, 8 audio-only recording (other values unknown).
+
+### Stopping recordings (INFERRED)
+- The app has no command to stop video or audio-only recording; it only starts them. Starting again while busy returns "busy" and names the activity (2 = video, 8 = audio), so
+  the command is not a toggle. Recording is stopped on the glasses (a single click on the front button, per the manual).
+- Therefore `02 01 02` (video) and `02 01 08` (audio recording) are only to be tested with the user present, who stops the recording with the front button.
+- `02 01 09` is what the app sends right after a download finishes, just before it drops the Wi-Fi Direct group: probably "end the Wi-Fi/album session". It would be part of the rollback
+  and needs its own approval.
+
+### Voice codec settings used by the app (INFERRED, match our decode)
+No Ogg header, 16 kHz, mono, 40-byte packets; input is the frame payload (bytes after the 6-byte header). See "Voice stream" above.
+
+### Access-point mode is not recommended
+Access-point mode (`02 01 04 02`) relies on a fixed default Wi-Fi password built into the app, so it is weak and is **not** recommended. Wi-Fi Direct (push-button setup, no shared password) is
+preferred. The password is deliberately not recorded anywhere in this repository. If access-point mode is ever needed, the user supplies the password through a gitignored local config; it must
+never be committed, logged or placed in tests.
 
 ### Corrections to earlier notes
 - `writeIpToSoc` belongs to the OTA screen (cmd 0xFC), not the media IP. The earlier guess is withdrawn.
