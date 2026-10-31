@@ -27,11 +27,20 @@ async def connect_with_retry(
             if attempt == attempts:
                 raise
             delay = min(max_delay, base_delay * 2 ** (attempt - 1))
-            log.warning(
-                "connect attempt %d/%d failed (%s); retrying in %.1fs",
-                attempt,
-                attempts,
-                exc,
-                delay,
-            )
+            if isinstance(exc, DeviceNotFoundError):
+                log.info(
+                    "glasses not advertising yet (attempt %d/%d). They can need up to about 30 s "
+                    "after a session ends; trying again in %.1fs",
+                    attempt,
+                    attempts,
+                    delay,
+                )
+            else:
+                log.warning(
+                    "connect attempt %d/%d failed (%s); retrying in %.1fs",
+                    attempt,
+                    attempts,
+                    exc,
+                    delay,
+                )
             await sleep(delay)

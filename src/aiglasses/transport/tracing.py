@@ -1,9 +1,9 @@
 import asyncio
 import json
-from datetime import datetime, timezone
 from pathlib import Path
 
 from aiglasses.domain.models import GattService
+from aiglasses.timefmt import stamps
 from aiglasses.transport.base import BleTransport, NotifyHandler
 
 
@@ -27,7 +27,7 @@ class TracingTransport:
 
     def _log(self, op: str, char: str, data: bytes) -> None:
         entry = {
-            "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+            **stamps(),
             "op": op,
             "handle": self._handle_of(char),
             "uuid": char.lower(),
@@ -39,12 +39,16 @@ class TracingTransport:
     def mark(self, label: str) -> None:
         """Write a user-typed label into the trace so actions can be matched to notifications."""
         entry = {
-            "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+            **stamps(),
             "op": "mark",
             "label": label,
         }
         with self._path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(entry) + "\n")
+
+    @property
+    def is_connected(self) -> bool:
+        return self._inner.is_connected
 
     @property
     def mtu(self) -> int:

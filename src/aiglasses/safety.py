@@ -1,12 +1,12 @@
 import json
 import re
-import time
 from collections.abc import Iterable
 from pathlib import Path
 
 from aiglasses.domain.errors import WriteBlockedError
 from aiglasses.protocol.denylist import denied_reason
 from aiglasses.protocol.registry import Command
+from aiglasses.timefmt import stamps
 from aiglasses.transport.base import BleTransport
 
 # Firmware/OTA commands share the control channel on Jieli devices and can brick the unit.
@@ -30,6 +30,7 @@ class WriteGuard:
         }
         self.dry_run = dry_run
         self._audit_path = audit_path
+        self._sent: set[tuple[str, bytes]] = set()
 
     def approve(self, name: str, char: str, payload: bytes) -> None:
         """Explicit user approval of one exact payload for this session."""
@@ -40,7 +41,7 @@ class WriteGuard:
             return
         self._audit_path.parent.mkdir(parents=True, exist_ok=True)
         entry = {
-            "ts": time.time(),
+            **stamps(),
             "outcome": outcome,
             "name": name,
             "uuid": char.lower(),
@@ -65,5 +66,14 @@ class WriteGuard:
         if self.dry_run:
             self._audit("dry_run", name, char, payload)
             return
+        if key in self._sent:
+            self._audit("blocked_repeat", name, char, payload)
+            raise WriteBlockedError(
+                "already sent once this session; writes are never repeated or retried"
+            )
+        if not self._transport.is_connected or self._transport.disconnected.is_set():
+            self._audit("blocked_link_down", name, char, payload)
+            raise WriteBlockedError("the link is not up right now; nothing was written")
+        self._sent.add(key)  # counted before the attempt: an ambiguous write is never retried
         self._audit("sent", name, char, payload)
         await self._transport.write(char, payload, response=response)

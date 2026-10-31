@@ -26,7 +26,8 @@ log = logging.getLogger("aiglasses.bleak")
 T = TypeVar("T")
 
 NOT_FOUND_HINT = (
-    "Glasses not found. Toggle their Bluetooth, and make sure the phone is not connected "
+    "Glasses not found after scanning. They can need up to about 30 s to advertise again after a "
+    "session ends. If it persists, toggle their Bluetooth and make sure the phone is not connected "
     "(a connected phone stops the glasses advertising)."
 )
 PAIRING_WORDS = ("access denied", "pair", "authentication", "encryption", "protection")
@@ -68,6 +69,11 @@ class BleakTransport:
         self._client: BleakClient | None = None
         self._device: BLEDevice | None = None
         self._disconnected = asyncio.Event()
+        self._closing = False
+
+    @property
+    def is_connected(self) -> bool:
+        return self._client is not None and self._client.is_connected
 
     @property
     def mtu(self) -> int:
@@ -108,12 +114,16 @@ class BleakTransport:
         return device
 
     def _on_disconnect(self, _client: BleakClient) -> None:
-        log.warning("link lost")
+        if self._closing:
+            log.info("disconnected (we asked for it)")
+        else:
+            log.warning("link lost (the glasses dropped the connection)")
         self._disconnected.set()
 
     async def connect(self) -> None:
         device = await self._find()
         self._disconnected = asyncio.Event()
+        self._closing = False
         client = BleakClient(
             device,
             disconnected_callback=self._on_disconnect,
@@ -128,6 +138,8 @@ class BleakTransport:
 
     async def disconnect(self) -> None:
         client, self._client = self._client, None
+        self._closing = True
+        log.info("disconnecting")
         if client is None:
             return
         try:

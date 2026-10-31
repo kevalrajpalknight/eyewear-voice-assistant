@@ -14,18 +14,23 @@ class FakeBleTransport:
         services: list[GattService] | None = None,
         *,
         fail_connects: int = 0,
+        connected: bool = True,
         subscribe_errors: dict[str, Exception] | None = None,
     ) -> None:
         self.reads = {k.lower(): v for k, v in (reads or {}).items()}
         self.writes: list[tuple[str, bytes, bool]] = []
         self.read_log: list[str] = []
-        self.connected = False
+        self.connected = connected
         self.connect_calls = 0
         self._fail_connects = fail_connects
         self._services = services or []
         self._subscribe_errors = {k.lower(): v for k, v in (subscribe_errors or {}).items()}
         self._handlers: dict[str, NotifyHandler] = {}
         self._disconnected = asyncio.Event()
+
+    @property
+    def is_connected(self) -> bool:
+        return self.connected
 
     @property
     def mtu(self) -> int:

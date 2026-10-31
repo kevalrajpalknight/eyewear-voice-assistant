@@ -126,7 +126,7 @@ def test_cli_dry_run_refusal_and_confirmation(
     monkeypatch.setattr(Glasses, "connect", staticmethod(no_connect))
     dry = runner.invoke(cli.app, ["probe", "battery_read"])
     assert dry.exit_code == 0 and "bc42020001b00000" in dry.output and "nothing sent" in dry.output
-    refused = runner.invoke(cli.app, ["probe", "photo"])
+    refused = runner.invoke(cli.app, ["probe", "wifi_direct_on"])
     assert refused.exit_code == 2 and "not approved" in refused.output
     declined = runner.invoke(cli.app, ["probe", "battery_read", "--send"], input="n\n")
     assert declined.exit_code != 0

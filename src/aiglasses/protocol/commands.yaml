@@ -8,9 +8,9 @@ commands:
     characteristic: de5bf72a-d711-4e47-af26-65e3012a5dc7
     bytes: "bc42020001b00000"
     direction: write
-    status: INFERRED
-    source: apk-static (syncBattery, cmd 0x42, payload 00 00)
-    safe_to_send: false
+    status: CONFIRMED
+    source: probe runs 2026-10-31 06:27Z, 06:28Z, 06:40Z (reply bc4202002b706400 = 100 percent, not charging; user confirmed it matches the glasses)
+    safe_to_send: true
   - name: device_info_read
     characteristic: de5bf72a-d711-4e47-af26-65e3012a5dc7
     bytes: "bc43020001b00000"

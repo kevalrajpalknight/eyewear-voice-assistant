@@ -13,6 +13,9 @@ NotifyHandler = Callable[[str, bytes], None]
 
 class BleTransport(Protocol):
     @property
+    def is_connected(self) -> bool: ...
+
+    @property
     def mtu(self) -> int: ...
 
     @property

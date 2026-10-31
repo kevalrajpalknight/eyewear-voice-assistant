@@ -289,3 +289,34 @@ never be committed, logged or placed in tests.
 ### How each will be confirmed
 Read-only first: send the battery and device-info requests (replies expected as 0x42 and 0x43 frames). Then, only with your approval of the exact bytes: camera status read, photo, and
 `02 01 04 01` followed by watching for event type 8 and the Wi-Fi Direct peer on this PC. See `commands.yaml` for the exact frames (all INFERRED, none sendable yet).
+
+
+## Probe results (`aiglasses probe`; times are UTC and IST, IST = UTC+05:30)
+
+### battery_read, `bc42020001b00000` (CONFIRMED)
+Three runs on 2026-10-31. Every reply was `bc4202002b706400`: command 0x42, payload `64 00`, which is **100 percent, not charging** (the user confirmed this matches the glasses).
+
+| Run | Connected | Write sent | Reply | Write to reply | Disconnect logged |
+|---|---|---|---|---|---|
+| 1 | 06:27:45.378Z / 11:57:45.378 IST | 06:27:45.429Z | 06:27:45.547Z | 118 ms | 06:27:46.563Z / 11:57:46.563 IST |
+| 2 | 06:28:14.749Z / 11:58:14.749 IST | 06:28:14.781Z | 06:28:14.812Z | 31 ms | 06:28:15.815Z / 11:58:15.815 IST |
+| 3 | 06:40:14.162Z / 12:10:14.162 IST | 06:40:14.207Z | 06:40:14.254Z | 47 ms | 06:40:15.264Z / 12:10:15.264 IST |
+
+The "reply in 1.1 s" shown by the first version of the tool included its 1 s wait after the reply; the real write-to-reply time is 30 to 120 ms. Fixed.
+Promoted to CONFIRMED in `commands.yaml`. It is read-only and is not to be repeated.
+
+### What "link lost" meant (CONFIRMED from the logs)
+- In all three runs the "link lost" warning came 1 to 2 ms after the probe wrote its audit record, which is the end of the run, 1.0 s after the reply (the tool waits 1 s after a
+  reply to catch follow-up events), and then disconnects. The line was our **own deliberate disconnect**, logged under a misleading name. It is not a drop, and it did not happen before the write.
+- Order of events in each run: connect, notifications enabled, write, reply, 1 s wait, audit written, disconnect callback. Notifications and the write target were valid throughout: the
+  reply came back on the notification characteristic after the write.
+- Fixed: a requested disconnect is now logged at INFO as "disconnected (we asked for it)"; an unexpected one is a WARNING "link lost (the glasses dropped the connection)".
+  The probe and the write guard now also check that the link is up right before a write and refuse to write if it is not; the guard never sends the same payload twice in a session.
+
+### Media counts frame seen right after connecting (INFERRED field meanings)
+`bc73080054070104000000010001` at 06:40:14.232Z / 12:10:14.232 IST, 25 ms after our write: payload `01 04 00 00 00 01 00 01`. With the app's own layout: photos 4, videos 0, audio recordings 1,
+file-list type 1 (no "only access-point import" byte, treated as false). The app would show 5 files to import (4 + 0 + 1). The glasses send these counts on connect.
+
+### Glasses need time to advertise again
+After a session ends the glasses may not advertise for a while. Observed: the first connect attempt of a run often reports "not found" and a later attempt finds them; waits of roughly 15 to 40 s
+were seen. The tool scans up to 15 s per attempt with up to 4 attempts, so it waits well past 10 s before giving up, and logs the early attempts at INFO. Wait about 30 s between runs.

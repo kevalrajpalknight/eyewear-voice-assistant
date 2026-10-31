@@ -3,6 +3,7 @@ import sys
 import threading
 from collections import Counter
 from collections.abc import Awaitable
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TypeVar
 
@@ -21,6 +22,7 @@ from aiglasses.logging_setup import setup_logging
 from aiglasses.research.gatt_dump import dump_gatt, write_dump
 from aiglasses.research.listen import Notification, listen
 from aiglasses.services.audio import AudioService
+from aiglasses.timefmt import both
 from aiglasses.transport.audio_sd import SoundDeviceAudio
 from aiglasses.transport.ble_scan import is_candidate, scan
 from aiglasses.transport.tracing import TracingTransport
@@ -235,7 +237,7 @@ def listen_cmd(
     """Subscribe to all notify/indicate characteristics and print what arrives (no writes)."""
 
     def show(n: Notification) -> None:
-        stamp = f"{n.ts % 86400:.3f}"
+        stamp = both(datetime.fromtimestamp(n.ts, timezone.utc))
         console.print(
             f"{stamp} h={n.handle} {n.uuid[:8]} {n.data.hex()} '{escape(ascii_of(n.data))}'"
         )
@@ -573,16 +575,16 @@ def apk_methods(
 
 @app.command("probe")
 def probe_cmd(
-    name: str = typer.Argument(..., help="battery_read, device_info_read or camera_status_read"),
+    name: str = typer.Argument(..., help="An approved probe: see `aiglasses probe --help`"),
     send: bool = typer.Option(False, "--send", help="Actually send. Without it nothing is sent."),
 ) -> None:
-    """Send ONE approved read-only request and show the reply. Dry run unless --send."""
+    """Send ONE approved request and show the reply. Dry run unless --send. Never repeated."""
     from aiglasses.protocol.registry import load_commands
     from aiglasses.research.probe import APPROVED_FRAMES, REPLY_TIMEOUT_SECONDS, run_probe
 
     if name not in APPROVED_FRAMES:
         console.print(
-            f"[red]{escape(name)} is not approved. Approved reads: {sorted(APPROVED_FRAMES)}.[/]"
+            f"[red]{escape(name)} is not approved. Approved: {sorted(APPROVED_FRAMES)}.[/]"
         )
         raise typer.Exit(2)
     command = next((c for c in load_commands() if c.name == name), None)
@@ -595,9 +597,15 @@ def probe_cmd(
     if not send:
         console.print("Dry run: nothing sent. Add --send to send once.")
         return
-    typer.confirm(
-        "Is the Cyan app closed and your phone's Bluetooth off, and are you ready?", abort=True
-    )
+    from aiglasses.research.probe import STATE_CHANGING
+
+    question = "Is the Cyan app closed and your phone's Bluetooth off, and are you ready?"
+    if name in STATE_CHANGING:
+        question = (
+            f"{name} CHANGES the glasses' state (a photo is taken and stored). "
+            "Are you watching the glasses, with the app closed and phone Bluetooth off?"
+        )
+    typer.confirm(question, abort=True)
     settings = Settings()
 
     async def go() -> None:
@@ -606,10 +614,13 @@ def probe_cmd(
                 g.transport, g.guard, command, settings.log_dir / "probe_audit.jsonl"
             )
         console.print(f"notifications active before the write: {result.notifications_active}")
+        console.print(f"link up immediately before the write: {result.link_up_before_write}")
         console.print(f"sent: {result.sent} (once, timeout {REPLY_TIMEOUT_SECONDS:.0f}s)")
         for r in result.replies:
             mark = "reply" if r.expected else "other"
-            console.print(f"  {r.time[11:23]} [{mark}] {r.hex}  {escape(r.decoded)}")
+            when = both(datetime.fromisoformat(r.time))
+            console.print(f"  {when} [{mark}] {r.hex}  {escape(r.decoded)}")
         console.print(f"verdict: {escape(result.verdict)}")
+        console.print("Next run: wait about 30 s; the glasses need time to advertise again.")
 
     _run(go())

@@ -8,7 +8,7 @@
 | Notifications | CONFIRMED | `aiglasses listen`: 8 of 9 CCCD enables succeed | Frames are `BC cmd len16 crc16 payload` (CRC verified on 756/756); event meanings partly inferred |
 | Voice stream decoding | INFERRED | `aiglasses voice candidates` uses the app's exact settings (16 kHz mono, 40-byte Opus packets): 0 errors | Not yet confirmed by listening; very low level |
 | Device info | CONFIRMED | 0x180A read: hardware, firmware | Serial empty; no battery service |
-| Battery | INFERRED | Command read from the app (0x42, payload 00 00); not yet sent | Needs approval of the exact bytes (docs/PROTOCOL.md) |
+| Battery | CONFIRMED | `aiglasses probe battery_read`: reply `bc4202002b706400` = 100 percent, not charging, 3 runs, user confirmed | Read-only request; not to be repeated needlessly |
 | Photo / video | INFERRED | Commands read from the app (02 01 01, 02 01 02); not yet sent | Stop-recording command not found |
 | Media download | INFERRED | App code: plain HTTP on port 80, `/files/media.config` then `/files/<name>` | Needs Wi-Fi Direct up first; plan in docs/PHASE4_PLAN.md |
 | Wi-Fi link | INFERRED | Phone bug report: the app connects to the glasses over **Wi-Fi Direct** (phone is group owner, glasses join as client) | Not hotspot/SoftAP as first assumed; trigger and PC-side route untested. This PC's adapter supports Wi-Fi Direct device, group owner and client (read-only check) |
