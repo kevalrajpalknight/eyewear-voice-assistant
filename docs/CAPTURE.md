@@ -107,6 +107,16 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 If nothing is listed, or the file is not a plain btsnoop (a `.cfa` or pcapng file, or empty), send me the list of file names and
 sizes, not the file.
 
+## 4b. Check what a bug report contains (works even when the Bluetooth log is empty)
+
+```powershell
+uv run aiglasses capture triage bug-reports
+```
+
+This lists, for each report, whether the Bluetooth log has packets, the app's BLE connection and A2DP history, any Wi-Fi Direct
+activity (and the group), the network endpoints the app uses, and when each app screen opened. It prints only the Cyan app
+and glasses information and never collects passphrases or your phone's own addresses.
+
 ## 5. Analyze
 
 ```powershell

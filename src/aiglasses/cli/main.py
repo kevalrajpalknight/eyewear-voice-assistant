@@ -42,6 +42,7 @@ for name, sub in (
     app.add_typer(sub, name=name)
 
 console = Console()
+TRIAGE_ARGUMENT = typer.Argument(..., help="Bug report .zip files, or a folder of them")
 LOG_ARGUMENT = typer.Argument(..., help="btsnoop_hci.log or an Android bugreport .zip")
 T = TypeVar("T")
 
@@ -455,3 +456,42 @@ def capture_analyze(
         console.print(f"Wrote {md_path} and {csv_path}")
 
     _run(go())
+
+
+@capture_app.command("triage")
+def capture_triage(
+    paths: list[Path] = TRIAGE_ARGUMENT,
+) -> None:
+    """What a phone bug report says about the Cyan app and the glasses (no Bluetooth log needed)."""
+    from aiglasses.research.bugreport import triage_zip
+
+    zips = sorted(z for p in paths for z in (p.glob("*.zip") if p.is_dir() else [p]))
+    if not zips:
+        console.print("[red]No .zip files found.[/]")
+        raise typer.Exit(1)
+    for zip_path in zips:
+        result = triage_zip(zip_path)
+        console.print(f"\n[bold]{escape(result.zip_name)}[/]")
+        for name, size in result.snoop_files:
+            note = "EMPTY (header only)" if size <= 16 else f"{size} bytes"
+            console.print(f"  Bluetooth log: {escape(name)} {note}")
+        if not result.snoop_files:
+            console.print("  Bluetooth log: none in this report")
+        for item in result.gatt_connections:
+            console.print(f"  BLE connection by the app: {escape(item)}")
+        for line in result.audio_events:
+            console.print(f"  audio: {escape(line)}")
+        for time, what in result.p2p_events:
+            console.print(f"  Wi-Fi Direct: {time} {escape(what)}")
+        group = result.p2p_group
+        if group.network:
+            console.print(
+                f"  Wi-Fi Direct group: network '{escape(group.network)}', phone is group owner: "
+                f"{group.phone_is_group_owner}, owner IP {group.group_owner_ip}, "
+                f"glasses P2P address {group.glasses_p2p_address or '?'}"
+            )
+        if result.remote_endpoints:
+            console.print(f"  app network endpoints: {sorted(result.remote_endpoints)}")
+        resumed = [e for e in result.app_events if e[1] == "ACTIVITY_RESUMED"]
+        for time, _kind, cls in resumed:
+            console.print(f"  app screen opened: {time} {escape(cls)}")

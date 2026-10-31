@@ -17,3 +17,4 @@ config.toml
 .venv*/
 bugreport*.zip
 btsnoop*
+bug-reports/
