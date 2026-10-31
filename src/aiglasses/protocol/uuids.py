@@ -10,3 +10,7 @@ SERIAL_NUMBER = short_uuid(0x2A25)
 FIRMWARE_REVISION = short_uuid(0x2A26)
 HARDWARE_REVISION = short_uuid(0x2A27)
 BATTERY_LEVEL = short_uuid(0x2A19)
+
+# Custom channel used by the official app (CONFIRMED on this unit)
+GLASSES_WRITE = "de5bf72a-d711-4e47-af26-65e3012a5dc7"
+GLASSES_NOTIFY = "de5bf729-d711-4e47-af26-65e3012a5dc7"

@@ -31,6 +31,8 @@ class WriteGuard:
         self.dry_run = dry_run
         self._audit_path = audit_path
         self._sent: set[tuple[str, bytes]] = set()
+        # Confirmed read-only commands may repeat; in-session approvals are sent at most once.
+        self._repeatable = set(self._allowed)
 
     def approve(self, name: str, char: str, payload: bytes) -> None:
         """Explicit user approval of one exact payload for this session."""
@@ -66,7 +68,7 @@ class WriteGuard:
         if self.dry_run:
             self._audit("dry_run", name, char, payload)
             return
-        if key in self._sent:
+        if key in self._sent and key not in self._repeatable:
             self._audit("blocked_repeat", name, char, payload)
             raise WriteBlockedError(
                 "already sent once this session; writes are never repeated or retried"

@@ -2,6 +2,10 @@
 
 from dataclasses import dataclass, field
 
+from aiglasses.domain.models import GlassesEvent
+from aiglasses.protocol.bcframe import BcFrame
+from aiglasses.protocol.voice import VOICE_CMD
+
 EVENT_CMD = 0x73
 
 
@@ -70,3 +74,15 @@ def decode_event(payload: bytes) -> DeviceEvent:
         groups = [tuple(payload[i : i + 4]) for i in (1, 5, 9) if i + 3 < len(payload)]
         return DeviceEvent("volume", f"volume settings (id, a, b, current) {groups}")
     return DeviceEvent("unknown", f"event type 0x{kind:02x}, payload {payload.hex()}")
+
+
+def frame_to_event(frame: BcFrame, timestamp: float) -> GlassesEvent | None:
+    """A typed event for 0x73 device events and 0x59 voice frames; replies to requests give None."""
+    if frame.cmd == EVENT_CMD:
+        event = decode_event(frame.payload)
+        return GlassesEvent(event.kind, frame.payload, timestamp, event.text, dict(event.fields))
+    if frame.cmd == VOICE_CMD:
+        return GlassesEvent(
+            "voice_frame", frame.payload, timestamp, "voice frame (40-byte Opus packet)"
+        )
+    return None

@@ -3,10 +3,25 @@ from contextlib import asynccontextmanager
 
 from aiglasses.capabilities import CAPABILITIES
 from aiglasses.config import Settings
-from aiglasses.domain.models import Capability, Confidence, GlassesEvent
+from aiglasses.domain.models import (
+    BatteryStatus,
+    Capability,
+    Confidence,
+    DeviceInfo,
+    GlassesEvent,
+    MediaCounts,
+)
 from aiglasses.protocol.registry import allowlist_from, load_commands
 from aiglasses.safety import WriteGuard
-from aiglasses.services import AudioService, CameraService, DeviceService, EventService
+from aiglasses.services import (
+    AudioService,
+    CameraService,
+    ControlService,
+    DeviceService,
+    EventService,
+    FrameChannel,
+    PhotoResult,
+)
 from aiglasses.transport.base import AudioIO, BleTransport
 from aiglasses.transport.bleak_transport import BleakTransport
 from aiglasses.transport.retry import connect_with_retry
@@ -35,10 +50,30 @@ class Glasses:
         self.device = DeviceService(transport)
         self.camera = CameraService(self.guard)
         self.audio = AudioService(audio)
-        self._events = EventService(transport)
+        self.channel = FrameChannel(transport)
+        self.control = ControlService(self.guard, self.channel, load_commands())
+        self._events = EventService(self.channel)
 
     def events(self) -> AsyncIterator[GlassesEvent]:
+        """Typed events: `async for event in glasses.events():`."""
         return self._events.events()
+
+    async def read_battery(self) -> BatteryStatus:
+        """Read-only request (CONFIRMED). Needs `connect(..., dry_run=False)`."""
+        return await self.control.read_battery()
+
+    async def read_device_info(self) -> DeviceInfo:
+        """Read-only request (CONFIRMED): firmware and hardware strings."""
+        address = str(self.transport.connection_info().get("address", ""))
+        return await self.control.read_device_info(address)
+
+    async def read_media_counts(self) -> MediaCounts:
+        """Read-only request (CONFIRMED): photos, videos and audio recordings on the glasses."""
+        return await self.control.read_media_counts()
+
+    async def take_photo(self, *, confirm: bool) -> PhotoResult:
+        """Take ONE photo. Changes the glasses' state, so it needs an explicit confirm=True."""
+        return await self.control.take_photo(confirm=confirm)
 
     def capabilities(self) -> dict[Capability, Confidence]:
         return dict(CAPABILITIES)

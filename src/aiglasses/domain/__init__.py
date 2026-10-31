@@ -1,5 +1,6 @@
 from aiglasses.domain.errors import (
     BluetoothUnavailableError,
+    ConfirmationRequired,
     ConnectionFailedError,
     DeviceNotFoundError,
     GlassesError,
@@ -18,6 +19,7 @@ from aiglasses.domain.models import (
     GattDescriptor,
     GattService,
     GlassesEvent,
+    MediaCounts,
     MediaItem,
     ScanResult,
 )
@@ -27,6 +29,7 @@ __all__ = [
     "BluetoothUnavailableError",
     "Capability",
     "Confidence",
+    "ConfirmationRequired",
     "ConnectionFailedError",
     "DeviceInfo",
     "DeviceNotFoundError",
@@ -36,6 +39,7 @@ __all__ = [
     "GlassesError",
     "GlassesEvent",
     "GlassesTimeoutError",
+    "MediaCounts",
     "MediaItem",
     "NotSupportedError",
     "PairingRequiredError",

@@ -85,3 +85,13 @@ class GlassesEvent:
     kind: str
     raw: bytes
     timestamp: float
+    text: str = ""
+    fields: dict[str, int | bool | str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class MediaCounts:
+    photos: int
+    videos: int
+    audio: int
+    file_list_type: int | None = None

@@ -19,8 +19,7 @@ async def test_connect_lifecycle_and_unsupported_services(tmp_path: Path) -> Non
             await g.camera.take_photo()
         with pytest.raises(NotSupportedError):
             await g.device.battery()
-        with pytest.raises(NotSupportedError):
-            g.events()
+        assert hasattr(g.events(), "__aiter__")  # typed events are available now
         assert g.capabilities()[Capability.PHOTO] is Confidence.UNVERIFIED
     assert not transport.connected
 

@@ -1,13 +1,14 @@
 from collections.abc import AsyncIterator
 
-from aiglasses.domain.errors import NotSupportedError
 from aiglasses.domain.models import GlassesEvent
-from aiglasses.transport.base import BleTransport
+from aiglasses.services.channel import FrameChannel
 
 
 class EventService:
-    def __init__(self, transport: BleTransport) -> None:
-        self._transport = transport
+    """Typed events from the glasses: 0x73 device events and 0x59 voice frames."""
+
+    def __init__(self, channel: FrameChannel) -> None:
+        self._channel = channel
 
     def events(self) -> AsyncIterator[GlassesEvent]:
-        raise NotSupportedError("decoded events arrive in Phase 5")
+        return self._channel.events()

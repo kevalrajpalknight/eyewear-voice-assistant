@@ -26,6 +26,10 @@ class GlassesTimeoutError(GlassesError):
     """A BLE operation did not complete in time."""
 
 
+class ConfirmationRequired(GlassesError):
+    """A state-changing call needs an explicit confirm=True from the person present."""
+
+
 class WriteBlockedError(GlassesError):
     """WriteGuard refused a BLE write."""
 

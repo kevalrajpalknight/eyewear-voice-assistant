@@ -275,8 +275,31 @@ def battery() -> None:
 
 @app.command()
 def photo() -> None:
-    """Take a photo."""
-    _stub("photo", 4)
+    """Take ONE photo (changes the glasses' state). Reads counts first; asks you to confirm."""
+    typer.confirm(
+        "A photo will be taken and stored on the glasses. Are you watching the glasses, with the "
+        "Cyan app closed and your phone's Bluetooth off?",
+        abort=True,
+    )
+
+    async def go() -> None:
+        async with Glasses.connect(Settings(), dry_run=False) as g:
+            result = await g.take_photo(confirm=True)
+        before = result.before
+        console.print(
+            f"before: photos {before.photos}, videos {before.videos}, audio {before.audio}"
+        )
+        if result.after is None:
+            console.print("[yellow]no media-count event arrived after the photo[/]")
+        else:
+            after = result.after
+            console.print(
+                f"after:  photos {after.photos}, videos {after.videos}, audio {after.audio}"
+            )
+            console.print(f"photos added: {result.photos_added}")
+        console.print(f"reply {result.reply_hex}: {escape(result.reply)}")
+
+    _run(go())
 
 
 @video_app.command("start")
