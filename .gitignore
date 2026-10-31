@@ -36,3 +36,5 @@ bench/data/
 backups/
 .env.*
 !.env.example
+tools/
+models/

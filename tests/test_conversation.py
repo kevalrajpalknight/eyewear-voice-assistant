@@ -17,7 +17,6 @@ from aiglasses.assistant.cleaner import clean_reply
 from aiglasses.assistant.conversation import (
     AssistantTurnRecord,
     ConversationPipeline,
-    History,
     system_prompt,
 )
 from aiglasses.assistant.echo import TurnLog
@@ -26,6 +25,7 @@ from aiglasses.assistant.glossary import Glossary, parse_glossary
 from aiglasses.assistant.interfaces import Message, TtsOptions
 from aiglasses.assistant.joiner import TurnJoiner
 from aiglasses.assistant.llm_client import LangChainLlmClient
+from aiglasses.assistant.memory import Memory
 from aiglasses.assistant.router import LocalState, RoutedLlmClient
 from aiglasses.domain.errors import ConfigError, GlassesError
 from aiglasses.logging_setup import RedactingFilter
@@ -114,7 +114,7 @@ async def test_the_llm_sees_persona_date_glossary_note_and_history() -> None:
     system, *rest = rig.llm.requests[1]
     assert system.role == "system" and system.content.startswith("PERSONA")
     assert "Zorvex Quill" in system.content and "speech recognition" in system.content
-    assert "Saturday 31 October 2026, 16:35" in system.content
+    assert "Saturday 31 October 2026, 16:35" in system.content  # kept in the system prompt
     assert [m.role for m in rest] == ["user", "assistant", "user"]
     assert rest[1].content == "One."
 
@@ -192,7 +192,7 @@ async def test_history_keeps_only_the_configured_number_of_exchanges() -> None:
     for turn in range(1, 5):
         await rig.pipeline.run_turn(utterance(), turn)
     assert len(rig.llm.requests[3]) == 1 + 2 * 2 + 1
-    assert History(0).messages() == []
+    assert Memory(0, 60, 100).messages() == []
 
 
 async def test_the_reply_length_cap_stops_generation_between_clauses() -> None:
@@ -236,7 +236,7 @@ async def test_two_clicks_are_joined_when_the_first_was_cut_off() -> None:
 
 
 def test_the_joiner_leaves_complete_requests_and_late_clicks_alone() -> None:
-    joiner = TurnJoiner(4.0)
+    joiner = TurnJoiner(4.0, 300)
     base = 1000.0
     assert joiner.feed(utterance(base, 2.0)).replaces_previous is False
     assert joiner.feed(utterance(base + 3.0, 2.0)).replaces_previous is False  # first was complete
@@ -379,3 +379,15 @@ def test_persona_loading_uses_the_packaged_default_or_a_given_file(tmp_path: Pat
     assert load_persona(settings(persona_path=custom)) == "Be a pirate."
     with pytest.raises(ConfigError):
         load_persona(settings(persona_path=tmp_path / "missing.md"))
+
+
+async def test_a_long_reply_is_cut_to_the_sentence_limit() -> None:
+    long_reply = tuple(f"Sentence number {i} is here now. " for i in range(12))
+    rig = Rig(reply_max_sentences=5, llm=FakeLlm([long_reply]))
+    await rig.pipeline.run_turn(utterance(), 1)
+    assert len(rig.tts.spoken) == 5 and rig.tts.spoken[-1].endswith("four is here now.")
+
+
+def test_the_persona_names_the_target_length_from_settings() -> None:
+    prompt = system_prompt("Say {target_sentences} sentences.", None, FIXED_NOW, 3)
+    assert "Say three sentences." in prompt

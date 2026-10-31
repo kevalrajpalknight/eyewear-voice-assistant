@@ -1,0 +1,50 @@
+# Synthetic quality suite for the local model (no real user text). Each item is what the model
+# should decide for ONE step: action answer | tool | escalate (and which tool).
+# `says` (optional) lists substrings of which at least one must appear in an answer's text.
+prompts:
+  # greetings and chit-chat: answer
+  - {id: g1, group: greeting, text: "Hello there", action: answer}
+  - {id: g2, group: greeting, text: "Good morning, how are you?", action: answer}
+  - {id: g3, group: chitchat, text: "Tell me a short joke about cats", action: answer}
+  - {id: g4, group: chitchat, text: "I am feeling a bit tired today", action: answer}
+  - {id: g5, group: chitchat, text: "Thanks, that was helpful", action: answer}
+  # stable simple knowledge: answer, with known answers for hallucination checks
+  - {id: k1, group: stable, text: "What is the capital of France?", action: answer, says: ["Paris"]}
+  - {id: k2, group: stable, text: "How many days are in a week?", action: answer, says: ["seven", "7"]}
+  - {id: k3, group: stable, text: "What colour do you get by mixing blue and yellow?", action: answer, says: ["green"]}
+  - {id: k4, group: stable, text: "Which planet is closest to the sun?", action: answer, says: ["Mercury"]}
+  - {id: k5, group: stable, text: "What is two plus two?", action: answer, says: ["four", "4"]}
+  - {id: k6, group: stable, text: "How many legs does a spider have?", action: answer, says: ["eight", "8"]}
+  # time-sensitive facts: escalate (or search)
+  - {id: t1, group: time_sensitive, text: "What is the weather like in Mumbai right now?", action: escalate_or_search}
+  - {id: t2, group: time_sensitive, text: "Who won the cricket match last night?", action: escalate_or_search}
+  - {id: t3, group: time_sensitive, text: "What is the latest news about the election?", action: escalate_or_search}
+  - {id: t4, group: time_sensitive, text: "How much is a bitcoin today?", action: escalate_or_search}
+  - {id: t5, group: time_sensitive, text: "What is the price of petrol in Delhi?", action: escalate_or_search}
+  - {id: t6, group: time_sensitive, text: "Is the shop on Main Street open now?", action: escalate_or_search}
+  # tool intents
+  - {id: d1, group: tool, text: "Take a photo", action: tool, tool: take_photo}
+  - {id: d2, group: tool, text: "How much battery do the glasses have left?", action: tool, tool: read_battery}
+  - {id: d3, group: tool, text: "How many photos are on the glasses?", action: tool, tool: read_media_counts}
+  - {id: d4, group: tool, text: "What am I looking at?", action: tool, tool: describe_scene}
+  - {id: d5, group: tool, text: "Forget what I just said", action: tool, tool: forget_all_that}
+  - {id: d6, group: tool, text: "Let's start over, clear your memory", action: tool, tool: forget_all_that}
+  - {id: d7, group: tool, text: "Search the web for the opening hours of the national museum", action: tool, tool: search_web}
+  - {id: d8, group: tool, text: "Look up how tall Mount Everest is", action: tool, tool: search_web}
+  # dissatisfaction: escalate
+  - {id: s1, group: dissatisfied, text: "No, I meant the other one, that is wrong", action: escalate, history: true}
+  - {id: s2, group: dissatisfied, text: "That's not what I asked", action: escalate, history: true}
+  - {id: s3, group: dissatisfied, text: "You are wrong, try again properly", action: escalate, history: true}
+  # ambiguous: answer with a question, or escalate
+  - {id: a1, group: ambiguous, text: "Do the thing", action: answer_or_escalate}
+  - {id: a2, group: ambiguous, text: "Can you fix it?", action: answer_or_escalate}
+  - {id: a3, group: ambiguous, text: "Call him", action: answer_or_escalate}
+  # research and deep analysis: escalate
+  - {id: r1, group: research, text: "Do a deep dive on the pros and cons of solar panels for a flat roof", action: escalate}
+  - {id: r2, group: research, text: "Think hard and compare three laptop brands in detail", action: escalate}
+  - {id: r3, group: research, text: "Give me a detailed analysis of how interest rates affect house prices", action: escalate}
+  - {id: r4, group: research, text: "Use the big model for this: plan a ten day trip across Japan", action: escalate}
+  # hallucination traps: obscure facts the model should not invent
+  - {id: h1, group: trap, text: "Who is the mayor of the village of Tarnowo Podgorne?", action: escalate}
+  - {id: h2, group: trap, text: "What did my neighbour have for lunch yesterday?", action: answer_or_escalate}
+  - {id: h3, group: trap, text: "What is the phone number of the pharmacy near me?", action: escalate_or_search}

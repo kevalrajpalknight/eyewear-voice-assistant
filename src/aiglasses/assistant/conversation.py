@@ -9,7 +9,6 @@ import asyncio
 import contextlib
 import logging
 import time
-from collections import deque
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -20,6 +19,7 @@ from aiglasses.assistant.cleaner import clean_reply
 from aiglasses.assistant.echo import Debug, TurnLog
 from aiglasses.assistant.glossary import Correction, Glossary
 from aiglasses.assistant.interfaces import (
+    TIME_MARKER,
     AudioChunk,
     AudioSink,
     LlmClient,
@@ -28,14 +28,16 @@ from aiglasses.assistant.interfaces import (
     TextToSpeech,
     TtsOptions,
 )
+from aiglasses.assistant.lanes import TurnReport
 from aiglasses.assistant.llm_client import LlmError
+from aiglasses.assistant.memory import Exchange, Memory
 from aiglasses.assistant.router import RouteDecision, RoutedLlmClient
+from aiglasses.assistant.spoken import number_words
 from aiglasses.services.voice import VoiceUtterance
 from aiglasses.settings import AssistantSettings
 from aiglasses.timefmt import stamps
 
 log = logging.getLogger("aiglasses.assistant")
-INTERRUPTED_NOTE = " [the user interrupted before the end]"
 QUEUE_DEPTH = 3
 
 
@@ -47,57 +49,14 @@ class StageError(Exception):
         self.stage, self.cause = stage, cause
 
 
-@dataclass
-class Exchange:
-    user: str
-    assistant: str
-    interrupted: bool = False
-    turn: int = 0
-
-
-class History:
-    """Rolling memory of recent exchanges, newest last."""
-
-    def __init__(self, turns: int) -> None:
-        self.turns = turns
-        self._items: deque[Exchange] = deque(maxlen=max(turns, 1))
-
-    def add(self, exchange: Exchange) -> None:
-        if self.turns > 0:
-            self._items.append(exchange)
-
-    def drop_turn(self, turn: int) -> bool:
-        """Remove the newest exchange if it belongs to `turn` (a request that gets re-asked)."""
-        if self._items and self._items[-1].turn == turn:
-            self._items.pop()
-            return True
-        return False
-
-    @property
-    def last(self) -> Exchange | None:
-        return self._items[-1] if self._items else None
-
-    def messages(self) -> list[Message]:
-        found: list[Message] = []
-        for item in self._items:
-            found.append(Message("user", item.user))
-            found.append(
-                Message(
-                    "assistant", item.assistant + (INTERRUPTED_NOTE if item.interrupted else "")
-                )
-            )
-        return found
-
-    def __len__(self) -> int:
-        return len(self._items)
-
-
-def system_prompt(persona: str, glossary: Glossary | None, now: datetime) -> str:
+def system_prompt(
+    persona: str, glossary: Glossary | None, now: datetime, target_sentences: int = 2
+) -> str:
     """Persona + recognition-error note (from the glossary) + the current date and time."""
-    parts = [persona.strip()]
+    parts = [persona.strip().replace("{target_sentences}", number_words(target_sentences))]
     if glossary:
         parts.append(glossary.prompt_note())
-    parts.append(f"Current date and time: {now:%A %d %B %Y, %H:%M} ({now.tzinfo}).")
+    parts.append(f"{TIME_MARKER} {now:%A %d %B %Y, %H:%M} ({now.tzinfo}).")
     return "\n\n".join(parts)
 
 
@@ -121,6 +80,10 @@ class AssistantTurnRecord:
     route_role: str = ""
     route_reason: str = ""
     router_s: float = 0.0
+    action: str = ""
+    steps: int = 0
+    local_first_token_s: float | None = None
+    cloud_first_token_s: float | None = None
     corrections: int = 0
     outcome: str = "spoken"  # spoken | empty | cancelled | llm_error | tts_error | error
     error: str = ""
@@ -138,7 +101,9 @@ class AssistantTurnRecord:
             "audio_s": round(self.audio_seconds, 2), "words_in": self.words_in,
             "chars_out": self.chars_out, "clauses": self.clauses, "corrections": self.corrections,
             "tier": self.tier, "route_role": self.route_role, "route_reason": self.route_reason,
-            "router_s": round(self.router_s, 3),
+            "router_s": round(self.router_s, 3), "action": self.action, "steps": self.steps,
+            "local_first_token_s": self.local_first_token_s,
+            "cloud_first_token_s": self.cloud_first_token_s,
             "decode_s": self._gap(self.t_received, self.t_end),
             "stt_s": self._gap(self.t_stt, self.t_received),
             "llm_first_token_s": self._gap(self.t_llm_first, self.t_stt),
@@ -174,7 +139,10 @@ class ConversationPipeline:
         debug: Debug | None = None,
         on_record: Callable[[AssistantTurnRecord], None] | None = None,
         on_correction: Callable[[Correction], None] | None = None,
+        on_text: Callable[[str], None] | None = None,
         clock: Callable[[ZoneInfo], datetime] | None = None,
+        memory_clock: Callable[[], float] = time.monotonic,
+        memory: Memory | None = None,
     ) -> None:
         self.stt, self.tts, self.sink, self.llm = stt, tts, sink, llm
         self.options, self.settings, self.persona, self.glossary = (
@@ -183,9 +151,15 @@ class ConversationPipeline:
             persona,
             glossary,
         )
-        self.history = History(settings.memory_max_turns)
+        self.history = memory or Memory(
+            settings.memory_max_turns,
+            settings.memory_ttl_s,
+            settings.memory_max_tokens,
+            memory_clock,
+        )
         self._turn_log, self._debug = turn_log, debug
         self._on_record, self._on_correction = on_record, on_correction
+        self.on_text = on_text
         self._clock = clock or (lambda tz: datetime.now(tz))
         self._current: AssistantTurnRecord | None = None
         if isinstance(llm, RoutedLlmClient):
@@ -198,11 +172,29 @@ class ConversationPipeline:
             record.tier, record.route_role = decision.tier, decision.role
             record.route_reason, record.router_s = decision.reason, decision.router_s
 
+    def _absorb_report(self, record: AssistantTurnRecord) -> TurnReport | None:
+        """Lane details from a local-first client; other clients have none."""
+        report = getattr(self.llm, "report", None)
+        if not isinstance(report, TurnReport):
+            return None
+        record.tier, record.route_reason, record.action = (
+            report.lane,
+            report.category,
+            report.action,
+        )
+        record.route_role = ("rules", "local", "cloud")[report.lane]
+        record.steps = report.steps
+        record.local_first_token_s = report.local_first_token_s
+        record.cloud_first_token_s = report.cloud_first_token_s
+        return report
+
     def _now(self) -> datetime:
         return self._clock(ZoneInfo(self.settings.assistant_timezone))
 
     def _messages(self, user_text: str) -> list[Message]:
-        system = system_prompt(self.persona, self.glossary, self._now())
+        system = system_prompt(
+            self.persona, self.glossary, self._now(), self.settings.reply_target_sentences
+        )
         return [Message("system", system), *self.history.messages(), Message("user", user_text)]
 
     async def _transcribe(self, utterance: VoiceUtterance, record: AssistantTurnRecord) -> str:
@@ -244,22 +236,26 @@ class ConversationPipeline:
         """LLM text -> clauses -> cleaned -> TTS chunks on the queue. Ends with None or an error."""
         stream = ClauseStream(self.settings.tts_first_clause_max_words)
         audio_seconds = 0.0
+        sentences = 0
         reply: list[str] = []
         deltas = self.llm.stream(messages, max_tokens=self.settings.llm_max_tokens)
 
         async def speak(clause: str) -> bool:
-            nonlocal audio_seconds
+            nonlocal audio_seconds, sentences
             cleaned = clean_reply(clause)
             if not cleaned:
                 return True
             record.clauses += 1
             spoken.append(cleaned)
+            if cleaned.endswith((".", "?", "!")):
+                sentences += 1
             async for chunk in self.tts.synthesize_stream(cleaned, self.options):
                 if record.t_first_chunk is None:
                     record.t_first_chunk = time.time()
                 audio_seconds += chunk.seconds
                 await queue.put(chunk)
-            return audio_seconds < self.settings.max_reply_seconds
+            within_time = audio_seconds < self.settings.max_reply_seconds
+            return within_time and sentences < self.settings.reply_max_sentences
 
         stage = "llm"
         try:
@@ -310,6 +306,8 @@ class ConversationPipeline:
             if self._debug is not None and self.settings.debug_save_audio:
                 self._debug.save_audio(turn, utterance)
             text = await self._transcribe(utterance, record)
+            if self.on_text is not None:
+                self.on_text(text)
             if self.settings.log_transcripts:
                 record.heard = text
             if not text:
@@ -343,12 +341,18 @@ class ConversationPipeline:
                 await self._failed(exc, record, spoken)
             else:
                 record.t_done = time.time()
-            if record.outcome == "spoken":
-                self.history.add(Exchange(text, " ".join(spoken), turn=turn))
+            report = self._absorb_report(record)
+            if record.outcome == "spoken" and not (report and report.skip_memory):
+                notes = report.notes if report else []
+                self.history.add(Exchange(text, " ".join(spoken), turn=turn, notes=notes))
         except asyncio.CancelledError:
             record.outcome = "cancelled"
             if text:
-                self.history.add(Exchange(text, " ".join(spoken), interrupted=True, turn=turn))
+                report = self._absorb_report(record)
+                notes = report.notes if report else []
+                self.history.add(
+                    Exchange(text, " ".join(spoken), interrupted=True, turn=turn, notes=notes)
+                )
             raise
         except Exception as exc:
             record.outcome = "error"

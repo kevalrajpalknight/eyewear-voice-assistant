@@ -97,7 +97,7 @@ a sentence boundary for every lane.
 ## Local model (llama.cpp)
 `LOCAL_LLM_BIN_DIR` (`tools/llama.cpp`), `LOCAL_LLM_MODEL` (a name from the registry; empty means no
 local model), `LOCAL_LLM_THREADS` (empty = physical cores), `LOCAL_LLM_CTX` (`4096` tokens),
-`LOCAL_LLM_PORT` (`8081`, bound to 127.0.0.1), `LOCAL_LLM_BATCH` (`512`), `LOCAL_LLM_PRELOAD`
+`LOCAL_LLM_PORT` (`8081`, bound to 127.0.0.1), `LOCAL_LLM_BATCH` (`512`), `LOCAL_LLM_MAX_TOKENS` (`120` tokens per local step), `LOCAL_LLM_PRELOAD`
 (`true`), `LOCAL_LLM_PROMPT_CACHE` (`true`), `LOCAL_FIRST_TOKEN_TIMEOUT_S` (`2.5`), `MODELS_DIR`
 (`models`), `MODEL_REGISTRY_PATH` (the shipped `models.yaml`), `MODEL_DOWNLOAD_BUDGET_GB` (`8`),
 `ESCALATION_FILLER` (spoken while the cloud answers). `ROUTER_MODE=local_first` enables the lanes.

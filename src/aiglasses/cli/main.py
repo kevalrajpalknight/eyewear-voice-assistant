@@ -13,6 +13,7 @@ from rich.markup import escape
 from rich.table import Table
 
 from aiglasses.capabilities import CAPABILITIES
+from aiglasses.cli.local import llm_server_app, models_app
 from aiglasses.config import Settings, save_device_address
 from aiglasses.domain.errors import GlassesError
 from aiglasses.domain.models import Confidence
@@ -50,6 +51,8 @@ for name, sub in (
     ("ai-voice", ai_voice_app),
     ("assistant", assistant_app),
     ("apk", apk_app),
+    ("models", models_app),
+    ("llm-server", llm_server_app),
 ):
     app.add_typer(sub, name=name)
 
@@ -376,6 +379,9 @@ def assistant_check(
         "--live",
         help="Make one neutral call per configured LLM role (LIVE_CALL_BUDGET in all)",
     ),
+    live_tools: bool = typer.Option(
+        False, "--live-tools", help="Make ONE neutral web search (counts against the live budget)"
+    ),
     reset_live_budget: bool = typer.Option(
         False, "--reset-live-budget", help="Set the live-call counter back to zero, then exit"
     ),
@@ -388,7 +394,9 @@ def assistant_check(
         check_module.reset_live_budget(log_dir / "live_calls.count")
         console.print("Live-call counter reset to zero.")
         raise typer.Exit(0)
-    code = check_module.run_check(AssistantSettings(), live=live, log_dir=log_dir, console=console)
+    code = check_module.run_check(
+        AssistantSettings(), live=live, log_dir=log_dir, console=console, live_tools=live_tools
+    )
     raise typer.Exit(code)
 
 

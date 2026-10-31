@@ -1,0 +1,49 @@
+# Model registry: data, not code. Revisions are pinned commits; sha256 are the Hugging Face LFS hashes.
+# `runtime` is the llama.cpp release (sha256 from the GitHub release asset digest).
+runtime:
+  llama.cpp:
+    release: b11715
+    published: '2026-10-17T19:34:47Z'
+    url: https://github.com/ggml-org/llama.cpp/releases/download/b11715/llama-b11715-bin-win-cpu-x64.zip
+    filename: llama-b11715-bin-win-cpu-x64.zip
+    sha256: d50ea1fc9283c3dc9d9aba160b88f722628d42eede09556447663e8833a43327
+    size: 19662498
+    license: MIT
+    source: GitHub release asset digest
+models:
+  qwen3-1.7b-q4_k_m:
+    repo: unsloth/Qwen3-1.7B-GGUF
+    revision: d7f544eead698dbd1f15126ef60b45a1e1933222
+    license: Apache-2.0
+    role: local text model, non-thinking
+    kind: chat
+    gated: false
+    filename: Qwen3-1.7B-Q4_K_M.gguf
+    sha256: b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897
+    size: 1107409472
+    companions: []
+  llama-3.2-3b-q4_k_m:
+    repo: unsloth/Llama-3.2-3B-Instruct-GGUF
+    revision: e7d0997e49c9cb00d88b4c1a6a16aa894b0bbc31
+    license: Llama 3.2 Community License (official repo is gated; this mirror is not)
+    role: local text model
+    kind: chat
+    gated: false
+    filename: Llama-3.2-3B-Instruct-Q4_K_M.gguf
+    sha256: 6c99cc00ae910f6a532a80022cb4bc1939094527a089c29294b841c0bd87f74d
+    size: 2019377600
+    companions: []
+  gemma-4-e2b-q4_k_m:
+    repo: unsloth/gemma-4-E2B-it-GGUF
+    revision: 0314792d7f1f7e229411f620751375812bb9faf2
+    license: Apache-2.0
+    role: local text, image and audio model
+    kind: chat+vision
+    gated: false
+    filename: gemma-4-E2B-it-Q4_K_M.gguf
+    sha256: 740185b21d22ceb83a11c3aa62ad5842ef32c70f6096d756bbee85a1e4ec34b8
+    size: 3106738272
+    companions:
+    - filename: mmproj-BF16.gguf
+      sha256: a402f10fb5780bf91d03a10cd89061139f522bee2e679b1291bbfdcd71d9547d
+      size: 986833728

@@ -74,3 +74,10 @@ commands:
     status: CONFIRMED
     source: probe runs 2026-10-31 07:37Z and 07:39Z (reply bc410b000b290204060000000100010000 twice = photos 6, videos 0, audio 1, equal to the earlier count event; no state change seen)
     safe_to_send: true
+  - name: ai_session_heartbeat
+    characteristic: de5bf72a-d711-4e47-af26-65e3012a5dc7
+    bytes: "bc450200c2400701"
+    direction: write
+    status: INFERRED
+    source: apk-static (syncHeartBeat(7) sent about every 3 s while the app's voice recognizer runs; our captures never had it)
+    safe_to_send: false

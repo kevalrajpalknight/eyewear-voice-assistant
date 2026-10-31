@@ -1,0 +1,14 @@
+# Deterministic escalation triggers (data, not code). Matched on lower-cased words.
+time_sensitive:
+  - '\b(?:today|tonight|tomorrow|right now|currently|latest|news|score|scores|weather|forecast|price|prices|stock|exchange rate|trending|live|results?)\b'
+  - '\bwho (?:won|is winning|is playing)\b'
+  - '\bwhat(?:''s| is) happening\b'
+research:
+  - '\b(?:research|deep dive|in depth|in-depth|detailed analysis|analy[sz]e|think hard|think carefully|big model|strong model|smartest model|step by step plan)\b'
+dissatisfied:
+  - '^(?:no|nope|nah)\b.*\b(?:i meant|i said|i asked)\b'
+  - '\b(?:that''s|that is|you are|you''re) (?:wrong|incorrect|not right)\b'
+  - '\bnot what i (?:asked|meant|wanted)\b'
+  - '^(?:i said|i meant)\b'
+# Two user turns this similar (0 to 100) within the memory window count as a repeated question.
+repeat_similarity: 85

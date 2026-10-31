@@ -43,6 +43,13 @@ llm = [
     "langchain-openai==1.7.2",
     "langchain-anthropic==1.7.5",
     "langchain-google-genai==4.4.2",
+    "psutil==7.2.2",
+    "httpx==0.28.1",
+    "pillow==12.3.0",
+]
+
+search = [
+    "ddgs==9.16.0",
 ]
 
 [dependency-groups]
@@ -83,7 +90,7 @@ files = ["src", "tests"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["sounddevice", "soundfile", "moonshine_voice", "moonshine_voice.*", "faster_whisper", "kokoro_onnx", "sherpa_onnx"]
+module = ["psutil", "sounddevice", "soundfile", "moonshine_voice", "moonshine_voice.*", "faster_whisper", "kokoro_onnx", "sherpa_onnx"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

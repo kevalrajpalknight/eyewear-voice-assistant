@@ -3,6 +3,7 @@
 import asyncio
 import time
 from collections.abc import AsyncIterator, Callable, Sequence
+from typing import Any
 
 import numpy as np
 
@@ -10,9 +11,11 @@ from aiglasses.assistant.interfaces import (
     AudioChunk,
     Message,
     Pcm,
+    ToolCall,
     Transcript,
     TtsOptions,
 )
+from aiglasses.assistant.local_llm import LocalLlm, Step, StepTiming
 
 
 class FakeStt:
@@ -108,3 +111,50 @@ class FakeSink:
     async def stop(self) -> None:
         self.stops += 1
         self._stopped.set()
+
+
+class FakeLocalLlm(LocalLlm):
+    """A scripted stand-in for the local server. Each script item is a Step, or an exception to
+    raise. Records the messages and tool lists of every call."""
+
+    def __init__(self, script: Sequence[Step | Exception], *, up: bool = True) -> None:
+        self._script = list(script)
+        self._up = up
+        self.calls: list[tuple[list[Message], list[str]]] = []
+
+    async def available(self) -> bool:
+        return self._up
+
+    async def step(
+        self, messages: list[Message], tools: list[str], *, max_tokens: int, time_left_s: float
+    ) -> tuple[Step, StepTiming]:
+        self.calls.append((list(messages), list(tools)))
+        item = self._script.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item, StepTiming(0.05, 0.1)
+
+
+class FakeCloudLlm:
+    """A cloud model with native tool calling. Each script item lists the events of one call:
+    text deltas (str) and ToolCall objects, in order."""
+
+    name = "fake-cloud"
+
+    def __init__(self, script: Sequence[Sequence[str | ToolCall]]) -> None:
+        self._script = [list(item) for item in script]
+        self.requests: list[list[Message]] = []
+        self.tool_lists: list[list[dict[str, Any]]] = []
+
+    async def stream_with_tools(
+        self, messages: list[Message], tools: list[dict[str, Any]], *, max_tokens: int
+    ) -> AsyncIterator[str | ToolCall]:
+        self.requests.append(list(messages))
+        self.tool_lists.append(list(tools))
+        for event in self._script[min(len(self.requests), len(self._script)) - 1]:
+            yield event
+
+    async def stream(self, messages: list[Message], *, max_tokens: int) -> AsyncIterator[str]:
+        async for event in self.stream_with_tools(messages, [], max_tokens=max_tokens):
+            if isinstance(event, str):
+                yield event

@@ -33,7 +33,8 @@ def test_packaged_registry_statuses_and_allowlist() -> None:
             assert denied_reason(command.payload) is not None
         else:
             assert denied_reason(command.payload) is None, command.name
-        assert frame.cmd in (0x41, 0x42, 0x43, 0x4A)
+        heartbeat = command.name == "ai_session_heartbeat"
+        assert frame.cmd in (0x41, 0x42, 0x43, 0x4A) or (heartbeat and frame.cmd == 0x45)
         if command.status is Confidence.INFERRED:
             assert not command.safe_to_send
 

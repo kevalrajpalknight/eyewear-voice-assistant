@@ -5,6 +5,7 @@ import importlib.util
 import subprocess
 import sys
 import time
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from rich.console import Console
@@ -30,6 +31,7 @@ from aiglasses.settings import ROLES, AssistantSettings, LlmRole
 
 LIVE_PROMPT = "Reply with the word ok."
 LIVE_MAX_TOKENS = 5
+LIVE_SEARCH_QUERY = "what is the capital of France"
 HINTS = {
     LlmAuthError: "the provider rejected the key: check LLM_API_KEY and LLM_PROVIDER",
     LlmRequestError: "the request was rejected: check LLM_MODEL (exact id) and LLM_BASE_URL",
@@ -105,7 +107,87 @@ async def live_call(role: LlmRole) -> tuple[bool, str]:
     )
 
 
-def run_check(assistant: AssistantSettings, *, live: bool, log_dir: Path, console: Console) -> int:
+def local_report(assistant: AssistantSettings, console: Console) -> list[str]:
+    """Print the local-model, tool, search and vision settings; return problems."""
+    from aiglasses.assistant import local_server
+    from aiglasses.assistant.models import Registry, model_path
+    from aiglasses.assistant.search import SEARCH_PROVIDERS
+    from aiglasses.assistant.tools.factory import KNOWN_TOOLS
+
+    problems: list[str] = []
+    console.print(
+        f"Tools enabled: {', '.join(assistant.enabled_tools) or 'none'} "
+        f"(at most {assistant.tool_max_calls_per_turn} calls per turn, "
+        f"{assistant.tool_timeout_s:g} s each)"
+    )
+    unknown = [t for t in assistant.enabled_tools if t not in KNOWN_TOOLS]
+    if unknown:
+        problems.append(f"TOOLS_ENABLED names unknown tools: {', '.join(unknown)}")
+    if assistant.search_provider not in SEARCH_PROVIDERS:
+        valid = ", ".join(sorted(SEARCH_PROVIDERS))
+        problems.append(f"SEARCH_PROVIDER {assistant.search_provider!r} is unknown; valid: {valid}")
+    console.print(
+        f"Search: {assistant.search_provider}, {assistant.search_max_results} results, region "
+        f"{assistant.search_region}, cache {assistant.search_cache_ttl_s:g} s; vision: "
+        f"{assistant.vision_provider}"
+    )
+    console.print(
+        f"Memory: {assistant.memory_max_turns} turns or {assistant.memory_ttl_s:g} s, "
+        f"{assistant.memory_max_tokens} tokens; replies: about {assistant.reply_target_sentences}, "
+        f"at most {assistant.reply_max_sentences} sentences; agent: {assistant.agent_max_steps} "
+        f"steps in {assistant.agent_time_budget_s:g} s"
+    )
+    if assistant.router_mode != "local_first":
+        return problems
+    name = assistant.local_llm_model
+    try:
+        registry = Registry.load(
+            assistant.model_registry_path if assistant.model_registry_path.exists() else None
+        )
+    except Exception as exc:
+        return [*problems, f"model registry: {type(exc).__name__}"]
+    threads = assistant.local_llm_threads or f"{local_server.physical_cores()} (physical cores)"
+    console.print(
+        f"Local model: {name or 'NOT set'}; port {assistant.local_llm_port}; context "
+        f"{assistant.local_llm_ctx}; batch {assistant.local_llm_batch}; threads "
+        f"{threads}; "
+        f"prompt cache {'on' if assistant.local_llm_prompt_cache else 'off'}; first token limit "
+        f"{assistant.local_first_token_timeout_s:g} s"
+    )
+    exe = assistant.local_llm_bin_dir / local_server.EXECUTABLE
+    console.print(f"llama.cpp: {'installed' if exe.exists() else 'NOT installed'} ({exe})")
+    if name is None:
+        console.print(
+            "[yellow]warning: LOCAL_LLM_MODEL is not set; every request goes to the cloud[/]"
+        )
+    elif name not in registry.models:
+        problems.append(
+            f"LOCAL_LLM_MODEL {name!r} is not in the registry; valid: "
+            + ", ".join(sorted(registry.models))
+        )
+    else:
+        spec = registry.models[name]
+        missing = [
+            f.filename for f in spec.files if not model_path(assistant.models_dir, spec, f).exists()
+        ]
+        if missing:
+            console.print(
+                f"[yellow]warning: model files missing ({', '.join(missing)}); "
+                f"run `aiglasses models pull {name}`[/]"
+            )
+        if not exe.exists():
+            console.print("[yellow]warning: run `aiglasses models pull llama.cpp`[/]")
+    return problems
+
+
+def run_check(
+    assistant: AssistantSettings,
+    *,
+    live: bool,
+    log_dir: Path,
+    console: Console,
+    live_tools: bool = False,
+) -> int:
     """Print the report; return 0 when nothing is wrong, 1 otherwise."""
     problems = list(assistant.problems())
     table = Table(title="LLM roles (secrets show only set / NOT set)")
@@ -159,34 +241,57 @@ def run_check(assistant: AssistantSettings, *, live: bool, log_dir: Path, consol
         lines = assistant.glossary_path.read_text(encoding="utf-8").splitlines()
         for warning in glossary_warnings(lines):
             console.print(f"[yellow]warning: {warning}[/]")
+    problems += local_report(assistant, console)
     console.print(f"Audio output device: {audio_device_line()}")
     for warning in assistant.warnings():
         console.print(f"[yellow]warning: {warning}[/]")
     if live and problems:
         console.print("[yellow]Live check skipped: fix the problems below first.[/]")
-    elif live:
-        problems += asyncio.run(_live(assistant, log_dir, console))
+    elif live or live_tools:
+        problems += asyncio.run(_live(assistant, log_dir, console, roles=live, tools=live_tools))
     for problem in problems:
         console.print(f"[red]problem:[/] {problem}")
     console.print("[green]Configuration looks complete.[/]" if not problems else "")
     return 1 if problems else 0
 
 
-async def _live(assistant: AssistantSettings, log_dir: Path, console: Console) -> list[str]:
+async def live_search(assistant: AssistantSettings) -> tuple[bool, str]:
+    """One neutral search through the configured provider."""
+    from aiglasses.assistant.search import SearchError, build_search
+
+    started = time.perf_counter()
+    try:
+        hits = await build_search(assistant).search(
+            LIVE_SEARCH_QUERY, max_results=2, region=assistant.search_region,
+            timeout_s=assistant.search_timeout_s,
+        )  # fmt: skip
+    except SearchError as exc:
+        return False, f"search failed: {exc.category}"
+    return True, f"{len(hits)} results in {time.perf_counter() - started:.2f} s"
+
+
+async def _live(
+    assistant: AssistantSettings, log_dir: Path, console: Console, *, roles: bool, tools: bool
+) -> list[str]:
     counter = log_dir / "live_calls.count"
-    roles = [assistant.llm_role("main")]
-    if assistant.fast_configured:
-        roles.append(assistant.llm_role("fast"))
-    if assistant.router_mode == "model":
-        roles.append(assistant.llm_role("router"))
+    jobs: list[tuple[str, Callable[[], Awaitable[tuple[bool, str]]]]] = []
+    if roles:
+        chosen = [assistant.llm_role("main")]
+        if assistant.fast_configured:
+            chosen.append(assistant.llm_role("fast"))
+        if assistant.router_mode == "model":
+            chosen.append(assistant.llm_role("router"))
+        jobs += [(r.role, lambda r=r: live_call(r)) for r in chosen]  # type: ignore[misc]
+    if tools:
+        jobs.append(("search", lambda: live_search(assistant)))
     failures = []
-    for role in roles:
+    for label, job in jobs:
         if live_budget_left(counter, assistant.live_call_budget) == 0:
             failures.append(f"live-call budget of {assistant.live_call_budget} is used up")
             break
         spend_live_call(counter)
-        ok, message = await live_call(role)
-        console.print(f"live {role.role}: {'ok' if ok else 'FAILED'}: {message}")
+        ok, message = await job()
+        console.print(f"live {label}: {'ok' if ok else 'FAILED'}: {message}")
         if not ok:
-            failures.append(f"live call for the {role.role} model failed")
+            failures.append(f"live call for {label} failed")
     return failures

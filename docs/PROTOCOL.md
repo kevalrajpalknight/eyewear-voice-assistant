@@ -463,3 +463,28 @@ Read-only search of the decompiled app (packages `ble`, `home`, `setting`, `ai`;
   earlier note that the video command may toggle and that the front-button click stops a recording.
 - Consequence: the assistant has no light tool and no stop tool. See
   `docs/APPROVAL_REQUEST_RECORDING.md` for the recording start commands (blocked, unapproved).
+
+## How the official app keeps an AI voice session alive (read-only study, 2026-11-01; INFERRED)
+Source: names and numbers in the decompiled `GlassesAzureSpeechRecognizer`, `AiChatViewModel` and the
+Oudmon `LargeDataHandler`. No code copied. Nothing was sent to the glasses.
+- **Heartbeat while a session is active.** When the app starts its recognizer it starts a timer that
+  calls `syncHeartBeat(7)` about every 3 seconds while the Bluetooth link is up. That builds a frame
+  with command 0x45 and payload `07 01`: `bc450200c2400701` (CRC computed with our own
+  `crc16_modbus`, which reproduces the known battery frame). The value 7 is also the app's
+  "AI conversation mode" activity number. Our own captures never had this heartbeat, and every one
+  ended 4.76 to 4.78 s after the start marker (20 of 22 takes). So the 4.8 s window is most
+  plausibly "the glasses stop the stream when no app answers"; the heartbeat may be what lets a
+  session run longer. UNVERIFIED: this would need one new write (see below) and is not approved.
+- **`02 01 0B` means "leave the AI mode" (most plausible).** The app sends it in three places: when
+  it has the final recognised text in chat (GPT) mode, just before it hands the text to the chat;
+  when its safety timer fires (15 s in chat mode, 60 s in translate mode); and in its `exitAi`
+  method. In all three the intent is "the app is finished with the AI session", so the glasses can
+  go back to normal. It carries no arguments and has no reply handler. UNVERIFIED on the unit.
+- **Agent chat mode has no timeout.** The app's timer is skipped when the "agent chat mode" user
+  setting is on, so there a session is only ended by the glasses (`0a 01`), by the heartbeat
+  stopping, or by exit. What decides the glasses' own end is still unknown.
+- **What this means for the assistant.** The 4.8 s window is a property of running without the app.
+  A longer session needs the heartbeat and probably a matching exit (`02 01 0B`) at the end; both
+  are new writes that need your approval of the exact bytes: `bc450200c2400701` (heartbeat,
+  command 0x45) and the existing frame for `02 01 0B`. Not in `commands.yaml` as sendable.
+  Until then requests stay short and cut-off requests are joined (see `TURN_JOIN_WINDOW_S`).

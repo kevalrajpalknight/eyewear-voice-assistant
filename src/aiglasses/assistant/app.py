@@ -34,7 +34,9 @@ class AssistantApp:
     def __init__(self, pipeline: ConversationPipeline, settings: AssistantSettings) -> None:
         self.pipeline = pipeline
         self.runner = TurnRunner(pipeline)
-        self.joiner = TurnJoiner(settings.turn_join_window_s)
+        self.joiner = TurnJoiner(settings.turn_join_window_s, settings.turn_end_silence_ms)
+        pipeline.history.on_forget(self.joiner.reset)
+        pipeline.on_text = self.joiner.note_text
         self.max_turns = settings.max_turns_per_session
         self.turns = 0
 

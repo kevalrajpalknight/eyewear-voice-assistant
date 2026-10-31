@@ -7,10 +7,11 @@ service (not tuning) live in `PROVIDER_BASE_URLS` and LLM_BASE_URL overrides the
 
 import asyncio
 import contextlib
+import json
 from collections.abc import AsyncIterator, Callable, Sequence
 from typing import Any
 
-from aiglasses.assistant.interfaces import Message
+from aiglasses.assistant.interfaces import Message, ToolCall
 from aiglasses.domain.errors import ConfigError, GlassesError
 from aiglasses.redact import redact
 from aiglasses.settings import LlmRole
@@ -146,10 +147,64 @@ def build_chat_model(role: LlmRole) -> Any:
 
 
 def _to_langchain(messages: list[Message]) -> list[Any]:
-    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
-    kinds = {"system": SystemMessage, "user": HumanMessage, "assistant": AIMessage}
-    return [kinds[m.role](content=m.content) for m in messages]
+    converted: list[Any] = []
+    for m in messages:
+        if m.role == "tool":
+            converted.append(ToolMessage(content=m.content, tool_call_id=m.tool_call_id or ""))
+        elif m.role == "assistant" and m.tool_calls:
+            calls = [{"id": c.id, "name": c.name, "args": c.args} for c in m.tool_calls]
+            converted.append(AIMessage(content=m.content, tool_calls=calls))
+        else:
+            kinds = {"system": SystemMessage, "user": HumanMessage, "assistant": AIMessage}
+            converted.append(kinds[m.role](content=m.content))
+    return converted
+
+
+def openai_tool_defs(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Our minimal tool schemas -> the function-calling format LangChain's bind_tools accepts."""
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": t["tool"],
+                "description": t["does"],
+                "parameters": {
+                    "type": "object",
+                    "properties": {k: {"type": v} for k, v in t["args"].items()},
+                    "required": list(t["args"]),
+                },
+            },
+        }
+        for t in tools
+    ]
+
+
+class _ToolCallCollector:
+    """Joins streamed tool-call fragments into whole calls."""
+
+    def __init__(self) -> None:
+        self._parts: dict[int, dict[str, str]] = {}
+
+    def feed(self, chunk: Any) -> None:
+        for part in getattr(chunk, "tool_call_chunks", None) or []:
+            index = int(part.get("index") or 0)
+            slot = self._parts.setdefault(index, {"id": "", "name": "", "args": ""})
+            slot["id"] += part.get("id") or ""
+            slot["name"] += part.get("name") or ""
+            slot["args"] += part.get("args") or ""
+
+    def calls(self) -> list[ToolCall]:
+        found = []
+        for index in sorted(self._parts):
+            part = self._parts[index]
+            try:
+                args = json.loads(part["args"]) if part["args"] else {}
+            except ValueError:
+                args = {}
+            found.append(ToolCall(part["id"] or f"call_{index}", part["name"], args))
+        return found
 
 
 class LangChainLlmClient:
@@ -167,12 +222,28 @@ class LangChainLlmClient:
         return build_chat_model(self.role.model_copy(update={"max_tokens": max_tokens}))
 
     async def stream(self, messages: list[Message], *, max_tokens: int) -> AsyncIterator[str]:
+        async for event in self._events(self._model(max_tokens), messages, with_tools=False):
+            if isinstance(event, str):
+                yield event
+
+    async def stream_with_tools(
+        self, messages: list[Message], tools: list[dict[str, Any]], *, max_tokens: int
+    ) -> AsyncIterator[str | ToolCall]:
+        """Text deltas, then any tool calls the model made (whole, after the stream ends)."""
         model = self._model(max_tokens)
+        bound = model.bind_tools(openai_tool_defs(tools)) if tools else model
+        async for event in self._events(bound, messages, with_tools=True):
+            yield event
+
+    async def _events(
+        self, model: Any, messages: list[Message], *, with_tools: bool
+    ) -> AsyncIterator[str | ToolCall]:
         prepared = _to_langchain(messages)
         loop = asyncio.get_running_loop()
         attempt = 0
         while True:
             started = False
+            collector = _ToolCallCollector()
             deadline = loop.time() + self.role.timeout_s
             iterator = model.astream(prepared).__aiter__()
             try:
@@ -183,11 +254,16 @@ class LangChainLlmClient:
                     try:
                         chunk = await asyncio.wait_for(iterator.__anext__(), remaining)
                     except StopAsyncIteration:
-                        return
+                        break
+                    if with_tools:
+                        collector.feed(chunk)
                     text = str(chunk.text)
                     if text:
                         started = True
                         yield text
+                for call in collector.calls():
+                    yield call
+                return
             except asyncio.CancelledError:
                 raise
             except GeneratorExit:
@@ -207,3 +283,27 @@ class LangChainLlmClient:
 async def _quiet(awaitable: Any) -> None:
     with contextlib.suppress(Exception):  # closing a half-read stream can fail harmlessly
         await awaitable
+
+
+class CloudVision:
+    """Describes an image with the cloud model. Off unless VISION_PROVIDER=cloud."""
+
+    def __init__(self, role: LlmRole, max_side: int, *, model: Any = None) -> None:
+        self.role, self._max_side, self._injected = role, max_side, model
+        self._secrets = [role.api_key.get_secret_value()] if role.api_key else []
+
+    async def describe(self, image: bytes, prompt: str) -> str:
+        from langchain_core.messages import HumanMessage
+
+        from aiglasses.assistant.vision import VisionError, data_uri, shrink
+
+        model = self._injected or build_chat_model(self.role)
+        picture = {"url": data_uri(shrink(image, self._max_side))}
+        message = HumanMessage(
+            content=[{"type": "text", "text": prompt}, {"type": "image_url", "image_url": picture}]
+        )
+        try:
+            reply = await asyncio.wait_for(model.ainvoke([message]), self.role.timeout_s)
+        except Exception as exc:
+            raise VisionError(str(map_error(exc, self._secrets))) from None
+        return str(reply.text).strip()

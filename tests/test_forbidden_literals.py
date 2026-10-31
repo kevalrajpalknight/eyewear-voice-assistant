@@ -12,6 +12,10 @@ REGISTRIES = {"settings.py", "registry.py", "engines.py"}
 MODEL_NAMES = re.compile(r"\b(gpt-?\d|claude-|gemini-?\d|llama-?\d|mistral-|o\d-mini|sonar)", re.I)
 VOICE_IDS = re.compile(r"\b[ab][fm]_[a-z]+\b")
 ENGINE_NAMES = re.compile(r"moonshine|parakeet|kokoro|faster.whisper", re.I)
+PROVIDER_NAMES = re.compile(r"ddgs|tavily|brave", re.I)
+LOCAL_MODEL_NAMES = re.compile(r"qwen|gemma|llama-?3|phi-?\d|unsloth|bartowski", re.I)
+SEARCH_REGISTRY = {"settings.py", "search.py"}
+MODEL_FILES = {"settings.py", "models.py"}
 
 
 def string_literals(path: Path) -> list[tuple[int, str]]:
@@ -58,3 +62,11 @@ def test_the_guard_itself_detects_a_hardcoded_literal(tmp_path: Path) -> None:
     texts = [t for _, t in string_literals(sample)]
     assert texts == ["bf_isabella", "gpt-5"]
     assert VOICE_IDS.search(texts[0]) and MODEL_NAMES.search(texts[1])
+
+
+def test_search_provider_names_appear_only_in_settings_and_the_search_registry() -> None:
+    assert offenders(PROVIDER_NAMES, SEARCH_REGISTRY) == []
+
+
+def test_local_model_names_are_data_not_code() -> None:
+    assert offenders(LOCAL_MODEL_NAMES, MODEL_FILES) == []

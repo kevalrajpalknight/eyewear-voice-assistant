@@ -89,13 +89,17 @@ class ToolOutcome:
 
 class ToolRegistry:
     def __init__(self, tools: list[Tool] | None = None, *, intents: Intents | None = None) -> None:
-        self._intents = intents or Intents([])
+        self.intents = intents or Intents([])
         self._tools: dict[str, Tool] = {}
         for tool in tools or []:
             self.register(tool)
 
     def register(self, tool: Tool) -> None:
         self._tools[tool.name] = tool
+
+    def risk(self, name: str) -> Risk | None:
+        tool = self._tools.get(name)
+        return tool.risk if tool is not None else None
 
     def names(self) -> list[str]:
         return sorted(self._tools)
@@ -152,7 +156,7 @@ class ToolRegistry:
                 False, f"{name} refused: untrusted content is in this turn", "tainted",
                 "I won't do that right now.",
             )  # fmt: skip
-        if tool.risk in NEEDS_REQUEST and not self._intents.requests(tool.name, ctx.utterance):
+        if tool.risk in NEEDS_REQUEST and not self.intents.requests(tool.name, ctx.utterance):
             return ToolOutcome(
                 False, f"{name} refused: you did not ask for it", "not_requested",
                 "Tell me directly if you want that.",

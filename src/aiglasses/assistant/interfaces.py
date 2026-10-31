@@ -2,12 +2,13 @@
 
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Any, Protocol
 
 import numpy as np
 import numpy.typing as npt
 
 Pcm = npt.NDArray[np.int16]
+TIME_MARKER = "Current date and time:"  # starts the last paragraph of the system prompt
 
 
 @dataclass(frozen=True)
@@ -34,9 +35,18 @@ class AudioChunk:
 
 
 @dataclass(frozen=True)
+class ToolCall:
+    id: str
+    name: str
+    args: dict[str, Any]
+
+
+@dataclass(frozen=True)
 class Message:
-    role: str  # "system" | "user" | "assistant"
+    role: str  # "system" | "user" | "assistant" | "tool"
     content: str
+    tool_calls: tuple[ToolCall, ...] = ()  # on an assistant message that called tools
+    tool_call_id: str | None = None  # on the "tool" message that answers one
 
 
 @dataclass
@@ -65,6 +75,14 @@ class LlmClient(Protocol):
     name: str
 
     def stream(self, messages: list[Message], *, max_tokens: int) -> AsyncIterator[str]: ...
+
+
+class ToolLlmClient(LlmClient, Protocol):
+    """An LLM that can also call tools natively (the cloud lane)."""
+
+    def stream_with_tools(
+        self, messages: list[Message], tools: list[dict[str, Any]], *, max_tokens: int
+    ) -> AsyncIterator[str | ToolCall]: ...
 
 
 class AudioSink(Protocol):

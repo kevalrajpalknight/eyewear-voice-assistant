@@ -136,6 +136,7 @@ class AssistantSettings(BaseSettings):
     local_llm_ctx: int = Field(4096, gt=0)
     local_llm_port: int = Field(8081, gt=0, lt=65536)
     local_llm_batch: int = Field(512, gt=0)
+    local_llm_max_tokens: int = Field(120, gt=0)  # per local step; one step is a short JSON
     local_llm_preload: bool = True
     local_llm_prompt_cache: bool = True
     local_first_token_timeout_s: float = Field(2.5, gt=0)

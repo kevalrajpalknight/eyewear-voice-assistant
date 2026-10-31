@@ -49,7 +49,7 @@ def fakes(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         monkeypatch.setattr(module, "build_tts", lambda s: made["tts"])
     monkeypatch.setattr(
         runtime, "build_llm",
-        lambda s, force_role, no_router: RoutedLlmClient(s, made["llm"]),
+        lambda s, force_role, no_router, parts=None: RoutedLlmClient(s, made["llm"]),
     )  # fmt: skip
     made["stt"] = stt
     return made
@@ -202,3 +202,25 @@ async def test_bench_record_glue_saves_takes_and_reports(
     monkeypatch.setattr(typer, "confirm", lambda *a, **k: False)
     await session.run_bench_record(ble(tmp_path), tmp_path / "out", [Sentence("a", "short", "Hi.")])
     assert (tmp_path / "out" / "a.wav").exists()
+
+
+async def test_local_first_with_no_local_server_falls_back_to_the_cloud_cleanly(
+    tmp_path: Path, wav: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from aiglasses.assistant.fakes import FakeCloudLlm
+
+    cloud, stt, tts = FakeCloudLlm([("The cloud answered.",)]), FakeStt("hello there"), FakeTts()
+    for module in (runtime, session):
+        monkeypatch.setattr(module, "build_stt", lambda s, normalize=False: stt)
+        monkeypatch.setattr(module, "build_tts", lambda s: tts)
+    monkeypatch.setattr(runtime, "LangChainLlmClient", lambda role: cloud)
+    settings = assistant(
+        router_mode="local_first", local_llm_port=59999, tools_enabled="read_battery"
+    )
+    await runtime.run_assistant(
+        ble(tmp_path), settings, output="null", force_role=None, no_router=False, wav=wav
+    )
+    spoken = " ".join(tts.spoken)
+    assert settings.escalation_filler.split()[0] in spoken and "The cloud answered" in spoken
+    row = json.loads((tmp_path / "logs" / "assistant_turns.jsonl").read_text().splitlines()[-1])
+    assert row["tier"] == 2 and row["route_reason"] == "local_down" and row["route_role"] == "cloud"
