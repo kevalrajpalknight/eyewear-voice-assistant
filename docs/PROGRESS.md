@@ -28,7 +28,7 @@ to the glasses, no pairing.
 | M6 engine registries | done | `registry.py`: STT and TTS by name from settings only |
 | M7 tests | done | see the final report for counts and coverage |
 | M8 docs | done | README quickstart, CONFIG, ASSISTANT_DESIGN, LATENCY_BUDGET, ADR 0009 |
-| M9 verification | see final report | |
+| M9 verification | done except the live call | 356 tests pass, new code 86 to 100 % covered, offline dry run with real Parakeet and Kokoro OK, `assistant check` OK; live call NOT made by me (budget used up, see below) |
 
 ## Decisions (conservative defaults, no user input needed)
 - `STT_MODEL_DIR` added next to `TTS_MODEL_DIR` (the task named only the TTS one).
@@ -43,3 +43,16 @@ to the glasses, no pairing.
 
 ## Blockers
 - none. Things only the user can check are listed in the final report.
+
+## Resolved
+- The deleted `bench/data` files (and probably the earlier `bench/src`) were deleted by the user by
+  accident; recordings were restored byte-identical from `backups/`.
+
+## Live-call budget
+`logs/live_calls.count` reads 3 (last written 2026-10-31 23:47 IST) although this session made no
+live call: the user's own `assistant check --live` runs used the budget. No live result has been
+seen by me. To allow more calls, the user can reset or delete that file.
+
+## Commit
+b980c7e holds M1 to M8 together (the pre-commit hook type-checks the whole tree, so the
+milestones could not be committed separately).
