@@ -39,6 +39,22 @@ after a cut-off request is joined to it. Changing provider, model, router, speec
 speed means editing `.env` only: see `docs/CONFIG.md`. `assistant run --wav file.wav --output null`
 runs one turn from a recording without sound; `assistant echo` repeats what it heard (no LLM).
 
+### Local model setup (optional, `ROUTER_MODE=local_first`)
+
+```powershell
+uv sync --extra assistant --extra research --extra llm --extra search
+uv run aiglasses models pull llama.cpp            # llama-server, sha256 checked, into tools/
+uv run aiglasses models list                      # sizes, licences, 8 GB download budget
+uv run aiglasses models pull qwen3-1.7b-q4_k_m    # into models/ (gitignored), sha256 checked
+# in .env: ROUTER_MODE=local_first   LOCAL_LLM_MODEL=qwen3-1.7b-q4_k_m   TOOLS_ENABLED=...
+uv run aiglasses assistant check                  # shows the resolved local settings
+uv run aiglasses assistant run                    # starts the local server itself (127.0.0.1)
+```
+
+`aiglasses llm-server start|status|stop` runs the server on its own. The server cannot outlive the
+program (Windows job object). If it is down, requests go to the cloud model. Free some RAM first:
+a 1 to 4 GB model needs headroom. Details: `docs/ASSISTANT_DESIGN.md`, `docs/CONFIG.md`.
+
 ## Library
 
 ```python

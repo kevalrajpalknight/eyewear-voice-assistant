@@ -50,3 +50,16 @@ playback start (`logs/assistant_turns.jsonl`, `end_to_sound_s` is the total).
   is therefore estimated at about 2 to 4 s from the end marker to the first spoken word. Replace this
   with the first `assistant run` log.
 - Tier-0 answers (time, date, stop, repeat) skip the LLM: estimated 1 to 1.5 s (STT + TTS only).
+
+## Local-first lanes (2026-11-01) - ESTIMATED, not measured
+- Lane 0 (rules, tools): end marker to sound about 1.2 to 1.8 s (decode + STT + TTS first chunk, as
+  measured for the echo loop) plus the tool call (a BLE read is well under a second).
+- Lane 1 (local model): STT + one constrained call + TTS. Qwen3 1.7B Q4 gave a first token at 0.9 s
+  and a whole short JSON step in 2.4 s in one smoke test run under heavy memory pressure (a single
+  call, not a benchmark). Estimate for a quiet PC: 1.5 to 3 s to the first spoken word. A cached
+  prompt prefix should cut the first-token part; to be measured.
+- Lane 2 (cloud after escalation): the filler line is spoken at once (about the lane-0 time), then
+  the cloud answer follows after its own first-token time (to be measured with one live call).
+- Wasted time when lane 1 escalates: one local step (about 1 to 3 s) before the filler. The
+  deterministic pre-checks (research, repeated question, correction, no search tool) escalate with
+  no local call at all.

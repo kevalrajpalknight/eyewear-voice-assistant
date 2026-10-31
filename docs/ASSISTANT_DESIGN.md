@@ -109,3 +109,45 @@ README quickstart, privacy switches (cloud vision, saving audio/transcripts), cl
 prints raw and corrected text. Phase B puts `Glossary.prompt_note()` into the LLM system prompt so
 the model also reads near-miss words as the user's terms. Hard limit found: the glasses stop a
 voice session about 4.8 s after the click, so requests must be short (see STT_TTS_BENCHMARK.md).
+
+## Local-first lanes (built 2026-11-01; `ROUTER_MODE=local_first`)
+```
+utterance -> STT -> LocalFirstClient
+  lane 0  rules: time/date/stop/repeat/heard handlers + intents.yaml (photo, battery, media counts,
+          forget, describe) -> tool -> short spoken result            (no model at all)
+  lane 1  ONE constrained call per step to llama-server (forced JSON, 127.0.0.1):
+          {"action": answer | tool | escalate, "text", "tool", "args", "reason"}
+          at most AGENT_MAX_STEPS steps within AGENT_TIME_BUDGET_S
+  lane 2  cloud (LLM_*): same history, native tool calling, after a one-line filler
+```
+- **Stable prompt prefix.** Persona, rules and tool schemas come first, then history, then the
+  utterance with the current time appended, so llama-server reuses its KV cache between turns.
+  Non-thinking mode (`--reasoning off`). No separate router model.
+- **Escalation (categories are logged, never content):** `research` (deep dive, think hard, big
+  model), `current_facts` (time-sensitive facts with no search tool, or an unaided local answer to
+  one), `dissatisfied` (a correction such as "no, I meant", or the same question again inside the
+  memory window), `unsure` (the model must escalate instead of guessing), `invalid_json` (after one
+  retry), `step_cap`, `time_budget`, `local_down` (server missing or down), `local_slow` (no first
+  token within `LOCAL_FIRST_TOKEN_TIMEOUT_S`). Rules live in `escalation.yaml` (data).
+- **Time-sensitive questions** go to `search_web` first (ddgs, titles and snippets only, results
+  tainted), then the local model answers from the results; a blocked or rate-limited search gets a
+  short spoken line and never crashes the turn.
+- **Memory.** `MEMORY_MAX_TURNS` or `MEMORY_TTL_S`, whichever hits first; RAM only; tool calls and
+  search results kept as one-line notes; interrupted replies flagged; `forget_all_that` (rules and
+  model) clears memory and pending turn joins, leaves no trace of the forget request, and never
+  touches log files.
+- **Tool rules, enforced in code (`tools/base.py`):** only registered and enabled tools run; a
+  state-changing tool (photo) runs only if the user's own words asked for it this turn (intents
+  file, with near-miss rejects); once web or camera text has entered the turn (taint) every device
+  and state-changing tool is refused for the rest of that turn; per-turn call cap and timeout;
+  recording tools stay blocked (they need `TOOLS_ENABLED`, `ALLOW_RECORDING_TOOLS` and a CONFIRMED
+  command, and even then the facade has no recording method).
+- **Short answers.** The persona asks for `REPLY_TARGET_SENTENCES`; speech stops at
+  `REPLY_MAX_SENTENCES` sentences for every lane.
+- **Fallback.** If the local server is down the filler plays and the cloud answers; if the cloud
+  also fails the usual spoken error line is used.
+- **Turn taking.** `turn_end.py` decides if a request was finished (timeout, trailing silence of
+  `TURN_END_SILENCE_MS`, final punctuation). Only cut-off requests are joined with the next click,
+  and joining adds no waiting.
+- **Not verified live:** the whole loop with real glasses and a real cloud model; local speed
+  numbers (see LOCAL_LLM_BENCHMARK.md).
