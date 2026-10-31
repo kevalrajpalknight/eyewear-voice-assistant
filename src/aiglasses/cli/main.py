@@ -286,7 +286,8 @@ def ai_voice_record(
             burst = await record_burst(g.events(), wait_seconds=wait)
         started = datetime.fromtimestamp(burst.started_at, timezone.utc)
         console.print(
-            f"burst at {both(started)}: {len(burst.packets)} packets, {burst.seconds:.2f}s of audio, "
+            f"burst at {both(started)}: {len(burst.packets)} packets, "
+            f"{burst.seconds:.2f}s of audio, "
             f"ended by {burst.ended_by}"
         )
         import soundfile as sf
