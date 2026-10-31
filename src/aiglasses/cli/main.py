@@ -1,6 +1,7 @@
 import asyncio
 import sys
 import threading
+from collections import Counter
 from collections.abc import Awaitable
 from pathlib import Path
 from typing import TypeVar
@@ -31,6 +32,7 @@ audio_app = typer.Typer(help="Bluetooth audio.")
 wifi_app = typer.Typer(help="Glasses Wi-Fi link.")
 capture_app = typer.Typer(help="Official-app capture analysis.")
 voice_app = typer.Typer(help="Offline experiments on the voice stream.")
+apk_app = typer.Typer(help="Static analysis of the official app (read-only).")
 for name, sub in (
     ("video", video_app),
     ("media", media_app),
@@ -38,10 +40,12 @@ for name, sub in (
     ("wifi", wifi_app),
     ("capture", capture_app),
     ("voice", voice_app),
+    ("apk", apk_app),
 ):
     app.add_typer(sub, name=name)
 
 console = Console()
+APK_ARGUMENT = typer.Argument(..., help="Path to the APK")
 TRIAGE_ARGUMENT = typer.Argument(..., help="Bug report .zip files, or a folder of them")
 LOG_ARGUMENT = typer.Argument(..., help="btsnoop_hci.log or an Android bugreport .zip")
 T = TypeVar("T")
@@ -495,3 +499,73 @@ def capture_triage(
         resumed = [e for e in result.app_events if e[1] == "ACTIVITY_RESUMED"]
         for time, _kind, cls in resumed:
             console.print(f"  app screen opened: {time} {escape(cls)}")
+
+
+@apk_app.command("packages")
+def apk_packages(
+    apk: Path = APK_ARGUMENT,
+    prefix: str = typer.Option("com.jieli", help="Dotted package prefix"),
+    depth: int = typer.Option(4, help="Package segments to group by"),
+) -> None:
+    """Count classes per package under a prefix (names only)."""
+    from aiglasses.research.dexstrings import apk_strings, class_packages
+
+    total: Counter[str] = Counter()
+    for _name, strings in apk_strings(apk):
+        total.update(class_packages(strings, prefix, depth))
+    for package, count in sorted(total.items()):
+        console.print(f"{count:5d}  {package}")
+    console.print(f"{sum(total.values())} classes under {prefix}")
+
+
+@apk_app.command("search")
+def apk_search(
+    apk: Path = APK_ARGUMENT,
+    pattern: str = typer.Argument(..., help="Regular expression (case-insensitive)"),
+    limit: int = typer.Option(40, help="Maximum matches to print"),
+    where: str = typer.Option(None, help="Only show strings whose class path contains this text"),
+) -> None:
+    """List string-table entries matching a pattern (class names, constants)."""
+    import re
+
+    from aiglasses.research.dexstrings import apk_strings
+
+    rx = re.compile(pattern, re.IGNORECASE)
+    shown = 0
+    seen: set[str] = set()
+    for dex, strings in apk_strings(apk):
+        for s in strings:
+            if s in seen or not rx.search(s) or (where and where not in s):
+                continue
+            seen.add(s)
+            if shown < limit:
+                console.print(f"{dex}  {escape(s[:200])}")
+            shown += 1
+    console.print(
+        f"{shown} distinct matches" + (f" (first {limit} shown)" if shown > limit else "")
+    )
+
+
+@apk_app.command("methods")
+def apk_methods(
+    apk: Path = APK_ARGUMENT,
+    class_pattern: str = typer.Argument(
+        ..., help="Regex on the class descriptor, e.g. LargeDataHandler"
+    ),
+    max_classes: int = typer.Option(12, help="Maximum classes to print"),
+) -> None:
+    """List method names declared or called on matching classes (names only)."""
+    import re
+
+    from aiglasses.research.dexstrings import apk_method_names
+
+    rx = re.compile(class_pattern, re.IGNORECASE)
+    shown = 0
+    for cls, names in sorted(apk_method_names(apk).items()):
+        if not rx.search(cls):
+            continue
+        shown += 1
+        if shown <= max_classes:
+            console.print(f"[bold]{escape(cls)}[/] ({len(names)})")
+            console.print("  " + escape(", ".join(sorted(names))))
+    console.print(f"{shown} matching classes")

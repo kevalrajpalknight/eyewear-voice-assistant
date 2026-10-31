@@ -171,3 +171,36 @@ UNVERIFIED: whether Windows can hold a Wi-Fi Direct group and a normal Wi-Fi con
 the phone's own Wi-Fi was on 5 GHz); if not, a second USB Wi-Fi adapter, or running the Wi-Fi side from the phone, is the fallback. The Python route needs the
 `winrt-Windows.Devices.WiFiDirect` package, not installed yet (would need an ADR).
 
+## APK findings (INFERRED, from names in the app's code; nothing here is confirmed on the device)
+
+Source: static read of `base.apk` (Cyan Glasses 1.0.2.18). Only class, method and string names were read; no code was run or copied. Reproduce with
+`aiglasses apk packages|search|methods base.apk ...`.
+
+**SDK and channel**
+- The BLE layer is the Oudmon "QC" SDK (`com.oudmon.ble.base`), not Jieli RCSP: there are no Jieli protocol packages. Jieli's only presence is
+  `com.jieli.jl_audio_decode` with `opus` and `speex` decoders, which fits the Opus voice stream.
+- The app's UUID constants are service `de5bf728-d711-4e47-af26-65e3012a5dc7` with `de5bf72a` (send) and `de5bf729` (notify), plus Nordic UART
+  `6e40fff0/6e400002/6e400003`. The 0xAE30 and 0xAE3A services are not referenced. This matches where our notifications arrive.
+- INFERRED: the observed `BC | cmd | len | crc16 | payload` channel is the SDK's "large data" path (`LargeDataHandler`, `LargeDataParser`). The class names fit;
+  the constants are not read yet.
+
+**Command names** (`LargeDataHandler`, names only, payloads unknown): `glassesControl`, `syncBattery`, `syncDeviceInfo`, `syncTime`, `syncHeartBeat`,
+`syncClassicBluetooth`, `openBT`, `aiVoiceWake`, `aiVoicePlay`, `aiShortCut`, `chatGpt`, `realAudioToText`, `speakSoundSwitch`, `earphoneCameraStatus`,
+`getPictureThumbnails`, `wearCheck`, `get/setVolumeControl`, `testPcm`, and **`writeIpToSoc`**. `CommandHandle` has `executeReqCmd` and hardware/firmware version reads.
+
+**Wi-Fi flow (Album tab)** (`PictureFragment`): `connectDeviceWifi`, peer discovery started/failed, `onConnected`, then `importAlbum`, `wifiSpeed`,
+`fileDownloadStart/Progress/Complete`, `downloadMediaConfig`. A `P2pConnectFailRunnable` retries failures. There is also `importAlbumAp`, and a generic
+"connect to a Wi-Fi network by SSID and password" helper (`wifi.ConnectorUtils`) with a stored `glassDeviceWifiPassword`. INFERRED: the glasses may also support an
+ordinary access-point mode as a fallback. Live preview (`RealTimePreviewActivity`) uses the same Wi-Fi connection with a media player (VLC libraries are bundled).
+- INFERRED for question (b): `writeIpToSoc` suggests the app tells the glasses an IP address over BLE. What the address is for, and the media protocol, are unknown.
+  The glasses' IP is not a string constant (no `192.168.*` found), so it is learned at run time.
+
+**Things on the denylist side** (never to be sent): `DfuHandle` (BLE firmware update), `OTAActivity` and `OtaWifiMode` (update over Wi-Fi), `FileHandle`/`AlbumHandle` file
+sends. Opcode values are not extracted yet.
+
+**Other**: the app lists supported glasses name prefixes including `AIMB`; it bundles Agora (real-time audio/video), Azure/Microsoft speech libraries, and Allwinner
+image-enhancement data for the camera sensor (photos probably post-processed on the phone). Strings `AM01G1` and `2512271030` are not constants; they come from the device.
+
+**Next**: the opcode numbers, the order of calls before Wi-Fi Direct starts (question a), and the notification meanings (question c) need bytecode-level reading,
+which names alone cannot give. Tool options need your approval (see docs/APK_ANALYSIS.md).
+
