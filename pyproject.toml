@@ -43,6 +43,7 @@ dev = [
 packages = ["src/aiglasses"]
 
 [tool.ruff]
+extend-exclude = ["bench"]
 line-length = 100
 src = ["src", "tests"]
 

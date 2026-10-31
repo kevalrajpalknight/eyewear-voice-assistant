@@ -28,3 +28,8 @@ jadx-out/
 base.apk_Decompiler.com/
 *_Decompiler.com/
 *_Decompiler.com.zip
+
+bench/.venv/
+bench/models/
+bench/out/
+bench/data/
