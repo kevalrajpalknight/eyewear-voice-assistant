@@ -171,36 +171,102 @@ UNVERIFIED: whether Windows can hold a Wi-Fi Direct group and a normal Wi-Fi con
 the phone's own Wi-Fi was on 5 GHz); if not, a second USB Wi-Fi adapter, or running the Wi-Fi side from the phone, is the fallback. The Python route needs the
 `winrt-Windows.Devices.WiFiDirect` package, not installed yet (would need an ADR).
 
-## APK findings (INFERRED, from names in the app's code; nothing here is confirmed on the device)
+## APK findings (INFERRED, from reading the decompiled app; "matches capture" where our own data agrees)
 
-Source: static read of `base.apk` (Cyan Glasses 1.0.2.18). Only class, method and string names were read; no code was run or copied. Reproduce with
-`aiglasses apk packages|search|methods base.apk ...`.
+Source: the decompiled Java of `base.apk` (Cyan Glasses 1.0.2.18), read locally in a gitignored folder. No code is copied here; these are observations
+(numbers, names, call order). Nothing is confirmed on the device until stated. Tools: `aiglasses apk packages|search|methods`.
 
-**SDK and channel**
-- The BLE layer is the Oudmon "QC" SDK (`com.oudmon.ble.base`), not Jieli RCSP: there are no Jieli protocol packages. Jieli's only presence is
-  `com.jieli.jl_audio_decode` with `opus` and `speex` decoders, which fits the Opus voice stream.
-- The app's UUID constants are service `de5bf728-d711-4e47-af26-65e3012a5dc7` with `de5bf72a` (send) and `de5bf729` (notify), plus Nordic UART
-  `6e40fff0/6e400002/6e400003`. The 0xAE30 and 0xAE3A services are not referenced. This matches where our notifications arrive.
-- INFERRED: the observed `BC | cmd | len | crc16 | payload` channel is the SDK's "large data" path (`LargeDataHandler`, `LargeDataParser`). The class names fit;
-  the constants are not read yet.
+### Channel and frame
+- The SDK is Oudmon "QC" (not Jieli RCSP). Writes go to `de5bf72a` (write without response), notifications arrive on `de5bf729`. Frame:
+  `BC | cmd | len16 LE | crc16-MODBUS of payload | payload`, with CRC `FFFF` for an empty payload. Matches capture (756/756 frames).
+- The same characteristic and framing are used by the firmware update (cmd 1 to 5), file transfers and a factory test, so a write to this
+  characteristic can be dangerous. The byte-level denylist below covers them.
 
-**Command names** (`LargeDataHandler`, names only, payloads unknown): `glassesControl`, `syncBattery`, `syncDeviceInfo`, `syncTime`, `syncHeartBeat`,
-`syncClassicBluetooth`, `openBT`, `aiVoiceWake`, `aiVoicePlay`, `aiShortCut`, `chatGpt`, `realAudioToText`, `speakSoundSwitch`, `earphoneCameraStatus`,
-`getPictureThumbnails`, `wearCheck`, `get/setVolumeControl`, `testPcm`, and **`writeIpToSoc`**. `CommandHandle` has `executeReqCmd` and hardware/firmware version reads.
+### Command numbers (cmd byte)
+| Hex | Name in the app | Notes |
+|---|---|---|
+| 0x40 | sync time | phone to glasses |
+| 0x41 | glasses control | payload `[op][function][args]`, op 1 = read, 2 = write (table below) |
+| 0x42 | battery | request payload `00 00`; the reply comes back as a 0x42 frame |
+| 0x43 | device info | request payload `00 00` |
+| 0x44 | AI voice setting | read `01 00`, set `02 xx` |
+| 0x45 | heartbeat | phone to glasses |
+| 0x46 / 0x47 | wear check / wear-function support | |
+| 0x48 | voice status / play prompt | |
+| 0x49 | BT connect (`02 01`) | probably brings up the Classic Bluetooth link; unverified |
+| 0x4A | camera status | read `01`; the app reads it before photo, video and recording |
+| 0x4B to 0x57 | shorthand, head angle, screen, inscription, push message, volume, speak-sound switch, gyro, switch status, AI shortcut, GPT chat | settings for other glasses models in the family; mostly not relevant to this unit |
+| **0x59** | **GPT upload** | the voice stream from the glasses (matches capture) |
+| 0x5C to 0x5E | other GPT messages | |
+| **0x73** | **device data reporting** | the events from the glasses (matches capture) |
+| 0xF2 | factory test | denied |
+| 0xFC | update over the SoC (OTA) | denied |
+| 0xFD | picture thumbnails | the app asks for a thumbnail after an image-recognition capture |
 
-**Wi-Fi flow (Album tab)** (`PictureFragment`): `connectDeviceWifi`, peer discovery started/failed, `onConnected`, then `importAlbum`, `wifiSpeed`,
-`fileDownloadStart/Progress/Complete`, `downloadMediaConfig`. A `P2pConnectFailRunnable` retries failures. There is also `importAlbumAp`, and a generic
-"connect to a Wi-Fi network by SSID and password" helper (`wifi.ConnectorUtils`) with a stored `glassDeviceWifiPassword`. INFERRED: the glasses may also support an
-ordinary access-point mode as a fallback. Live preview (`RealTimePreviewActivity`) uses the same Wi-Fi connection with a media player (VLC libraries are bundled).
-- INFERRED for question (b): `writeIpToSoc` suggests the app tells the glasses an IP address over BLE. What the address is for, and the media protocol, are unknown.
-  The glasses' IP is not a string constant (no `192.168.*` found), so it is learned at run time.
+### glassesControl (0x41) payloads seen in the app
+| Payload | Meaning (from the calling method) |
+|---|---|
+| `02 01 01` | take photo |
+| `02 01 02` | start video |
+| `02 01 06 s s` | photo for AI vision, `s` = thumbnail size |
+| `02 01 08` | start audio-only recording |
+| `02 01 04 01` | **start Wi-Fi Direct mode** (sent with peer discovery when the Album import starts) |
+| `02 01 04 02` | start access-point mode (the fallback import) |
+| `02 01 0F` | reset the glasses' Wi-Fi Direct state (retry path) |
+| `02 01 0B` | used by the speech recognizer; meaning unknown |
+| `02 01 0A` | **factory reset (denied)** |
+| `02 01 0E` | **restart (denied)** |
+| `01 0A`, `01 02`, `01 06`, `01 08 xx` | settings reads |
+| `02 08 dir res`, `02 09 01/02`, `02 04` | settings writes (video direction/resolution, others unknown) |
 
-**Things on the denylist side** (never to be sent): `DfuHandle` (BLE firmware update), `OTAActivity` and `OtaWifiMode` (update over Wi-Fi), `FileHandle`/`AlbumHandle` file
-sends. Opcode values are not extracted yet.
+Stop commands for video and audio recording were not found; the same command may toggle, or recording is stopped with the button. Unverified.
 
-**Other**: the app lists supported glasses name prefixes including `AIMB`; it bundles Agora (real-time audio/video), Azure/Microsoft speech libraries, and Allwinner
-image-enhancement data for the camera sensor (photos probably post-processed on the phone). Strings `AM01G1` and `2512271030` are not constants; they come from the device.
+### 0x73 event types (first payload byte)
+| Type | Meaning | Matches capture |
+|---|---|---|
+| 1 | media counts: bytes 1-2 photos, 3-4 videos, 5-6 audio (INFERRED which is which), byte 7 file-list type, byte 8 = 1 if only access-point import is supported | Yes: `01 07 ...` after the 7th photo; the video count reached 2 after two recordings |
+| 2 | AI image-recognition capture ready; the app then fetches a thumbnail | Yes: rear double click, `02 00 NN 02 00` |
+| 3 | AI voice start (byte 1 = 1) | Yes: `03 01` precedes the 0x59 burst |
+| 0x0A | AI voice / recognition ended | Yes: `0a 01` ends the burst |
+| 4 | glasses ask the app to open the firmware-update screen; **never act on it** | |
+| 5 | battery percent (byte 1) and charging flag (byte 2 = 1) | not yet seen |
+| 8 | the glasses' IP address, 4 bytes (bytes 1-4) | not yet seen |
+| 9 | error, bytes 1-2 (`ff 02` makes the app reset the P2P state) | |
+| 0x0B | temperature in degrees C (byte 1) | Yes: 42 to 52 every 3 s while recording |
+| 0x0C | user interrupts the spoken answer | |
+| 0x0D | unbind request | |
+| 0x12 | volume settings report, groups of `[id, min, max, current]` | Yes: current value 15 to 16 after a volume swipe |
+| 0x14 / 0x16 / 0x17 / 0x18 / 0x19 | working state, gimbal angle (x90), real-time translation, transcription, teleprompter (byte 1 = 1 starts) | |
 
-**Next**: the opcode numbers, the order of calls before Wi-Fi Direct starts (question a), and the notification meanings (question c) need bytecode-level reading,
-which names alone cannot give. Tool options need your approval (see docs/APK_ANALYSIS.md).
+### Wi-Fi: questions (a) and (b)
+- **(a) What makes the glasses available:** the app writes `02 01 04 01` over BLE and, at the same moment, starts Wi-Fi Direct peer discovery on the phone
+  (consistent with the observed discovery at 10:46:41; the BLE write itself was not captured). `02 01 04 02` is the access-point alternative. The glasses report
+  in event type 1 whether only access-point import is supported.
+- **Pairing:** the app picks the peer whose name equals the stored glasses Wi-Fi name, or ends with the Bluetooth address without colons (observed
+  `AIMB-G2_D04B1BC32324`), then connects with push-button setup and no explicit group-owner intent. Discovery times out after 16 s (one retry after `02 01 0F`),
+  the connect after 15 s (one retry). In our observed session the phone became group owner.
+- **(b) IP and media protocol:** the glasses report their IP over BLE as event type 8 once the link is up (when the phone is not the group owner, the app uses the
+  group owner's address). Media is served over **plain HTTP on port 80**, no authentication seen: first `GET /files/media.config` (a text list of names), then
+  `GET /files/<name>`. If the unit reports file-list type 2 instead, the list is `GET /storage/sd0/C/DCIM/1/vf_list.txt` (JSON with `file_list[].f` paths) and files are at
+  `/<f>`. Logs are listed by `/files/log/log.list`. Our unit reports file-list type 1.
+- **Access-point mode:** the SSID is the same name (device name plus the address without colons). The app has a fixed default password for it; the value is deliberately not
+  recorded here. Using it on your own glasses is your decision; it is visible in the decompiled source (`MyBluetoothReceiver`).
+- Live preview uses the same Wi-Fi link with a media player; its URL has not been read yet.
 
+### Voice stream and cloud
+- The 0x59 frames are the audio the glasses send while the AI voice is active. The app bundles Opus and Speex decoders and feeds speech recognition (Azure SDK) and a
+  chat backend. Only hostnames/IPs and the usage pattern are recorded; nothing is contacted by this project.
+
+### Byte-level denylist (implemented in `protocol/denylist.py`, beats any approval)
+Commands 0x01 to 0x05 (firmware update), 0x25, 0x26, 0x30 to 0x35 and 0x80 to 0x82 (file transfers), 0xF2 (factory test), 0xFC (OTA via SoC), and control payloads starting
+`02 01 0A` (factory reset) or `02 01 0E` (restart). Commands 0x4A and 0x54 are also used by file code with another meaning, so they are not denied; the allowlist covers them.
+
+### Corrections to earlier notes
+- `writeIpToSoc` belongs to the OTA screen (cmd 0xFC), not the media IP. The earlier guess is withdrawn.
+- The "counter" in photo and recording-stop events is the media count; the 3 s "heartbeat" is the temperature; `02 00 NN 02 00` is an AI-image capture; `03 01` and `0a 01` are AI voice start and end;
+  the 14-byte events are volume reports (so the touch pad is visible over BLE after all, at least for volume).
+- The glasses support both Wi-Fi Direct and an access-point mode; the SoftAP idea was partly right.
+
+### How each will be confirmed
+Read-only first: send the battery and device-info requests (replies expected as 0x42 and 0x43 frames). Then, only with your approval of the exact bytes: camera status read, photo, and
+`02 01 04 01` followed by watching for event type 8 and the Wi-Fi Direct peer on this PC. See `commands.yaml` for the exact frames (all INFERRED, none sendable yet).

@@ -61,3 +61,40 @@ async def test_session_approval_allows_write() -> None:
     guard.approve("take_photo", CHAR, b"\x05")
     await guard.write(CHAR, b"\x05")
     assert len(transport.writes) == 1
+
+
+@pytest.mark.parametrize(
+    ("cmd", "payload", "why"),
+    [
+        (0x01, b"", "firmware update"),
+        (0x02, bytes(9), "firmware update"),
+        (0x03, bytes(10), "firmware update"),
+        (0x05, b"", "firmware update"),
+        (0x31, b"\x01", "file transfer"),
+        (0x81, b"\x02\x00", "file transfer"),
+        (0xF2, b"\x02\x03\x00", "factory test"),
+        (0xFC, b"192.168.0.2", "OTA"),
+        (0x41, b"\x02\x01\x0a", "factory reset"),
+        (0x41, b"\x02\x01\x0e", "restart"),
+    ],
+)
+async def test_byte_level_denylist_beats_approval(cmd: int, payload: bytes, why: str) -> None:
+    from tests.helpers import build_bc_frame
+
+    frame = build_bc_frame(cmd, payload)
+    transport = FakeBleTransport()
+    guard = WriteGuard(transport, dry_run=False)
+    guard.approve("innocent_name", CHAR, frame)
+    with pytest.raises(WriteBlockedError, match=why):
+        await guard.write(CHAR, frame)
+    assert transport.writes == []
+
+
+async def test_denylist_ignores_crc_and_allows_benign_frames() -> None:
+    from aiglasses.protocol.denylist import denied_reason
+    from tests.helpers import build_bc_frame
+
+    assert denied_reason(bytes([0xBC, 0x05, 0, 0, 0xFF, 0xFF])) is not None  # bad CRC still blocked
+    assert denied_reason(build_bc_frame(0x42, bytes(2))) is None  # battery read
+    assert denied_reason(build_bc_frame(0x41, b"\x02\x01\x01")) is None  # take photo
+    assert denied_reason(b"\x01\x02\x03") is None  # not a BC frame

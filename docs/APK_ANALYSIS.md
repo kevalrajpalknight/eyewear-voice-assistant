@@ -30,6 +30,10 @@ Then:
 - Photo, video, audio-only recording and smart image recognition commands; device info and battery.
 - Jieli OTA, upgrade and reset opcodes (for the denylist only).
 
+## Status (2026-10-31)
+
+A decompiled source tree (base.apk_Decompiler.com, gitignored) was provided and used; androguard and Java were not needed. Findings are in docs/PROTOCOL.md under APK findings.
+
 ## Tools
 
 No Java, jadx, apktool or androguard is installed on this PC. Options once the APK path is available:

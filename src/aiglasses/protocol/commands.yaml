@@ -1,5 +1,62 @@
-# Entries are added only from observed captures of the official app (Phase 3).
-# Fields: name, characteristic (UUID), bytes (hex), direction (write|notify),
-#         status (CONFIRMED|INFERRED), source (capture id, required for CONFIRMED),
-#         safe_to_send (bool)
-commands: []
+# Entries from observed captures of the official app are CONFIRMED and need a capture source.
+# Entries read from the app's code are INFERRED and are never sendable (safe_to_send false) until
+# confirmed on the device and approved. Fields: name, characteristic (UUID), bytes (full frame, hex),
+# direction (write|notify), status (CONFIRMED|INFERRED), source, safe_to_send (bool).
+# Frame: BC | cmd | len16 LE | crc16-MODBUS LE of payload | payload (empty payload: crc FFFF).
+commands:
+  - name: battery_read
+    characteristic: de5bf72a-d711-4e47-af26-65e3012a5dc7
+    bytes: "bc42020001b00000"
+    direction: write
+    status: INFERRED
+    source: apk-static (syncBattery, cmd 0x42, payload 00 00)
+    safe_to_send: false
+  - name: device_info_read
+    characteristic: de5bf72a-d711-4e47-af26-65e3012a5dc7
+    bytes: "bc43020001b00000"
+    direction: write
+    status: INFERRED
+    source: apk-static (syncDeviceInfo, cmd 0x43, payload 00 00)
+    safe_to_send: false
+  - name: camera_status_read
+    characteristic: de5bf72a-d711-4e47-af26-65e3012a5dc7
+    bytes: "bc4a01007e8001"
+    direction: write
+    status: INFERRED
+    source: apk-static (earphoneCameraStatus, cmd 0x4A, payload 01)
+    safe_to_send: false
+  - name: photo
+    characteristic: de5bf72a-d711-4e47-af26-65e3012a5dc7
+    bytes: "bc4103001050020101"
+    direction: write
+    status: INFERRED
+    source: apk-static (glassesControl 02 01 01, used by takePicture)
+    safe_to_send: false
+  - name: video_start
+    characteristic: de5bf72a-d711-4e47-af26-65e3012a5dc7
+    bytes: "bc4103005051020102"
+    direction: write
+    status: INFERRED
+    source: apk-static (glassesControl 02 01 02, used by startVideo; stop command not found)
+    safe_to_send: false
+  - name: audio_record_start
+    characteristic: de5bf72a-d711-4e47-af26-65e3012a5dc7
+    bytes: "bc410300d056020108"
+    direction: write
+    status: INFERRED
+    source: apk-static (glassesControl 02 01 08, used by startRecord; stop command not found)
+    safe_to_send: false
+  - name: wifi_direct_on
+    characteristic: de5bf72a-d711-4e47-af26-65e3012a5dc7
+    bytes: "bc410400935c02010401"
+    direction: write
+    status: INFERRED
+    source: apk-static (glassesControl 02 01 04 01, sent by the Album import together with peer discovery)
+    safe_to_send: false
+  - name: wifi_access_point_on
+    characteristic: de5bf72a-d711-4e47-af26-65e3012a5dc7
+    bytes: "bc410400d35d02010402"
+    direction: write
+    status: INFERRED
+    source: apk-static (glassesControl 02 01 04 02, the access-point variant of the Album import)
+    safe_to_send: false

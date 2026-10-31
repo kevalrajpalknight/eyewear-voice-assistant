@@ -15,8 +15,17 @@ def _write(tmp_path: Path, body: str) -> Path:
     return path
 
 
-def test_packaged_registry_is_empty() -> None:
-    assert load_commands() == []
+def test_packaged_registry_has_only_inferred_unsendable_commands() -> None:
+    from aiglasses.protocol.bcframe import parse_bc_frame
+    from aiglasses.protocol.denylist import denied_reason
+
+    commands = load_commands()
+    assert commands and all(c.status is Confidence.INFERRED for c in commands)
+    assert allowlist_from(commands) == []
+    for command in commands:
+        frame = parse_bc_frame(command.payload)  # valid length and CRC
+        assert denied_reason(command.payload) is None, command.name
+        assert frame.cmd in (0x41, 0x42, 0x43, 0x4A)
 
 
 def test_load_and_allowlist(tmp_path: Path) -> None:

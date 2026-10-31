@@ -5,6 +5,7 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from aiglasses.domain.errors import WriteBlockedError
+from aiglasses.protocol.denylist import denied_reason
 from aiglasses.protocol.registry import Command
 from aiglasses.transport.base import BleTransport
 
@@ -49,6 +50,10 @@ class WriteGuard:
             fh.write(json.dumps(entry) + "\n")
 
     async def write(self, char: str, payload: bytes, *, response: bool = False) -> None:
+        reason = denied_reason(payload)
+        if reason:
+            self._audit("blocked_denylist_bytes", reason, char, payload)
+            raise WriteBlockedError(f"refusing to send: {reason}")
         key = (char.lower(), payload)
         name = self._allowed.get(key, "unlisted")
         if DENY_PATTERN.search(name):

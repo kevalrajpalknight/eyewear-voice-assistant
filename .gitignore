@@ -25,3 +25,6 @@ jadx-out/
 *.xapk
 *.apks
 *.dex
+base.apk_Decompiler.com/
+*_Decompiler.com/
+*_Decompiler.com.zip
