@@ -5,7 +5,7 @@ import hashlib
 import json
 import threading
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -14,17 +14,12 @@ import numpy as np
 from aiglasses.assistant.interfaces import AudioChunk, Pcm, Transcript, TtsOptions
 from aiglasses.domain.errors import GlassesError, NotSupportedError
 
-STT_CHOICES = (
-    "moonshine-base", "moonshine-tiny", "moonshine-small-v2", "moonshine-medium-v2",
-    "parakeet", "fw-base.en", "fw-small.en", "fw-small",
-)  # fmt: skip
 MOONSHINE_FOLDERS = {
     "tiny": ("TINY", "tiny-en/quantized/tiny-en"),
     "base": ("BASE", "base-en/quantized/base-en"),
     "small-v2": ("SMALL_STREAMING", "small-streaming-en/quantized_*"),
     "medium-v2": ("MEDIUM_STREAMING", "medium-streaming-en/quantized_*"),
 }
-TTS_CHOICES = ("int8", "fp32")
 KOKORO_FILES = {"int8": "kokoro-v1.0.int8.onnx", "fp32": "kokoro-v1.0.onnx"}
 
 
@@ -98,25 +93,35 @@ class MoonshineStt:
 
 
 class FasterWhisperStt:
-    def __init__(self, models_dir: Path, size: str = "base.en", *, normalize: bool = False) -> None:
+    def __init__(
+        self,
+        models_dir: Path,
+        size: str,
+        *,
+        compute_type: str,
+        threads: int,
+        hints: Sequence[str] = (),
+        normalize: bool = False,
+    ) -> None:
         from faster_whisper import WhisperModel
 
         folder = models_dir / f"faster-whisper-{size}"
         verify_checksum(
             models_dir, f"faster-whisper-{size}/model.bin", f"faster-whisper-{size}/model.bin"
         )
-        self.name = f"fw-{size}-int8"
+        self.name = f"fw-{size}-{compute_type}"
         self._normalize = normalize
+        self._prompt = "Names and terms: " + ", ".join(hints) + "." if hints else None
         self._lock = threading.Lock()
         self._model: Any = WhisperModel(
-            str(folder), device="cpu", compute_type="int8", cpu_threads=4
+            str(folder), device="cpu", compute_type=compute_type, cpu_threads=threads
         )
 
     def _run(self, samples: np.ndarray[Any, np.dtype[np.float32]]) -> str:
         with self._lock:
             segments, _info = self._model.transcribe(
                 samples, language="en", beam_size=1, temperature=0.0, vad_filter=False,
-                condition_on_previous_text=False,
+                condition_on_previous_text=False, initial_prompt=self._prompt,
             )  # fmt: skip
             return " ".join(s.text.strip() for s in segments).strip()
 
@@ -134,7 +139,7 @@ class ParakeetStt:
 
     name = "parakeet-tdt-v2-int8"
 
-    def __init__(self, models_dir: Path, *, normalize: bool = False) -> None:
+    def __init__(self, models_dir: Path, *, threads: int, normalize: bool = False) -> None:
         import sherpa_onnx
 
         folder = models_dir / "parakeet-tdt-0.6b-v2-int8"
@@ -149,7 +154,7 @@ class ParakeetStt:
         self._recognizer: Any = sherpa_onnx.OfflineRecognizer.from_transducer(
             encoder=str(folder / "encoder.int8.onnx"), decoder=str(folder / "decoder.int8.onnx"),
             joiner=str(folder / "joiner.int8.onnx"), tokens=str(folder / "tokens.txt"),
-            num_threads=4, model_type="nemo_transducer",
+            num_threads=threads, model_type="nemo_transducer",
         )  # fmt: skip
 
     def _run(self, samples: np.ndarray[Any, np.dtype[np.float32]]) -> str:

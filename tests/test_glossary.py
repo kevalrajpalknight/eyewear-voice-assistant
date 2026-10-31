@@ -82,3 +82,11 @@ def test_prompt_note_lists_the_terms_and_warns_about_recognition_errors(
 ) -> None:
     note = glossary.prompt_note()
     assert "speech recognition" in note and "Zorvex Quill" in note and "Blenmark" in note
+
+
+def test_a_line_with_several_pipes_is_flagged_without_repeating_its_text() -> None:
+    pytest.importorskip("rapidfuzz")
+    from aiglasses.assistant.glossary import glossary_warnings
+
+    found = glossary_warnings(["Zorvex | zorvecks", "Blenmark | a | b | c", "# x | y | z"])
+    assert len(found) == 1 and "line 2" in found[0] and "Blenmark" not in found[0]

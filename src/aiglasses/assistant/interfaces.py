@@ -41,8 +41,8 @@ class Message:
 
 @dataclass
 class TtsOptions:
-    voice: str = "bf_isabella"
-    speed: float = 1.05
+    voice: str
+    speed: float
     language: str = "en"
     extra: dict[str, str] = field(default_factory=dict)
 

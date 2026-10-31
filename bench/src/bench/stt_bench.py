@@ -10,6 +10,7 @@ going in the last 100 ms); they are reported apart and kept out of the WER total
 """
 
 import json
+import os
 import statistics
 import sys
 import tempfile
@@ -25,6 +26,7 @@ from bench.stt_engines import make_engine
 from bench.textnorm import clean
 
 DATA = ROOT / "data"
+GLOSSARY_FILE = Path(os.environ.get("BENCH_GLOSSARY", str(DATA / "glossary.txt")))
 REPEATS = 3
 
 
@@ -32,6 +34,11 @@ def read_lines(path: Path) -> list[str]:
     if not path.exists():
         return []
     return [x.strip() for x in path.read_text(encoding="utf-8").splitlines() if x.strip()]
+
+
+def read_terms(path: Path) -> list[str]:
+    """Canonical glossary terms: the text before a `|`; comments and blanks skipped."""
+    return [x.partition("|")[0].strip() for x in read_lines(path) if not x.startswith("#")]
 
 
 def contains_terms(text: str, terms: list[str]) -> list[str]:
@@ -55,7 +62,7 @@ def wer_of(pairs: list[tuple[str, str]]) -> float | None:
 
 
 def run(engine_key: str, condition: str, use_hints: bool) -> dict[str, object]:
-    glossary = read_lines(DATA / "glossary.txt")
+    glossary = read_terms(GLOSSARY_FILE)
     truncated = set(read_lines(DATA / "truncated.txt"))
     hints = glossary if use_hints else None
     hint_error = ""

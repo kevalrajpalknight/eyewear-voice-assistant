@@ -6,6 +6,7 @@ from pathlib import Path
 from rich.logging import RichHandler
 from rich.text import Text
 
+from aiglasses.redact import redact
 from aiglasses.timefmt import stamps
 
 
@@ -14,6 +15,18 @@ def _console_time(moment: datetime) -> Text:
     local = moment.astimezone()
     offset = local.strftime("%z")
     return Text(f"[{local.strftime('%H:%M:%S')} {offset[:3]}:{offset[3:]}]")
+
+
+class RedactingFilter(logging.Filter):
+    """Scrub configured secret values and key-shaped strings from every record."""
+
+    def __init__(self, secrets: tuple[str, ...] = ()) -> None:
+        super().__init__()
+        self.secrets = secrets
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.msg, record.args = redact(record.getMessage(), self.secrets), None
+        return True
 
 
 class JsonLinesHandler(logging.FileHandler):
@@ -29,10 +42,18 @@ class JsonLinesHandler(logging.FileHandler):
         self.flush()
 
 
-def setup_logging(log_dir: Path, verbose: bool = False) -> None:
+def setup_logging(
+    log_dir: Path, verbose: bool = False, level: str = "INFO", secrets: tuple[str, ...] = ()
+) -> None:
     log_dir.mkdir(parents=True, exist_ok=True)
     root = logging.getLogger("aiglasses")
-    root.setLevel(logging.DEBUG if verbose else logging.INFO)
+    root.setLevel(logging.DEBUG if verbose else level)
     root.handlers.clear()
-    root.addHandler(RichHandler(show_path=False, log_time_format=_console_time))
-    root.addHandler(JsonLinesHandler(log_dir / "aiglasses.jsonl", encoding="utf-8"))
+    root.filters.clear()
+    guard = RedactingFilter(secrets)
+    for handler in (
+        RichHandler(show_path=False, log_time_format=_console_time),
+        JsonLinesHandler(log_dir / "aiglasses.jsonl", encoding="utf-8"),
+    ):
+        handler.addFilter(guard)
+        root.addHandler(handler)

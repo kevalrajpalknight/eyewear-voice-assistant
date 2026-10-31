@@ -24,6 +24,7 @@ from aiglasses.research.listen import Notification, listen
 from aiglasses.services.audio import AudioService
 from aiglasses.services.channel import FrameStat
 from aiglasses.services.voice import VoiceWatch
+from aiglasses.settings import AssistantSettings
 from aiglasses.timefmt import both
 from aiglasses.transport.audio_sd import SoundDeviceAudio
 from aiglasses.transport.ble_scan import is_candidate, scan
@@ -82,7 +83,15 @@ def _stub(feature: str, phase: int) -> None:
 
 @app.callback()
 def main(verbose: bool = typer.Option(False, "--verbose", "-v")) -> None:
-    setup_logging(Settings().log_dir, verbose)
+    assistant = AssistantSettings()
+    secrets = tuple(
+        key.get_secret_value()
+        for key in (
+            assistant.llm_api_key, assistant.llm_fast_api_key, assistant.router_model_api_key
+        )
+        if key is not None
+    )  # fmt: skip
+    setup_logging(Settings().log_dir, verbose, assistant.log_level, secrets)
 
 
 @app.command("scan")
@@ -291,20 +300,20 @@ def _print_frame_summary(stats: dict[str, FrameStat], watch: VoiceWatch) -> None
     console.print(f"end marker (0a 01): {moment(watch.end_marker_at)}")
 
 
+def parse_stt_option(value: str | None) -> dict[str, str]:
+    """`--stt ENGINE` or `--stt ENGINE:MODEL` overrides STT_ENGINE and STT_MODEL for this run."""
+    if not value:
+        return {}
+    engine, _, model = value.partition(":")
+    return {"stt_engine": engine, **({"stt_model": model} if model else {})}
+
+
 @assistant_app.command("echo")
 def assistant_echo(
-    output: str = typer.Option("pc", help="pc = PC speakers, null = no sound (latency test)"),
-    stt: str = typer.Option(
-        "moonshine-base",
-        help="moonshine-base | moonshine-tiny | moonshine-small-v2 | moonshine-medium-v2 | parakeet"
-        " | fw-base.en | fw-small.en | fw-small",
-    ),
-    tts: str = typer.Option("int8", help="Kokoro variant: int8 | fp32"),
-    voice: str = typer.Option("bf_isabella"),
-    speed: float = typer.Option(1.05),
-    models_dir: Path = typer.Option(
-        Path("bench/models"), help="Where `python -m bench.models` put them"
-    ),
+    output: str = typer.Option(None, help="null = no sound (latency test); default: AUDIO_OUTPUT"),
+    stt: str = typer.Option(None, help="ENGINE or ENGINE:MODEL; default: STT_ENGINE / STT_MODEL"),
+    tts_voice: str = typer.Option(None, help="Default: TTS_VOICE"),
+    speed: float = typer.Option(None, help="Default: TTS_SPEED"),
     normalize: bool = typer.Option(False, help="Peak-normalise the input before STT"),
     debug: bool = typer.Option(
         False,
@@ -316,33 +325,61 @@ def assistant_echo(
     glossary: bool = typer.Option(
         False,
         "--glossary",
-        help="Correct names with your private glossary; prints raw and corrected text and logs "
+        help="Correct names with GLOSSARY_PATH; prints raw and corrected text and logs "
         "every correction to logs/glossary_corrections.jsonl",
-    ),
-    glossary_file: Path = typer.Option(
-        Path("bench/data/glossary.txt"), help="One term per line (private, gitignored)"
     ),
 ) -> None:
     """Rear click -> speech to text -> speak it back. No LLM, no network, nothing sent."""
     from aiglasses.assistant.session import run_echo
 
-    if output not in ("pc", "null"):
+    if output not in (None, "pc", "null"):
         raise typer.BadParameter("--output must be pc or null")
+    overrides: dict[str, object] = {**parse_stt_option(stt)}
+    overrides.update({k: v for k, v in (("tts_voice", tts_voice), ("tts_speed", speed)) if v})
+    if glossary:
+        overrides["glossary_enabled"] = True
+    assistant = AssistantSettings().model_copy(update=overrides)
+    _run(run_echo(Settings(), assistant, output=output, normalize=normalize, debug=debug, wav=wav))
+
+
+@assistant_app.command("run")
+def assistant_run(
+    output: str = typer.Option(None, help="null = no sound; default: AUDIO_OUTPUT"),
+    stt: str = typer.Option(None, help="ENGINE or ENGINE:MODEL; default: STT_ENGINE / STT_MODEL"),
+    llm_role: str = typer.Option(
+        None, help="Force one LLM role (main or fast), skipping the router"
+    ),
+    no_router: bool = typer.Option(False, help="Always use the main model (local answers stay)"),
+    wav: Path = typer.Option(
+        None, help="Run ONE turn from a 16 kHz mono WAV instead of the glasses"
+    ),
+) -> None:
+    """Rear click -> speech to text -> LLM -> speech. Needs .env (see `assistant check`)."""
+    from aiglasses.assistant.runtime import run_assistant
+
+    if output not in (None, "pc", "null"):
+        raise typer.BadParameter("--output must be pc or null")
+    if llm_role not in (None, "main", "fast"):
+        raise typer.BadParameter("--llm-role must be main or fast")
+    assistant = AssistantSettings().model_copy(update=parse_stt_option(stt))
     _run(
-        run_echo(
-            Settings(),
-            models_dir=models_dir,
-            stt_name=stt,
-            tts_variant=tts,
-            voice=voice,
-            speed=speed,
-            output=output,
-            normalize=normalize,
-            debug=debug,
-            wav=wav,
-            glossary_file=glossary_file if glossary else None,
+        run_assistant(
+            Settings(), assistant, output=output, force_role=llm_role, no_router=no_router, wav=wav
         )
     )
+
+
+@assistant_app.command("check")
+def assistant_check(
+    live: bool = typer.Option(
+        False, "--live", help="Make one neutral call per configured LLM role (3 in total, ever)"
+    ),
+) -> None:
+    """Validate settings, models, packages and audio. Secrets show only as set / NOT set."""
+    from aiglasses.assistant.check import run_check
+
+    code = run_check(AssistantSettings(), live=live, log_dir=Settings().log_dir, console=console)
+    raise typer.Exit(code)
 
 
 @app.command("bench-record")

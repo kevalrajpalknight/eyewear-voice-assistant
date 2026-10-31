@@ -5,6 +5,8 @@ import struct
 import sys
 from collections.abc import AsyncIterator, Callable
 
+import numpy as np
+
 from aiglasses.assistant.interfaces import AudioChunk
 from aiglasses.domain.errors import GlassesError
 
@@ -39,8 +41,9 @@ class NullSink:
 class SubprocessSpeakerSink:
     """Plays through the default PC output in a worker process. Call `start()` before use."""
 
-    def __init__(self) -> None:
+    def __init__(self, volume_limit: float = 1.0) -> None:
         self.on_playing: Callable[[], None] | None = None
+        self._volume = volume_limit
         self._process: asyncio.subprocess.Process | None = None
         self._reader: asyncio.Task[None] | None = None
         self._done = asyncio.Event()
@@ -90,7 +93,9 @@ class SubprocessSpeakerSink:
     async def play(self, chunks: AsyncIterator[AudioChunk]) -> None:
         self._done.clear()
         async for chunk in chunks:
-            await self._send(b"C", struct.pack("<I", chunk.sample_rate) + chunk.samples.tobytes())
+            samples = chunk.samples if self._volume >= 1.0 else (chunk.samples * self._volume)
+            payload = struct.pack("<I", chunk.sample_rate) + samples.astype(np.int16).tobytes()
+            await self._send(b"C", payload)
         await self._send(b"E")
         await self._done.wait()
         if self._errors:

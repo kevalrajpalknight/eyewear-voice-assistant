@@ -14,7 +14,7 @@ import sys
 import jiwer
 
 from bench.models import ROOT
-from bench.stt_bench import contains_terms, read_lines
+from bench.stt_bench import GLOSSARY_FILE, contains_terms, read_lines
 from bench.textnorm import clean
 
 
@@ -35,7 +35,7 @@ def option(name: str, default: float) -> float:
 
 def main() -> None:
     module = load_glossary_module()
-    lines = read_lines(ROOT / "data" / "glossary.txt")
+    lines = read_lines(GLOSSARY_FILE)
     if not lines:
         raise SystemExit("bench/data/glossary.txt is missing or empty")
     glossary = module.Glossary(

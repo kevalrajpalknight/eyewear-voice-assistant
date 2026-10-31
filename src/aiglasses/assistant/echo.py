@@ -12,6 +12,7 @@ from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Protocol
 
 from aiglasses.assistant.chunker import split_clauses
 from aiglasses.assistant.glossary import Correction
@@ -26,6 +27,10 @@ from aiglasses.services.voice import VoiceUtterance
 from aiglasses.timefmt import stamps
 
 log = logging.getLogger("aiglasses.assistant")
+
+
+class Loggable(Protocol):
+    def to_json(self) -> dict[str, object]: ...
 
 
 @dataclass
@@ -79,7 +84,7 @@ class TurnLog:
     def __init__(self, path: Path) -> None:
         self._path = path
 
-    def write(self, record: TurnRecord) -> None:
+    def write(self, record: Loggable) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         with self._path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(record.to_json()) + "\n")
@@ -109,10 +114,12 @@ class EchoPipeline:
         turn_log: TurnLog | None = None,
         debug: Debug | None = None,
         on_record: Callable[[TurnRecord], None] | None = None,
+        first_clause_max_words: int,
         corrector: Callable[[str], tuple[str, list[Correction]]] | None = None,
         on_correction: Callable[[Correction], None] | None = None,
     ) -> None:
         self.stt, self.tts, self.sink, self.options = stt, tts, sink, options
+        self._first_max = first_clause_max_words
         self._corrector = corrector
         self._on_correction = on_correction
         self._turn_log = turn_log
@@ -145,7 +152,7 @@ class EchoPipeline:
             if not text:
                 record.outcome = "empty"
                 return record
-            clauses = split_clauses(text)
+            clauses = split_clauses(text, self._first_max)
             record.clauses = len(clauses)
             record.first_clause_words = len(clauses[0].split())
             queue: asyncio.Queue[AudioChunk | Exception | None] = asyncio.Queue(maxsize=3)
@@ -198,14 +205,24 @@ class EchoPipeline:
         return record
 
 
+class TurnPipeline(Protocol):
+    sink: AudioSink
+
+    async def run_turn(self, utterance: VoiceUtterance, turn: int) -> object: ...
+
+
 class TurnRunner:
     """One turn at a time. A new click cancels playback and generation, then a fresh turn starts."""
 
-    def __init__(self, pipeline: EchoPipeline) -> None:
+    def __init__(self, pipeline: TurnPipeline) -> None:
         self.pipeline = pipeline
         self._turn = 0
-        self._task: asyncio.Task[TurnRecord] | None = None
+        self._task: asyncio.Task[object] | None = None
         self._interrupt: asyncio.Task[None] | None = None
+
+    @property
+    def turn(self) -> int:
+        return self._turn
 
     @property
     def busy(self) -> bool:

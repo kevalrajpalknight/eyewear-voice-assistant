@@ -40,8 +40,9 @@ def pipeline(
         stt or FakeStt(TEXT),
         tts or FakeTts(),
         sink or FakeSink(),
-        TtsOptions(),
+        TtsOptions(voice="v", speed=1.0),
         turn_log=TurnLog(tmp_path / "turns.jsonl"),
+        first_clause_max_words=6,
         debug=debug,
         on_record=records.append if records is not None else None,
     )
@@ -50,7 +51,7 @@ def pipeline(
 async def test_speaks_back_the_clauses_in_order_and_logs_latency_stages(tmp_path: Path) -> None:
     tts, sink = FakeTts(), FakeSink()
     record = await pipeline(tmp_path, tts=tts, sink=sink).run_turn(utterance(), 1)
-    assert record.outcome == "spoken" and tts.spoken == split_clauses(TEXT)
+    assert record.outcome == "spoken" and tts.spoken == split_clauses(TEXT, 6)
     assert len(sink.played) == len(tts.spoken)
     assert record.t_stt and record.t_first_chunk and record.t_playing and record.t_done
     assert record.t_end <= record.t_received <= record.t_stt <= record.t_first_chunk
@@ -66,7 +67,7 @@ async def test_first_clause_is_sent_to_tts_first_and_playback_starts_before_the_
 ) -> None:
     tts = FakeTts(delay=0.05)
     record = await pipeline(tmp_path, tts=tts).run_turn(utterance(), 1)
-    assert tts.spoken[0] == split_clauses(TEXT)[0] and 3 <= record.first_clause_words <= 6
+    assert tts.spoken[0] == split_clauses(TEXT, 6)[0] and 3 <= record.first_clause_words <= 6
     assert record.t_playing is not None and record.t_done is not None
     assert record.t_done - record.t_playing > 0.05  # later clauses were still being made
 
@@ -155,8 +156,9 @@ async def test_a_corrector_changes_what_is_spoken_but_the_log_holds_no_text(tmp_
     tts = FakeTts()
     seen: list[Correction] = []
     pipe = EchoPipeline(
-        FakeStt("ask zorvexquill now please"), tts, FakeSink(), TtsOptions(),
+        FakeStt("ask zorvexquill now please"), tts, FakeSink(), TtsOptions(voice='v', speed=1.0),
         turn_log=TurnLog(tmp_path / "turns.jsonl"),
+        first_clause_max_words=6,
         corrector=lambda t: (
             t.replace("zorvexquill", "Zorvex Quill"),
             [Correction("zorvexquill", "Zorvex Quill", 100.0, "spacing/case")],

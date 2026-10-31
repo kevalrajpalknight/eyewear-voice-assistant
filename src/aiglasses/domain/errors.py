@@ -36,3 +36,7 @@ class WriteBlockedError(GlassesError):
 
 class ProtocolError(GlassesError):
     """A frame or command definition is malformed."""
+
+
+class ConfigError(GlassesError):
+    """A setting is missing or invalid. The message never contains a secret."""

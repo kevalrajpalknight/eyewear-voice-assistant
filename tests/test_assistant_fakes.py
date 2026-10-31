@@ -33,6 +33,6 @@ async def test_llm_streams_deltas_and_records_requests() -> None:
 
 async def test_tts_and_sink_roundtrip() -> None:
     tts, sink = FakeTts(), FakeSink()
-    await sink.play(tts.synthesize_stream("Hi.", TtsOptions()))
+    await sink.play(tts.synthesize_stream("Hi.", TtsOptions(voice="v", speed=1.0)))
     assert tts.spoken == ["Hi."] and len(sink.played) == 1
     assert sink.played[0].seconds == 0.1

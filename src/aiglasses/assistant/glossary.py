@@ -62,6 +62,16 @@ def parse_glossary(lines: Sequence[str]) -> list[Term]:
     return terms
 
 
+def glossary_warnings(lines: Sequence[str]) -> list[str]:
+    """Lines that probably do not mean what they say (the term text is never repeated)."""
+    return [
+        f"glossary line {number}: more than one '|'. Spoken forms go after ONE '|', separated "
+        "by commas; put separate terms on separate lines"
+        for number, line in enumerate(lines, start=1)
+        if line.count("|") > 1 and not line.lstrip().startswith("#")
+    ]
+
+
 @dataclass(frozen=True)
 class _Token:
     start: int
@@ -88,8 +98,9 @@ class Glossary:
         )
 
     @classmethod
-    def load(cls, path: Path) -> "Glossary":
-        return cls(parse_glossary(path.read_text(encoding="utf-8").splitlines()))
+    def load(cls, path: Path, *, fuzzy_threshold: float = 88.0) -> "Glossary":
+        lines = path.read_text(encoding="utf-8").splitlines()
+        return cls(parse_glossary(lines), fuzzy_threshold=fuzzy_threshold)
 
     def __bool__(self) -> bool:
         return bool(self.terms)

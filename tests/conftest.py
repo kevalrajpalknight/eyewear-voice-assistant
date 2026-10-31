@@ -1,3 +1,6 @@
+import socket
+from typing import Any
+
 import pytest
 
 from aiglasses.domain.models import GattCharacteristic, GattDescriptor, GattService
@@ -69,3 +72,20 @@ def gatt_reads() -> dict[str, bytes]:
         uuids.HARDWARE_REVISION: b"AM01G1_V9.4",
         uuids.FIRMWARE_REVISION: b"AM01G1_9.40.00_260114",
     }
+
+
+LOOPBACK = ("127.0.0.1", "::1", "localhost")
+
+
+@pytest.fixture(autouse=True)
+def no_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tests never reach the internet: only loopback connections are allowed."""
+    real_connect = socket.socket.connect
+
+    def guarded(self: socket.socket, address: Any) -> None:
+        host = address[0] if isinstance(address, tuple) else address
+        if self.family in (socket.AF_INET, socket.AF_INET6) and host not in LOOPBACK:
+            raise RuntimeError(f"network access is blocked in tests (tried {host!r})")
+        real_connect(self, address)
+
+    monkeypatch.setattr(socket.socket, "connect", guarded)

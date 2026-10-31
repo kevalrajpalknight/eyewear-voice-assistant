@@ -7,6 +7,13 @@ repos:
       - id: ruff-format
   - repo: local
     hooks:
+      - id: no-secrets
+        name: block .env files and API-key-looking strings
+        entry: python scripts/check_secrets.py
+        language: system
+        exclude: ^(uv\.lock|bench/uv\.lock|tests/test_secrets_guard\.py)$
+  - repo: local
+    hooks:
       - id: mypy
         name: mypy
         entry: uv run mypy

@@ -142,3 +142,47 @@ errors plus the list of terms, built at runtime. No LLM is called.
 2. `uv run aiglasses bench-record --glossary-file bench/data/glossary.txt`: records 5 short ordinary
    and 10 glossary sentences (skips what is already recorded). Click, wait about 1 s, speak.
 3. Then I run `uv run python -m bench.round2` and `uv run python -m bench.glossary_eval`.
+
+### Round 2 results with the glossary (measured 2026-10-31, 21 complete sentences)
+Data: 11 ordinary and 10 glossary sentences (all contain the single term "RapDuo SM"); sentences cut
+off by the 4.8 s window are excluded. Median of 3 runs, one process per engine, int8, 4 threads.
+Only ONE glossary term appears in the recordings, so term accuracy means "RapDuo SM" only.
+
+| Engine | Hints | WER ordinary | WER glossary | Term hits | Median wall s | Peak RAM MB |
+|---|---|---|---|---|---|---|
+| moonshine tiny | none available | 28.3% | 56.2% | 0/10 | 0.22 | 159 |
+| moonshine base | none available | 17.2% | 51.6% | 0/10 | 0.32 | 336 |
+| moonshine v2 small | none available | 17.2% | 34.4% | 0/10 | 1.00 | 336 |
+| moonshine v2 medium | none available | 16.2% | 31.2% | 0/10 | 1.18 | 527 |
+| parakeet int8 | none | 11.1% | 28.1% | 0/10 | 0.43 | 851 |
+| parakeet int8 | sherpa hotwords | 11.1% | 26.6% | 1/10 | 0.58 | 852 |
+| faster-whisper base.en | none | 13.1% | 42.2% | 0/10 | 0.87 | 320 |
+| faster-whisper base.en | initial_prompt | 13.1% | 15.6% | 8/10 | 0.69 | 320 |
+| faster-whisper base.en | hotwords | 13.1% | 6.2% | 9/10 | 0.58 | 320 |
+| faster-whisper small.en | none | 13.1% | 34.4% | 0/10 | 2.31 | 697 |
+| faster-whisper small.en | initial_prompt | 13.1% | 17.2% | 8/10 | 1.84 | 697 |
+| faster-whisper small.en | hotwords | 11.1% | 17.2% | 8/10 | 1.90 | 697 |
+| faster-whisper small (en fixed) | none | 13.1% | 39.1% | 0/10 | 2.33 | 697 |
+| faster-whisper small (en fixed) | initial_prompt | 14.1% | 1.6% | 10/10 | 1.96 | 697 |
+| faster-whisper small (en fixed) | hotwords | 14.1% | 1.6% | 10/10 | 2.43 | 697 |
+
+Reading: without hints no engine writes the name correctly (0/10). Hints change that for
+faster-whisper: base.en with `hotwords` gets 9/10 at 0.58 s, small with a hint gets 10/10 at about
+2 s. Parakeet, the best engine on ordinary speech, barely benefits from sherpa hotwords (1/10).
+Hints can bend ordinary sentences a little (small: 13.1% to 14.1%). One term and 21 sentences is a
+small sample: treat this as a direction, not a final ranking. An earlier hinted run was discarded
+because the glossary file was mis-parsed and then because the recordings were deleted mid-run.
+"faster-whisper small + hotwords" hung for more than 30 minutes once while other work was using the
+CPU; the harness now times a configuration out after 900 s.
+
+### Corrector on the same transcripts (no hints), glossary of 4 terms
+| Engine | Terms before -> after | WER glossary | Ordinary sentences changed (false corrections) |
+|---|---|---|---|
+| moonshine tiny | 0 -> 1 | 56.2% -> 53.1% | 0 of 11 |
+| moonshine base | 0 -> 1 | 51.6% -> 48.4% | 0 of 11 |
+| moonshine v2 medium | 0 -> 4 | 31.2% -> 18.8% | 0 of 11 |
+| parakeet | 0 -> 1 | 28.1% -> 25.0% | 0 of 11 |
+| faster-whisper small | 0 -> 1 | 39.1% -> 35.9% | 0 of 11 |
+| others | 0 -> 0 | unchanged | 0 of 11 |
+The corrector made no false correction, but it also fixes few misses at the conservative threshold.
+Spoken forms in the glossary (`RapDuo SM | rap do s m`) are the lever to try next.

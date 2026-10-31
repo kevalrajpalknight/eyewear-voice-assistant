@@ -36,13 +36,38 @@ All interfaces take a `language` so Hindi can be added later; only English is im
 - Optional extra `assistant` in the root project (pins in `pyproject.toml`, 14-day rule enforced with constraints for new transitive packages; existing locked packages, including the BLE stack, unchanged).
 - `--output null` runs everything without sound (latency check); `--wav FILE` runs one turn from a 16 kHz mono WAV without the glasses.
 
-## Phase B: assistant core (fakes only)
-Pipeline: utterance -> STT -> LLM stream -> sentence/clause chunker -> TTS stream -> sink, speaking the first chunk while the LLM keeps streaming. Cancellation: a new rear click or stop cancels the
-playback and the generation and starts a fresh turn, with no orphaned tasks (one `TurnTask` owning its child tasks). Rolling history (configurable turns), persona prompt (concise, friendly, plain
-spoken English, no markdown/emoji/lists/URLs), max reply tokens, per-session turn cap. Reply cleaner strips markdown, emoji and URLs and keeps numbers readable. Config from environment and `config.toml`
-(provider, base URL, model, key *variable name*, voice, speed, history); `assistant check` never prints a secret. Per-turn JSONL latency log. LLM adapter: one OpenAI-compatible HTTP client;
-no real call until the user supplies a key. Tests: end to end with fakes, cancellation, chunker edge cases, failure paths, and a guard that fails any test that opens a network socket.
-Gate B: WAV-file demo through PC speakers.
+## Phase B: assistant core (built 2026-10-31)
+```
+rear click -> voice_requests() -> TurnJoiner -> TurnRunner -> ConversationPipeline
+  STT -> glossary correction -> RoutedLlmClient -> ClauseStream -> clean_reply -> TTS -> AudioSink
+                                   |-- tier 0: local handlers (time, date, stop, repeat, heard)
+                                   |-- tier 1: fast model (LLM_FAST_*)   |-- tier 2: main model
+```
+- **Settings:** `aiglasses.settings.AssistantSettings`, environment > `.env` > `config.toml` >
+  defaults; `docs/CONFIG.md`. A test forbids model names, voice ids and engine names elsewhere.
+- **LLM:** `LlmClient` protocol; `LangChainLlmClient` is the only module importing LangChain
+  (ADR 0009). Providers are factories in a registry. Streaming with `astream`, retries only before
+  the first token, a whole-request timeout, cancellation closes the provider stream.
+- **Router:** `ROUTER_MODE` off, rules or model. Tier 0 never calls an LLM. Every turn logs tier,
+  role, reason and router time; never the key, and no text unless `LOG_TRANSCRIPTS`.
+- **Speaking early:** the reply is cut into clauses while it streams (first clause up to
+  `TTS_FIRST_CLAUSE_MAX_WORDS` words); each is cleaned (no markdown, emoji, links; numbers, times
+  and percentages as words) and sent to TTS while the LLM keeps writing.
+- **Barge-in and joining:** a new rear click stops playback and generation at once; the interrupted
+  reply stays in history marked as interrupted. If the previous request was cut off by the 4.8 s
+  window and the new click starts within `TURN_JOIN_WINDOW_S`, the two audio clips are joined and
+  the earlier exchange is replaced.
+- **Caps:** `HISTORY_TURNS`, `MAX_TURNS_PER_SESSION`, `MAX_REPLY_SECONDS`, `LLM_MAX_TOKENS`.
+- **Failure modes:** LLM or network failure before speech: a short local line
+  (`FALLBACK_LLM_ERROR`); mid-reply: the speaker is stopped cleanly; empty recognition: the
+  no-speech line; TTS failure: logged, loop continues; BLE drop: reconnect with 2, 5, 10, 20, 30 s
+  backoff (the glasses can need about 30 s to advertise again); backoff resets only after a session
+  that served a request.
+- **Privacy:** text and audio are not kept unless `LOG_TRANSCRIPTS` / `DEBUG_SAVE_AUDIO`; the
+  logging filter removes configured keys and key-shaped strings; `assistant check` prints secrets
+  only as set / NOT set; tests block non-loopback network access and never read `.env`.
+- **Not verified live:** the whole loop with the real glasses, real provider replies and real
+  speaker output. See PROGRESS.md for what has and has not been run.
 
 ## Phase C: glasses speaker
 Pair the glasses as a Windows audio device (the user does this). Match endpoints by name, record the sample rates Windows reports (earlier: A2DP 48 kHz stereo, HFP 16 kHz mono), fall back to PC speakers.

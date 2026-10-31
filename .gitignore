@@ -33,3 +33,6 @@ bench/.venv/
 bench/models/
 bench/out/
 bench/data/
+backups/
+.env.*
+!.env.example

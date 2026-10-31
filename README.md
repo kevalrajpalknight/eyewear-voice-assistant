@@ -20,6 +20,25 @@ uv run aiglasses capture analyze captures\bugreport.zip   # Phase 3, see docs/CA
 
 Turn Bluetooth on in Windows and make sure the glasses are awake and not connected to a phone.
 
+## Voice assistant quickstart
+
+Single-click the rear button, speak, hear the answer on the PC speakers. Speech is recognised
+locally; only the text of your request goes to the LLM provider you choose.
+
+```powershell
+uv sync --extra assistant --extra research --extra llm
+python -m bench.models                  # in bench/: download the speech models (checksummed)
+copy .env.example .env                  # then edit .env: LLM_PROVIDER, LLM_MODEL, LLM_API_KEY
+uv run aiglasses assistant check        # validates everything; secrets show only as set / NOT set
+uv run aiglasses assistant run          # glasses mic -> STT -> LLM -> TTS -> PC speakers
+```
+
+Close the phone app first and keep the phone's Bluetooth off. The glasses end a voice session
+about 4.8 s after the click, so speak straight away and keep requests short; a second click soon
+after a cut-off request is joined to it. Changing provider, model, router, speech engine, voice or
+speed means editing `.env` only: see `docs/CONFIG.md`. `assistant run --wav file.wav --output null`
+runs one turn from a recording without sound; `assistant echo` repeats what it heard (no LLM).
+
 ## Library
 
 ```python

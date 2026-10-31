@@ -39,3 +39,14 @@ faster-whisper base.en 0.69 s, Moonshine v2 small 1.0 s, v2 medium 1.26 s, Whisp
 Replacing Moonshine base by Parakeet adds about 0.15 s to the 0.8 to 1.8 s end-to-sound you
 measured; Whisper small would add about 1.8 s. The glasses' session window (about 4.8 s) bounds
 utterance length, so STT time stays small.
+
+## Conversation core (2026-10-31): what is measured and what is estimated
+The turn log now splits a request into decode, STT, router, LLM first token, first TTS audio and
+playback start (`logs/assistant_turns.jsonl`, `end_to_sound_s` is the total).
+- MEASURED earlier (echo loop, real engines): STT 0.2 to 0.45 s (Moonshine base), first TTS audio
+  0.4 to 1.0 s, end marker to sound 0.8 to 1.8 s with the echo loop.
+- NOT YET MEASURED: LLM first-token time and the router. Estimate for a fast model over the internet:
+  0.3 to 1.0 s to the first token; a strong model 0.6 to 2.0 s. With early clause speaking the total
+  is therefore estimated at about 2 to 4 s from the end marker to the first spoken word. Replace this
+  with the first `assistant run` log.
+- Tier-0 answers (time, date, stop, repeat) skip the LLM: estimated 1 to 1.5 s (STT + TTS only).
