@@ -165,3 +165,10 @@ def test_photo_cli_asks_a_different_question(
     monkeypatch.chdir(tmp_path)
     result = CliRunner().invoke(cli.app, ["probe", "photo", "--send"], input="n\n")
     assert result.exit_code != 0 and "CHANGES" in result.output
+
+
+def test_not_found_hint_tells_the_user_what_to_do() -> None:
+    from aiglasses.transport.bleak_transport import NOT_FOUND_HINT
+
+    for needle in ("wake", "Bluetooth is off", "app is closed", "not scanning further"):
+        assert needle in NOT_FOUND_HINT

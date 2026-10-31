@@ -26,9 +26,10 @@ log = logging.getLogger("aiglasses.bleak")
 T = TypeVar("T")
 
 NOT_FOUND_HINT = (
-    "Glasses not found after scanning. They can need up to about 30 s to advertise again after a "
-    "session ends. If it persists, toggle their Bluetooth and make sure the phone is not connected "
-    "(a connected phone stops the glasses advertising)."
+    "Glasses not found after the retries; not scanning further. The glasses sleep or power off "
+    "when idle: wake or power them on (or take them out of the case), then start again right "
+    "away. Make sure the phone's Bluetooth is off and the Cyan app is closed (a connected phone "
+    "stops the glasses advertising). After a session they can take up to about 30 s to advertise."
 )
 PAIRING_WORDS = ("access denied", "pair", "authentication", "encryption", "protection")
 

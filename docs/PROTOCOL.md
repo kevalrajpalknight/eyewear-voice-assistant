@@ -213,7 +213,8 @@ Source: the decompiled Java of `base.apk` (Cyan Glasses 1.0.2.18), read locally 
 | `02 01 0A` | **factory reset (denied)** |
 | `02 01 0E` | **restart (denied)** |
 | `01 0A`, `01 02`, `01 06`, `01 08 xx` | settings reads |
-| `02 08 dir res`, `02 09 01/02`, `02 04` | settings writes (video direction/resolution, others unknown) |
+| `02 04` | read the media counts (the Album's request, also sent after connecting; reply type 4) |
+| `02 08 dir res`, `02 09 01/02` | settings writes (video direction/resolution, others unknown) |
 
 Stop commands for video and audio recording were not found; the same command may toggle, or recording is stopped with the button. Unverified.
 
@@ -320,3 +321,20 @@ file-list type 1 (no "only access-point import" byte, treated as false). The app
 ### Glasses need time to advertise again
 After a session ends the glasses may not advertise for a while. Observed: the first connect attempt of a run often reports "not found" and a later attempt finds them; waits of roughly 15 to 40 s
 were seen. The tool scans up to 15 s per attempt with up to 4 attempts, so it waits well past 10 s before giving up, and logs the early attempts at INFO. Wait about 30 s between runs.
+
+
+### Which media count is which (INFERRED; the photo field is confirmed only by the photo test)
+Fields in order: 1 (bytes 1-2), 2 (bytes 3-4), 3 (bytes 5-6), each a 16-bit little-endian number. Evidence:
+- **The app's names.** The reply to the Album's count request (`02 04`, below) is parsed into three consecutive fields called `imageCount`, `videoCount` and `recordCount`. The Album screen only
+  shows their sum ("files to import"), so the app itself never separates them in the UI.
+- **What "record" means in the app.** Everywhere in the app "record" is the audio-only recording: the audio-only quick function is `startRecord` (`02 01 08`), the file handler for it is
+  `RecordHandle`, and the related duration field is `recordAudioDuration`. Video is `startVideo` (`02 01 02`). So field 3 is audio-only recordings, not video.
+- **Our own capture.** At 19:11 UTC (00:41 IST) the stop-recording event was `01 08 00 02 00 00 00 01`: field 1 = 8, **field 2 = 2, field 3 = 0**, after two recordings started with the front button
+  (double click, 19:04 and 19:11). So a button-started recording incremented field 2 (video), not field 3. Field 1 had also gone up by one at the AI image capture, so photos include AI image captures.
+- **Now:** photos 4, videos 0, audio recordings 1. The earlier counts (8 photos, 2 videos) are gone, so the glasses' files were cleared in between (probably by the phone's Album import at 10:46 IST;
+  the app's deletion step was not read). Whether the 1 audio recording came from the rear-button long press or the app's "Recording" cannot be told from the counts alone.
+- `02 04` (cmd 0x41, write op 2, function 4) is the app's **read media counts** request; the app also sends it right after connecting. The glasses sent the same counts unasked on connect in our runs.
+
+### The glasses sleep or power off when idle
+They stop advertising when idle or after a session. Wake them (or take them out of the case) and start a probe straight away. If they are not advertising after the retries, the tool stops
+without scanning further and says what to do: wake or power on, phone Bluetooth off, Cyan app closed.

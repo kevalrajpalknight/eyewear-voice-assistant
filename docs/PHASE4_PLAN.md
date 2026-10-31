@@ -6,6 +6,7 @@ Everything in this plan is read from the official app's code (see docs/PROTOCOL.
 ## Standing rules
 
 - Cyan app closed and the phone's Bluetooth off before any BLE test (the glasses accept one connection).
+- The glasses sleep or power off when idle. Wake them first and start the probe straight away. If they are not advertising after the retries, stop (the tool does not keep scanning) and fix the cause: wake or power on, phone Bluetooth off, app closed.
 - One write at a time, no retries or loops, 5 s reply timeout, audited in `logs/probe_audit.jsonl` and `logs/write_audit.jsonl`.
 - The byte-level denylist stays on. No firmware, file-transfer, factory-test, restart or factory-reset payload is ever sent.
 - Nothing is sent to anything except the glasses and, for HTTP, the IP the glasses report. The app's cloud servers are never contacted.
