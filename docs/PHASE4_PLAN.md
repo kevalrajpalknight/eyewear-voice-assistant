@@ -82,6 +82,6 @@ Step 2 is not approved and is blocked until 2026-11-07 (winrt pin date).
 
 ### 2026-10-31 week work (no changes to the BLE stack or pinned packages)
 - Facade: `read_battery`, `read_device_info`, `read_media_counts`, `take_photo(confirm=True)`, `events()`. `aiglasses photo` asks the person to confirm and never answers for them. No other command became sendable.
-- `aiglasses ai-voice record` (read-only) saves a rear-click burst as a WAV under captures/. The codec stays INFERRED until the user reports the audio is intelligible.
+- `aiglasses ai-voice record` (read-only) saves a rear-click burst as a WAV under captures/. The user reported the audio intelligible, so the codec is CONFIRMED (see PROTOCOL.md).
 - Phase 2 audio check: `aiglasses audio devices` listed no glasses endpoints on 2026-10-31, so the glasses were not connected as a Windows audio device at that moment (only Realtek and a display output). Playback and microphone checks wait until they are reconnected in Windows Bluetooth settings; HFP is low bandwidth.
 - Wi-Fi Direct preparation: `services/wifidirect.py` (WifiDirect and HostNetwork interfaces, fakes, preflight, session with 16 s peer / 15 s connect limits, one retry, rollback). No winrt package installed or pinned.

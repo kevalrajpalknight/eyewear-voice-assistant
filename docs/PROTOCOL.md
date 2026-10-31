@@ -50,7 +50,7 @@ bytes a "trailer"; that was wrong, they are the CRC.
 
 Commands seen: `0x73` (control/status events) and `0x59` (voice stream).
 
-## Voice stream, cmd 0x59 (format matches the app exactly; audibility not yet confirmed)
+## Voice stream, cmd 0x59 (codec CONFIRMED: the user heard intelligible speech)
 
 - CONFIRMED (capture): payload is 40 bytes; a burst is 200 to 289 frames at 20 ms spacing (about 50 per second), bracketed by `0x73` markers `03 01` (start) and `0a 01` (end).
 - INFERRED (app code): 0x59 is the app's "GPT upload", the AI voice audio. The app decodes it with no Ogg header, 16 kHz, mono and 40-byte packets, feeding the decoder the bytes
@@ -59,8 +59,20 @@ Commands seen: `0x73` (control/status events) and `0x59` (voice stream).
   app's 16 kHz). Wrong offsets fail (11 to 149 errors out of 289, or clipped noise); Speex fails to open; SBC/mSBC is excluded (0 of 289 packets start with 0x9C/0xAD).
   Packet start `4b 41` is a valid Opus TOC pair (SILK wideband 20 ms, padded frames).
 - The decoded signal is very quiet: rms about 17 and peak 368 out of 32767 (about -52 dBFS rms), like the Windows microphone recording.
-- UNVERIFIED: whether it contains intelligible speech. Listen to
-  `logs/decode_candidates/burst2_opus_strip2_app_format_16000Hz_mono_PEAK-NORMALIZED.wav` (and the unnormalised file). Not a success until a human hears speech.
+- **CONFIRMED (2026-10-31, user listened): the decoded audio is intelligible speech.** Codec: Opus-style packets of 40 bytes, 20 ms each, 16 kHz mono, no Ogg header, decoded from the frame
+  payload as is. `aiglasses ai-voice record` produced the second sample.
+- CONFIRMED (live rear single-click, `ai-voice record`): start marker `03 01` arrived, then 288 voice frames (5.76 s), then the end marker `0a 01`; the burst was ended by the glasses' end event,
+  not by our idle timeout. Note: a LONG press on the rear button starts an audio-only recording on the glasses, not an AI voice session.
+- INFERRED (app code, names only): what ends a session. See "What ends an AI voice session" below.
+
+### What ends an AI voice session (INFERRED, from the decompiled app; names only)
+- On the `0a 01` event (the app logs it as "recognition ended on the glasses") `MainActivity` calls `GlassesAzureSpeechRecognizer.deviceIdentificationStop()`, which stops its own timers and the recognizer. So the
+  glasses end the session themselves; the app only reacts. What the glasses use to decide (timer, silence detection, button release) is NOT visible in the app and is UNVERIFIED. The 2 s and 10 s sentence tests
+  are meant to show it.
+- The app has its own guard: `GlassesAzureSpeechRecognizer.start()` schedules `timeoutTask(15)` in the AI chat ("GPT") mode and `timeoutTask(60)` in the translate mode. When it fires, the app sends
+  `glassesControl(02 01 0B)` to the glasses (meaning unknown, probably "stop voice") and stops its heartbeat. So the app expects a session to last at most 15 s in chat mode. `02 01 0B` is NOT approved and is not sent.
+- The app can also send `aiVoicePlay(3)` and `aiVoicePlay(241)` (cmd 0x48, payload `02 xx`) when a session starts or the network is down. Unknown effect, probably a built-in prompt sound. NOT approved, not sent.
+- Design consequence: plan for turns of up to about 15 s; do not assume the glasses cut voice at 6 s until the 10 s test shows it.
 
 ## Events, cmd 0x73 (payload after the CRC; meanings from the app's code, matching our captures)
 
