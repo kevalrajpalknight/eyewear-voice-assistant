@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -133,11 +133,14 @@ async def voice_requests(
     disconnected: asyncio.Event | None = None,
     idle_seconds: float = IDLE_END_SECONDS,
     min_frames: int = MIN_FRAMES,
+    on_start: Callable[[], None] | None = None,
 ) -> AsyncIterator[VoiceUtterance]:
     """Yield one decoded utterance per rear-click session. Read-only.
 
     Frames that arrive before the 03 01 marker belong to the session that the marker then opens.
     Sessions shorter than `min_frames` are dropped with a warning (stray frames, not speech).
+    `on_start` is called once when a session opens (first marker or frame), before it finishes,
+    so a caller can interrupt whatever it is doing when the user clicks again.
     """
     gone = asyncio.ensure_future(disconnected.wait()) if disconnected is not None else None
     pending: asyncio.Future[GlassesEvent] | None = None
@@ -185,6 +188,8 @@ async def voice_requests(
             pending = None
             if event.kind == "voice_frame":
                 if current is None:
+                    if marker_only is None and on_start is not None:
+                        on_start()
                     current = _Open(None)
                     current.start_marker_at = marker_only
                     marker_only = None
@@ -195,6 +200,8 @@ async def voice_requests(
                         yield u
                     current = None
                 if current is None:
+                    if marker_only is None and on_start is not None:
+                        on_start()
                     marker_only = event.timestamp
                 else:
                     current.start_marker_at = event.timestamp

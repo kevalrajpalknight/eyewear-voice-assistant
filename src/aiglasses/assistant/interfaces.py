@@ -1,6 +1,6 @@
 """The four seams of the voice assistant. Every cloud, audio and BLE interaction sits behind one."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -68,6 +68,8 @@ class LlmClient(Protocol):
 
 
 class AudioSink(Protocol):
+    on_playing: Callable[[], None] | None  # called when the first sound is actually written
+
     async def play(self, chunks: AsyncIterator[AudioChunk]) -> None:
         """Play until the iterator ends. Must return promptly after `stop()`."""
         ...

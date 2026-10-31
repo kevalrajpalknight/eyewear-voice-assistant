@@ -122,3 +122,22 @@ async def test_no_task_is_left_behind_after_closing_the_generator() -> None:
     await collect(feed, 1)
     await asyncio.sleep(0.05)
     assert len(asyncio.all_tasks()) <= before
+
+
+async def test_on_start_fires_once_per_session_at_the_marker_or_first_frame() -> None:
+    calls: list[int] = []
+    feed = Feed()
+    feed.push(ev("ai_voice", 1.0), *frames(1.1, 10), ev("ai_voice_end", 1.4))
+    feed.push(*frames(5.0, 10), ev("ai_voice_end", 5.3))  # no marker: first frame opens it
+    out: list[VoiceUtterance] = []
+
+    async def run() -> None:
+        async for u in voice_requests(
+            feed.events(), FakeDecoder(), idle_seconds=0.2, on_start=lambda: calls.append(1)
+        ):
+            out.append(u)
+            if len(out) == 2:
+                break
+
+    await asyncio.wait_for(run(), 3)
+    assert len(calls) == 2

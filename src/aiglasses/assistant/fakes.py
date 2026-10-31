@@ -2,7 +2,7 @@
 
 import asyncio
 import time
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Callable, Sequence
 
 import numpy as np
 
@@ -85,6 +85,8 @@ class FakeTts:
 
 class FakeSink:
     def __init__(self, *, play_delay: float = 0.0) -> None:
+        self.on_playing: Callable[[], None] | None = None
+        self.playing = asyncio.Event()  # set when the first chunk of a play() is written
         self.played: list[AudioChunk] = []
         self.stops = 0
         self._play_delay = play_delay
@@ -92,9 +94,14 @@ class FakeSink:
 
     async def play(self, chunks: AsyncIterator[AudioChunk]) -> None:
         self._stopped.clear()
+        self.playing.clear()
         async for chunk in chunks:
             if self._stopped.is_set():
                 return
+            if not self.playing.is_set():
+                self.playing.set()
+                if self.on_playing is not None:
+                    self.on_playing()
             self.played.append(chunk)
             await asyncio.sleep(self._play_delay)
 

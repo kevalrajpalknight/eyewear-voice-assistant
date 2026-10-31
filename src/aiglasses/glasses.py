@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 
 from aiglasses.capabilities import CAPABILITIES
@@ -60,13 +60,17 @@ class Glasses:
         """Typed events: `async for event in glasses.events():`."""
         return self._events.events()
 
-    def voice_requests(self, decoder: VoiceDecoder | None = None) -> AsyncIterator[VoiceUtterance]:
+    def voice_requests(
+        self, decoder: VoiceDecoder | None = None, *, on_start: Callable[[], None] | None = None
+    ) -> AsyncIterator[VoiceUtterance]:
         """One decoded utterance per rear-click session. Read-only; needs the `research` extra."""
         if decoder is None:
             from aiglasses.research.voice_decode import OpusVoiceDecoder
 
             decoder = OpusVoiceDecoder()
-        return voice_requests(self.events(), decoder, disconnected=self.transport.disconnected)
+        return voice_requests(
+            self.events(), decoder, disconnected=self.transport.disconnected, on_start=on_start
+        )
 
     async def read_battery(self) -> BatteryStatus:
         """Read-only request (CONFIRMED). Needs `connect(..., dry_run=False)`."""
