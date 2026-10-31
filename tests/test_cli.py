@@ -143,3 +143,12 @@ def test_setup_logging_writes_json_lines(tmp_path: Path) -> None:
     root.handlers.clear()
     line = json.loads((tmp_path / "logs" / "aiglasses.jsonl").read_text().splitlines()[0])
     assert line["msg"] == "hello world" and line["level"] == "INFO"
+
+
+def test_console_log_time_shows_the_utc_offset() -> None:
+    import re
+    from datetime import datetime
+
+    from aiglasses.logging_setup import _console_time
+
+    assert re.fullmatch(r"\[\d\d:\d\d:\d\d [+-]\d\d:\d\d\]", _console_time(datetime.now()).plain)
