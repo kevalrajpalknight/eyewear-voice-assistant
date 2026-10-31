@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+import numpy as np
 import soundfile as sf
 
 from aiglasses.services.voice import VoiceUtterance
@@ -72,6 +73,56 @@ SENTENCES = [
 ]
 
 
+# The glasses end a voice session about 4.8 s after the click, so a sentence has about 3.5 s
+# once you allow ~1 s before speaking. These replace the long ones that can never fit.
+SHORT_SENTENCES = [
+    Sentence("r01_reminder", "numbers and times", "Remind me to call the dentist at four."),
+    Sentence("r02_list", "command", "Add milk and eggs to my shopping list."),
+    Sentence("r03_question", "question", "How many days are left until the weekend?"),
+    Sentence("r04_message", "command", "Read my last message out loud."),
+    Sentence("r05_casual", "casual", "Tell me a short joke about cats."),
+]
+GLOSSARY_TEMPLATES = [
+    "Please send a message to {}.",
+    "Can you search about {} on the internet?",
+    "Remind me to call {} tomorrow.",
+    "Tell me more about {}.",
+    "What is the latest news on {}?",
+    "Play something by {}.",
+    "Open my notes about {}.",
+    "Is {} free this weekend?",
+    "Add {} to my list.",
+    "Who is {}?",
+]
+
+
+def glossary_sentences(terms: list[str], count: int = 10) -> list[Sentence]:
+    """Short sentences, one glossary term each, cycling through terms and templates."""
+    if not terms:
+        return []
+    sentences = []
+    for i in range(count):
+        term = terms[i % len(terms)]
+        sentences.append(
+            Sentence(f"g{i + 1:02d}_glossary", "glossary term", GLOSSARY_TEMPLATES[i].format(term))
+        )
+    return sentences
+
+
+def pending(sentences: list[Sentence], out_dir: Path) -> list[Sentence]:
+    """Sentences without a saved take yet, so a re-run continues instead of starting over."""
+    return [s for s in sentences if not (out_dir / f"{s.id}.wav").exists()]
+
+
+def cut_off(pcm: np.ndarray, sample_rate: int) -> bool:
+    """True when speech was still going in the last 100 ms, i.e. the session ended mid-sentence."""
+    if len(pcm) < sample_rate:
+        return False
+    samples = np.abs(pcm.astype(np.float32))
+    tail = samples[-sample_rate // 10 :].mean()
+    return bool(samples.max() > 0 and tail > 0.1 * samples.max())
+
+
 async def next_fresh(
     utterances: AsyncIterator[VoiceUtterance],
     shown_at: float,
@@ -111,6 +162,7 @@ async def record_sentences(
                 "frames": utterance.frame_count, "end_reason": utterance.end_reason.value,
                 "wall_s": round(utterance.ended_at - utterance.started_at, 2),
                 "start_marker_seen": utterance.start_marker_at is not None,
+                "cut_off": cut_off(utterance.pcm, utterance.sample_rate),
             }  # fmt: skip
             report(row)
             misread = await ask_misread()

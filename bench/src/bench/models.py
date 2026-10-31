@@ -28,6 +28,22 @@ HF_FILES = {
         ["config.json", "model.bin", "tokenizer.json", "vocabulary.txt"],
         {"model.bin": "62b2a45b05ee59acb4a5341b33ee35e041395d378d418a18acfe4c9e768ee37a"},
     ),
+    "faster-whisper-small": (
+        "Systran/faster-whisper-small",
+        "536b0662742c02347bc0e980a01041f333bce120",
+        ["config.json", "model.bin", "tokenizer.json", "vocabulary.txt"],
+        {"model.bin": "3e305921506d8872816023e4c273e75d2419fb89b24da97b4fe7bce14170d671"},
+    ),
+    "parakeet-tdt-0.6b-v2-int8": (
+        "csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8",
+        "1ab9323565ddb038682214b292f588070a538ce2",
+        ["decoder.int8.onnx", "encoder.int8.onnx", "joiner.int8.onnx", "tokens.txt"],
+        {
+            "decoder.int8.onnx": "b6bb64963457237b900e496ee9994b59294526439fbcc1fecf705b31a15c6b4e",
+            "encoder.int8.onnx": "a32b12d17bbbc309d0686fbbcc2987b5e9b8333a7da83fa6b089f0a2acd651ab",
+            "joiner.int8.onnx": "7946164367946e7f9f29a122407c3252b680dbae9a51343eb2488d057c3c43d2",
+        },
+    ),
 }
 GITHUB = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0"
 KOKORO_FILES = ["kokoro-v1.0.onnx", "kokoro-v1.0.int8.onnx", "voices-v1.0.bin"]

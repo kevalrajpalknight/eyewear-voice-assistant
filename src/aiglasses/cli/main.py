@@ -294,7 +294,11 @@ def _print_frame_summary(stats: dict[str, FrameStat], watch: VoiceWatch) -> None
 @assistant_app.command("echo")
 def assistant_echo(
     output: str = typer.Option("pc", help="pc = PC speakers, null = no sound (latency test)"),
-    stt: str = typer.Option("moonshine-base", help="moonshine-base | moonshine-tiny | fw-base.en"),
+    stt: str = typer.Option(
+        "moonshine-base",
+        help="moonshine-base | moonshine-tiny | moonshine-small-v2 | moonshine-medium-v2 | parakeet"
+        " | fw-base.en | fw-small.en | fw-small",
+    ),
     tts: str = typer.Option("int8", help="Kokoro variant: int8 | fp32"),
     voice: str = typer.Option("bf_isabella"),
     speed: float = typer.Option(1.05),
@@ -308,6 +312,15 @@ def assistant_echo(
     ),
     wav: Path = typer.Option(
         None, help="Run ONE turn from a 16 kHz mono WAV instead of the glasses"
+    ),
+    glossary: bool = typer.Option(
+        False,
+        "--glossary",
+        help="Correct names with your private glossary; prints raw and corrected text and logs "
+        "every correction to logs/glossary_corrections.jsonl",
+    ),
+    glossary_file: Path = typer.Option(
+        Path("bench/data/glossary.txt"), help="One term per line (private, gitignored)"
     ),
 ) -> None:
     """Rear click -> speech to text -> speak it back. No LLM, no network, nothing sent."""
@@ -327,6 +340,7 @@ def assistant_echo(
             normalize=normalize,
             debug=debug,
             wav=wav,
+            glossary_file=glossary_file if glossary else None,
         )
     )
 
@@ -334,11 +348,27 @@ def assistant_echo(
 @app.command("bench-record")
 def bench_record(
     out_dir: Path = typer.Option(Path("bench/data"), help="Local and gitignored"),
+    glossary_file: Path = typer.Option(
+        None, help="Private glossary (one term per line): adds 10 short sentences using your terms"
+    ),
 ) -> None:
-    """Guided recorder for the STT accuracy test: read a sentence, single-click the rear button."""
+    """Guided recorder for the STT accuracy test: read a sentence, single-click the rear button.
+
+    Sentences that already have a saved take are skipped, so a re-run continues.
+    """
+    from aiglasses.assistant.glossary import Glossary
+    from aiglasses.assistant.recorder import SHORT_SENTENCES, glossary_sentences, pending
     from aiglasses.assistant.session import SENTENCES, run_bench_record
 
-    _run(run_bench_record(Settings(), out_dir, SENTENCES))
+    extra = []
+    if glossary_file is not None:
+        terms = [t.canonical for t in Glossary.load(glossary_file).terms]
+        extra = glossary_sentences(terms)
+    todo = pending([*SENTENCES, *SHORT_SENTENCES, *extra], out_dir)
+    if not todo:
+        console.print("Every sentence already has a take.")
+        return
+    _run(run_bench_record(Settings(), out_dir, todo))
 
 
 @ai_voice_app.command("record")

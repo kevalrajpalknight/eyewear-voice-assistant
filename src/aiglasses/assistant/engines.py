@@ -14,7 +14,16 @@ import numpy as np
 from aiglasses.assistant.interfaces import AudioChunk, Pcm, Transcript, TtsOptions
 from aiglasses.domain.errors import GlassesError, NotSupportedError
 
-STT_CHOICES = ("moonshine-base", "moonshine-tiny", "fw-base.en")
+STT_CHOICES = (
+    "moonshine-base", "moonshine-tiny", "moonshine-small-v2", "moonshine-medium-v2",
+    "parakeet", "fw-base.en", "fw-small.en", "fw-small",
+)  # fmt: skip
+MOONSHINE_FOLDERS = {
+    "tiny": ("TINY", "tiny-en/quantized/tiny-en"),
+    "base": ("BASE", "base-en/quantized/base-en"),
+    "small-v2": ("SMALL_STREAMING", "small-streaming-en/quantized_*"),
+    "medium-v2": ("MEDIUM_STREAMING", "medium-streaming-en/quantized_*"),
+}
 TTS_CHOICES = ("int8", "fp32")
 KOKORO_FILES = {"int8": "kokoro-v1.0.int8.onnx", "fp32": "kokoro-v1.0.onnx"}
 
@@ -60,18 +69,18 @@ class MoonshineStt:
         from moonshine_voice import ModelArch
         from moonshine_voice.transcriber import Transcriber
 
-        folders = [
-            p.parent
-            for p in (models_dir / "moonshine").rglob("encoder_model.ort")
-            if p.parent.name == f"{arch}-en"
-        ]
+        if arch not in MOONSHINE_FOLDERS:
+            raise NotSupportedError(f"unknown Moonshine model {arch!r}")
+        arch_name, pattern = MOONSHINE_FOLDERS[arch]
+        root = models_dir / "moonshine" / "download.moonshine.ai" / "model"
+        folders = sorted(root.glob(pattern))
         if not folders:
-            raise ModelMissingError(f"Moonshine {arch}-en not found under {models_dir}/moonshine")
+            raise ModelMissingError(f"Moonshine {arch} not found under {root}")
         self.name = f"moonshine-{arch}"
         self._normalize = normalize
         self._lock = threading.Lock()
         self._transcriber: Any = Transcriber(
-            model_path=str(folders[0]), model_arch=getattr(ModelArch, arch.upper())
+            model_path=str(folders[-1]), model_arch=getattr(ModelArch, arch_name)
         )
 
     def _run(self, samples: np.ndarray[Any, np.dtype[np.float32]]) -> str:
@@ -89,14 +98,14 @@ class MoonshineStt:
 
 
 class FasterWhisperStt:
-    def __init__(self, models_dir: Path, *, normalize: bool = False) -> None:
+    def __init__(self, models_dir: Path, size: str = "base.en", *, normalize: bool = False) -> None:
         from faster_whisper import WhisperModel
 
-        folder = models_dir / "faster-whisper-base.en"
+        folder = models_dir / f"faster-whisper-{size}"
         verify_checksum(
-            models_dir, "faster-whisper-base.en/model.bin", "faster-whisper-base.en/model.bin"
+            models_dir, f"faster-whisper-{size}/model.bin", f"faster-whisper-{size}/model.bin"
         )
-        self.name = "fw-base.en-int8"
+        self.name = f"fw-{size}-int8"
         self._normalize = normalize
         self._lock = threading.Lock()
         self._model: Any = WhisperModel(
@@ -110,6 +119,45 @@ class FasterWhisperStt:
                 condition_on_previous_text=False,
             )  # fmt: skip
             return " ".join(s.text.strip() for s in segments).strip()
+
+    async def transcribe(
+        self, pcm: Pcm, sample_rate: int = 16000, *, language: str = "en"
+    ) -> Transcript:
+        _require_english(language)
+        started = time.perf_counter()
+        text = await asyncio.to_thread(self._run, _to_float(pcm, self._normalize))
+        return Transcript(text, language, len(pcm) / sample_rate, time.perf_counter() - started)
+
+
+class ParakeetStt:
+    """Parakeet TDT 0.6B v2 (int8 ONNX) through sherpa-onnx."""
+
+    name = "parakeet-tdt-v2-int8"
+
+    def __init__(self, models_dir: Path, *, normalize: bool = False) -> None:
+        import sherpa_onnx
+
+        folder = models_dir / "parakeet-tdt-0.6b-v2-int8"
+        for part in ("encoder", "decoder", "joiner"):
+            verify_checksum(
+                models_dir,
+                f"parakeet-tdt-0.6b-v2-int8/{part}.int8.onnx",
+                f"parakeet-tdt-0.6b-v2-int8/{part}.int8.onnx",
+            )
+        self._normalize = normalize
+        self._lock = threading.Lock()
+        self._recognizer: Any = sherpa_onnx.OfflineRecognizer.from_transducer(
+            encoder=str(folder / "encoder.int8.onnx"), decoder=str(folder / "decoder.int8.onnx"),
+            joiner=str(folder / "joiner.int8.onnx"), tokens=str(folder / "tokens.txt"),
+            num_threads=4, model_type="nemo_transducer",
+        )  # fmt: skip
+
+    def _run(self, samples: np.ndarray[Any, np.dtype[np.float32]]) -> str:
+        with self._lock:
+            stream = self._recognizer.create_stream()
+            stream.accept_waveform(16000, samples)
+            self._recognizer.decode_stream(stream)
+            return str(stream.result.text).strip()
 
     async def transcribe(
         self, pcm: Pcm, sample_rate: int = 16000, *, language: str = "en"

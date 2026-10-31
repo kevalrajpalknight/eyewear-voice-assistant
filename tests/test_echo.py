@@ -74,7 +74,8 @@ async def test_first_clause_is_sent_to_tts_first_and_playback_starts_before_the_
 async def test_log_has_no_transcript_or_audio_by_default(tmp_path: Path) -> None:
     await pipeline(tmp_path).run_turn(utterance(), 1)
     assert "kitchen" not in (tmp_path / "turns.jsonl").read_text()
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["turns.jsonl"]
+    names = await asyncio.to_thread(lambda: sorted(p.name for p in tmp_path.iterdir()))
+    assert names == ["turns.jsonl"]
 
 
 async def test_debug_flag_keeps_the_transcript_and_the_input_wav(tmp_path: Path) -> None:
@@ -146,3 +147,25 @@ async def test_no_tasks_are_left_behind(tmp_path: Path) -> None:
     await runner.close()
     await asyncio.sleep(0.05)
     assert len(asyncio.all_tasks()) <= before
+
+
+async def test_a_corrector_changes_what_is_spoken_but_the_log_holds_no_text(tmp_path: Path) -> None:
+    from aiglasses.assistant.glossary import Correction
+
+    tts = FakeTts()
+    seen: list[Correction] = []
+    pipe = EchoPipeline(
+        FakeStt("ask zorvexquill now please"), tts, FakeSink(), TtsOptions(),
+        turn_log=TurnLog(tmp_path / "turns.jsonl"),
+        corrector=lambda t: (
+            t.replace("zorvexquill", "Zorvex Quill"),
+            [Correction("zorvexquill", "Zorvex Quill", 100.0, "spacing/case")],
+        ),
+        on_correction=seen.append,
+    )  # fmt: skip
+    record = await pipe.run_turn(utterance(), 1)
+    assert " ".join(tts.spoken) == "ask Zorvex Quill now please"
+    assert record.raw_text == "ask zorvexquill now please" and record.corrections == 1
+    assert len(seen) == 1
+    log = (tmp_path / "turns.jsonl").read_text()
+    assert "zorvex" not in log.lower() and json.loads(log)["corrections"] == 1

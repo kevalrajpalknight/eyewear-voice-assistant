@@ -104,3 +104,44 @@ async def test_a_click_made_before_the_sentence_was_shown_is_ignored(tmp_path: P
         5,
     )
     assert len(strays) == 1 and len(rows) == 1
+
+
+def test_glossary_sentences_use_each_term_in_a_short_sentence() -> None:
+    from aiglasses.assistant.recorder import glossary_sentences
+
+    made = glossary_sentences(["Zorvex Quill", "Blenmark"], count=4)
+    assert [s.id for s in made] == ["g01_glossary", "g02_glossary", "g03_glossary", "g04_glossary"]
+    assert "Zorvex Quill" in made[0].text and "Blenmark" in made[1].text
+    assert all(len(s.text.split()) <= 10 for s in made)
+    assert glossary_sentences([]) == []
+
+
+def test_pending_skips_sentences_that_already_have_a_take(tmp_path: Path) -> None:
+    from aiglasses.assistant.recorder import pending
+
+    (tmp_path / "a.wav").write_bytes(b"")
+    assert pending(TWO, tmp_path) == [TWO[1]]
+
+
+def test_cut_off_is_true_only_when_speech_runs_to_the_end() -> None:
+    from aiglasses.assistant.recorder import cut_off
+
+    loud = np.full(16000 * 3, 8000, dtype=np.int16)
+    quiet_tail = loud.copy()
+    quiet_tail[-4000:] = 0
+    assert cut_off(loud, 16000) and not cut_off(quiet_tail, 16000)
+    assert not cut_off(np.zeros(16000 * 3, dtype=np.int16), 16000)
+
+
+async def test_the_take_log_records_whether_a_take_was_cut_off(tmp_path: Path) -> None:
+    async def ask() -> bool:
+        return False
+
+    rows = await asyncio.wait_for(
+        record_sentences(
+            feed(utt(4_000_000_000.0)), tmp_path, sentences=TWO[:1], show=lambda i, n, s, t: None,
+            report=lambda r: None, ask_misread=ask,
+        ),
+        5,
+    )  # fmt: skip
+    assert rows[0]["cut_off"] is True

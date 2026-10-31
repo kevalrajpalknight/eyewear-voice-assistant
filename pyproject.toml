@@ -29,6 +29,10 @@ assistant = [
     "moonshine-voice==0.1.5",
     "faster-whisper==1.2.1",
     "ctranslate2==4.8.3",
+    "rapidfuzz==3.14.6; python_version >= '3.11'",
+    "jellyfish==1.2.1",
+    "sherpa-onnx==1.13.8; python_version >= '3.11'",
+    "sherpa-onnx-core==1.13.8; python_version >= '3.11'",
     "kokoro-onnx==0.6.1; python_version >= '3.11'",
     "onnxruntime==1.31.0; python_version >= '3.11'",
 ]
@@ -71,7 +75,7 @@ files = ["src", "tests"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["sounddevice", "soundfile", "moonshine_voice", "moonshine_voice.*", "faster_whisper", "kokoro_onnx"]
+module = ["sounddevice", "soundfile", "moonshine_voice", "moonshine_voice.*", "faster_whisper", "kokoro_onnx", "sherpa_onnx"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

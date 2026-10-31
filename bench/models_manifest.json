@@ -64,5 +64,53 @@
     "revision": "model-files-v1.0",
     "sha256": "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d",
     "checked": "trust on first use"
+  },
+  "faster-whisper-small/config.json": {
+    "source": "https://huggingface.co/Systran/faster-whisper-small/resolve/536b0662742c02347bc0e980a01041f333bce120/config.json",
+    "revision": "536b0662742c02347bc0e980a01041f333bce120",
+    "sha256": "b55496ac7940a7ae47d2c01eab40edfd8701feec1229d9cce3b40014383fb828",
+    "checked": "trust on first use"
+  },
+  "faster-whisper-small/model.bin": {
+    "source": "https://huggingface.co/Systran/faster-whisper-small/resolve/536b0662742c02347bc0e980a01041f333bce120/model.bin",
+    "revision": "536b0662742c02347bc0e980a01041f333bce120",
+    "sha256": "3e305921506d8872816023e4c273e75d2419fb89b24da97b4fe7bce14170d671",
+    "checked": "published LFS sha256"
+  },
+  "faster-whisper-small/tokenizer.json": {
+    "source": "https://huggingface.co/Systran/faster-whisper-small/resolve/536b0662742c02347bc0e980a01041f333bce120/tokenizer.json",
+    "revision": "536b0662742c02347bc0e980a01041f333bce120",
+    "sha256": "fb7b63191e9bb045082c79fd742a3106a12c99513ab30df4a0d47fa6cb6fd0ab",
+    "checked": "trust on first use"
+  },
+  "faster-whisper-small/vocabulary.txt": {
+    "source": "https://huggingface.co/Systran/faster-whisper-small/resolve/536b0662742c02347bc0e980a01041f333bce120/vocabulary.txt",
+    "revision": "536b0662742c02347bc0e980a01041f333bce120",
+    "sha256": "34ce3fe1c5041027b3f8d42912270993f986dbc4bb34cf27f951e34a1e453913",
+    "checked": "trust on first use"
+  },
+  "parakeet-tdt-0.6b-v2-int8/decoder.int8.onnx": {
+    "source": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8/resolve/1ab9323565ddb038682214b292f588070a538ce2/decoder.int8.onnx",
+    "revision": "1ab9323565ddb038682214b292f588070a538ce2",
+    "sha256": "b6bb64963457237b900e496ee9994b59294526439fbcc1fecf705b31a15c6b4e",
+    "checked": "published LFS sha256"
+  },
+  "parakeet-tdt-0.6b-v2-int8/encoder.int8.onnx": {
+    "source": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8/resolve/1ab9323565ddb038682214b292f588070a538ce2/encoder.int8.onnx",
+    "revision": "1ab9323565ddb038682214b292f588070a538ce2",
+    "sha256": "a32b12d17bbbc309d0686fbbcc2987b5e9b8333a7da83fa6b089f0a2acd651ab",
+    "checked": "published LFS sha256"
+  },
+  "parakeet-tdt-0.6b-v2-int8/joiner.int8.onnx": {
+    "source": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8/resolve/1ab9323565ddb038682214b292f588070a538ce2/joiner.int8.onnx",
+    "revision": "1ab9323565ddb038682214b292f588070a538ce2",
+    "sha256": "7946164367946e7f9f29a122407c3252b680dbae9a51343eb2488d057c3c43d2",
+    "checked": "published LFS sha256"
+  },
+  "parakeet-tdt-0.6b-v2-int8/tokens.txt": {
+    "source": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8/resolve/1ab9323565ddb038682214b292f588070a538ce2/tokens.txt",
+    "revision": "1ab9323565ddb038682214b292f588070a538ce2",
+    "sha256": "ec182b70dd42113aff6c5372c75cac58c952443eb22322f57bbd7f53977d497d",
+    "checked": "trust on first use"
   }
 }

@@ -1,8 +1,10 @@
 """Glue for the CLI: load engines, connect the glasses, run the echo loop or the guided recorder."""
 
 import asyncio
+import json
 import time
 from collections.abc import AsyncIterator
+from dataclasses import asdict
 from pathlib import Path
 
 import numpy as np
@@ -13,6 +15,7 @@ from rich.markup import escape
 from rich.table import Table
 
 from aiglasses.assistant.echo import Debug, EchoPipeline, TurnLog, TurnRecord, TurnRunner
+from aiglasses.assistant.glossary import Correction, Glossary
 from aiglasses.assistant.interfaces import SpeechToText, TextToSpeech, TtsOptions
 from aiglasses.assistant.recorder import SENTENCES, Sentence, record_sentences
 from aiglasses.assistant.speaker import NullSink, SubprocessSpeakerSink
@@ -69,6 +72,7 @@ async def run_echo(
     normalize: bool,
     debug: bool,
     wav: Path | None,
+    glossary_file: Path | None = None,
 ) -> None:
     options = TtsOptions(voice=voice, speed=speed)
     console.print("Loading speech engines ...")
@@ -78,6 +82,25 @@ async def run_echo(
     sink = NullSink() if output == "null" else SubprocessSpeakerSink()
     if isinstance(sink, SubprocessSpeakerSink):
         await sink.start()
+    glossary = Glossary.load(glossary_file) if glossary_file is not None else None
+    if glossary is not None and not glossary:
+        raise GlassesError(f"{glossary_file} holds no terms")
+    corrections_path = settings.log_dir / "glossary_corrections.jsonl"
+
+    def log_correction(correction: Correction) -> None:
+        corrections_path.parent.mkdir(parents=True, exist_ok=True)
+        with corrections_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(asdict(correction)) + "\n")
+
+    def show(record: TurnRecord) -> None:
+        console.print(escape(describe(record)))
+        if record.raw_text is not None:
+            console.print(f"  raw:       {escape(record.raw_text)}")
+        if record.corrected_text is not None:
+            console.print(f"  corrected: {escape(record.corrected_text)}")
+        elif record.text:
+            console.print(f"  heard:     {escape(record.text)}")
+
     debug_keep = Debug(settings.captures_dir / "debug") if debug else None
     pipeline = EchoPipeline(
         stt, tts, sink, options,
@@ -123,13 +146,15 @@ async def run_bench_record(settings: Settings, out_dir: Path, sentences: list[Se
         console.print(f"\n[bold]Sentence {index} of {total}[/] [{sentence.kind}]{retry}")
         console.print(f'\n    [bold cyan]"{escape(sentence.text)}"[/]\n')
         console.print(
-            "Single-click the rear button (do not hold), wait about 2 s, then read it aloud."
+            "Single-click the rear button (do not hold), wait about 1 s, then read it aloud. "
+            "The glasses stop listening about 4.8 s after the click."
         )
 
     def report(row: dict[str, object]) -> None:
         console.print(
             f"  got {row['audio_s']} s of audio, {row['frames']} frames, ended by "
             f"{row['end_reason']}"
+            + ("; speech was still going when it ended (cut off)" if row["cut_off"] else "")
         )
 
     async def ask_misread() -> bool:
@@ -148,12 +173,12 @@ async def run_bench_record(settings: Settings, out_dir: Path, sentences: list[Se
             ask_misread=ask_misread, on_stray=on_stray,
         )  # fmt: skip
     table = Table(title="Takes")
-    for column in ("Sentence", "Take", "Words", "Audio s", "Wall s", "Ended by", "Excluded"):
+    for column in ("Sentence", "Take", "Words", "Audio s", "Ended by", "Cut off", "Excluded"):
         table.add_column(column)
     for r in rows:
         table.add_row(
             str(r["sentence"]), str(r["take"]), str(r["words"]), str(r["audio_s"]),
-            str(r["wall_s"]), str(r["end_reason"]), str(r["excluded"]),
+            str(r["end_reason"]), str(r["cut_off"]), str(r["excluded"]),
         )  # fmt: skip
     console.print(table)
     console.print(f"Saved under {out_dir} (local, gitignored). Longest take: "

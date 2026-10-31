@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from aiglasses.assistant.chunker import split_clauses
+from aiglasses.assistant.glossary import Correction
 from aiglasses.assistant.interfaces import (
     AudioChunk,
     AudioSink,
@@ -45,6 +46,9 @@ class TurnRecord:
     outcome: str = "spoken"  # spoken | empty | cancelled | error
     error: str = ""
     text: str | None = None  # only with Debug
+    raw_text: str | None = None  # console only, and only when a corrector is on
+    corrected_text: str | None = None  # console only, with raw_text
+    corrections: int = 0
 
     @staticmethod
     def _gap(later: float | None, earlier: float | None) -> float | None:
@@ -56,7 +60,7 @@ class TurnRecord:
             "turn": self.turn, "outcome": self.outcome, "end_reason": self.end_reason,
             "audio_s": round(self.audio_seconds, 2), "frames": self.frames,
             "words": self.words, "clauses": self.clauses,
-            "first_clause_words": self.first_clause_words,
+            "first_clause_words": self.first_clause_words, "corrections": self.corrections,
             "decode_s": self._gap(self.t_received, self.t_end),
             "stt_s": self._gap(self.t_stt, self.t_received),
             "first_chunk_s": self._gap(self.t_first_chunk, self.t_stt),
@@ -105,8 +109,12 @@ class EchoPipeline:
         turn_log: TurnLog | None = None,
         debug: Debug | None = None,
         on_record: Callable[[TurnRecord], None] | None = None,
+        corrector: Callable[[str], tuple[str, list[Correction]]] | None = None,
+        on_correction: Callable[[Correction], None] | None = None,
     ) -> None:
         self.stt, self.tts, self.sink, self.options = stt, tts, sink, options
+        self._corrector = corrector
+        self._on_correction = on_correction
         self._turn_log = turn_log
         self._debug = debug
         self._on_record = on_record
@@ -123,6 +131,14 @@ class EchoPipeline:
             transcript = await self.stt.transcribe(utterance.pcm, utterance.sample_rate)
             record.t_stt = time.time()
             text = transcript.text.strip()
+            if self._corrector is not None and text:
+                record.raw_text = text
+                text, found = self._corrector(text)
+                record.corrected_text = text
+                record.corrections = len(found)
+                for correction in found:
+                    if self._on_correction is not None:
+                        self._on_correction(correction)
             record.words = len(text.split())
             if self._debug is not None:
                 record.text = text
