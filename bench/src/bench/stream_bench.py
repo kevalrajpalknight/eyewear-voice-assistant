@@ -1,6 +1,6 @@
 """Transcribe WHILE audio is still arriving (paced like the glasses: 20 ms every 20 ms) versus
 only after the end marker. Moonshine's stream API is used for the first; every engine is timed
-for the second. Usage: python -m bench.stream_bench moonshine-tiny|moonshine-base
+for the second. Usage: python -m bench.stream_bench moonshine-tiny|base|small-v2|medium-v2
 """
 
 import json
@@ -45,6 +45,14 @@ def run(arch_name: str, wav: str) -> dict[str, object]:
 if __name__ == "__main__":
     print(
         json.dumps(
-            run({"moonshine-tiny": "TINY", "moonshine-base": "BASE"}[sys.argv[1]], "capture_a.wav")
+            run(
+                {
+                    "moonshine-tiny": "TINY",
+                    "moonshine-base": "BASE",
+                    "moonshine-small-v2": "SMALL_STREAMING",
+                    "moonshine-medium-v2": "MEDIUM_STREAMING",
+                }[sys.argv[1]],  # fmt: skip
+                "capture_a.wav",
+            )
         )
     )

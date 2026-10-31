@@ -32,3 +32,10 @@ recording only; the live loop with the glasses will give the real table (`logs/a
 ## What this document does not cover
 The time between the user's last word and the glasses' end marker, any network latency to the LLM, and Bluetooth playback are not measured. They are filled in by the Phase A voice tests,
 Phase B (with a real key) and Phase C/D respectively.
+
+## STT choice and latency (round 2, 2026-10-31)
+Measured STT wall time for a 3 to 5 s utterance: Moonshine base 0.27 s, Parakeet int8 0.41 s,
+faster-whisper base.en 0.69 s, Moonshine v2 small 1.0 s, v2 medium 1.26 s, Whisper small 2.1 s.
+Replacing Moonshine base by Parakeet adds about 0.15 s to the 0.8 to 1.8 s end-to-sound you
+measured; Whisper small would add about 1.8 s. The glasses' session window (about 4.8 s) bounds
+utterance length, so STT time stays small.

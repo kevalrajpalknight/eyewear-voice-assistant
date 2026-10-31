@@ -70,3 +70,75 @@ Not measured: STT accuracy (needs your reference texts), voice quality (needs yo
 1. DONE (Gate A decisions, 2026-10-31): Kokoro int8, bf_isabella, speed 1.05 approved as the TTS default; fp32 stays an option. No streaming STT.
 2. Run `aiglasses bench-record` (about 12 sentences), then tell me; I run `bench.table` and report speed, accuracy and RAM together. Recordings stay local and gitignored.
 3. STT: Moonshine base is the provisional default, Moonshine tiny the fallback, faster-whisper base.en selectable. Final choice after the accuracy table.
+
+## Round 2: more accurate models, hints and a glossary corrector (2026-10-31)
+
+Status: engines, harness and corrector are built and measured on the 12 existing takes only. The
+glossary results are NOT measured yet: the glossary file (`bench/data/glossary.txt`, private,
+gitignored) does not exist, so no glossary sentences have been recorded.
+
+### What the takes showed about the glasses (measured, 16 takes)
+15 of 16 takes ended at 4.76 to 4.78 s with an end marker, whatever the sentence length; one ended
+at 5.78 s (speech began at 4.0 s). Speech started about 1.3 s after the click because the recorder
+told you to wait about 2 s. So a sentence has roughly 3.4 s. The 10 s and "longer" sentences
+(s02, s05, s07, s08, s09) were cut off mid-sentence. What decides the end is still INFERRED
+(fixed window from the click versus speech-aware); a take that speaks immediately for 8 s would
+tell. Cut-off takes are detected automatically (speech still loud in the last 100 ms) and kept out
+of the WER totals, which leaves only 7 usable sentences. Treat every number below as a first look.
+
+### Result, 7 complete ordinary sentences, raw input, int8, 4 CPU threads
+| Engine | WER | Median wall s | RTF | Load s | Peak RAM MB |
+|---|---|---|---|---|---|
+| moonshine tiny | 37.1% | 0.19 | 0.04 | 2.8 | 158 |
+| moonshine base | 27.4% | 0.27 | 0.06 | 4.7 | 337 |
+| moonshine v2 small | 27.4% | 1.01 | 0.21 | 4.9 | 334 |
+| moonshine v2 medium | 25.8% | 1.26 | 0.26 | 9.1 | 529 |
+| Parakeet TDT 0.6B v2 | 17.7% | 0.41 | 0.09 | 18.2 | 838 |
+| faster-whisper base.en | 21.0% | 0.69 | 0.15 | 6.0 | 320 |
+| faster-whisper small.en | 21.0% | 2.10 | 0.44 | 8.9 | 697 |
+| faster-whisper small (en fixed) | 21.0% | 2.89 | 0.61 | 16.7 | 697 |
+
+Load time is with warm file cache (first load from disk is slower). Several errors are in the
+audio itself (all engines write "that sound to me" for "that sounds good to me").
+On this sample Parakeet is the most accurate and is faster than Whisper base.en; Moonshine v2 is
+slower than v1 base and not clearly better. Seven sentences cannot separate 21% from 17.7%.
+
+Streaming versus batch (Moonshine, 5.76 s capture, time from last audio to final text):
+v2 small 0.54 s streaming vs 0.84 s batch; v2 medium 0.30 s vs 1.05 s; v1 base 0.22 s vs 0.33 s.
+Streaming v2 medium is the fastest to final text, but needs the live stream API.
+
+### Install effort on Windows, licences, size
+- Moonshine v2 small (136 MB) and medium (257 MB): same `moonshine-voice==0.1.5` wheel, models
+  via `python -m moonshine_voice.download --model-arch 4|5`; MIT (code and English models). No compiler.
+- Parakeet TDT 0.6B v2 int8 (631 MB on disk): `sherpa-onnx==1.13.8` plus `sherpa-onnx-core==1.13.8`
+  (the core package carries the ONNX Runtime DLL; without it Windows loads its own older
+  `onnxruntime.dll` and fails with "API version 28 is not available"). Model files pinned to a
+  Hugging Face revision with published SHA-256; CC-BY-4.0 (NVIDIA). sherpa-onnx 2.0.0/2.0.1
+  (23/27 Oct 2026) are too new, so 1.13.8 (10 Sep 2026) is used. No compiler.
+- faster-whisper small (464 MB, MIT), already supported by the pinned library.
+
+### Hints and custom vocabulary
+- Moonshine v1/v2: no hint mechanism in the transcription path (a `bias_terms` field exists only in
+  the agent-flow helper and is not passed to the model). Said plainly: none.
+- Parakeet through sherpa-onnx: hotword biasing exists for transducers (`modified_beam_search`
+  plus a hotwords file); NOT tested yet because it needs the glossary. It may need a SentencePiece
+  model that this export does not ship; the harness records the error if so.
+- faster-whisper: `initial_prompt` and `hotwords` both exist in 1.2.1; both are in the harness and
+  run once the glossary exists.
+
+### Glossary corrector (src/aiglasses/assistant/glossary.py)
+Deterministic, post-STT: windows of 1 to N+1 words are compared with each term and its spoken
+forms by letters-only fuzzy ratio (threshold 88) or equal Metaphone key plus ratio 72. Never the
+edge of a span: common function words; never fewer than 4 letters; never across sentence
+punctuation. Every correction is returned with original, corrected, score and reason, and the echo
+loop logs them to `logs/glossary_corrections.jsonl`. Unit-tested with synthetic terms only.
+NOT measured on real takes yet (no glossary): glossary-term accuracy before/after and the false-
+correction rate on ordinary sentences come from `python -m bench.glossary_eval`.
+The LLM side is `Glossary.prompt_note()`: a short note that the transcript may contain recognition
+errors plus the list of terms, built at runtime. No LLM is called.
+
+### To finish this round (needs you)
+1. Create `bench/data/glossary.txt`, one term per line (`RapDuo SM | rap duo s m` adds spoken forms).
+2. `uv run aiglasses bench-record --glossary-file bench/data/glossary.txt`: records 5 short ordinary
+   and 10 glossary sentences (skips what is already recorded). Click, wait about 1 s, speak.
+3. Then I run `uv run python -m bench.round2` and `uv run python -m bench.glossary_eval`.

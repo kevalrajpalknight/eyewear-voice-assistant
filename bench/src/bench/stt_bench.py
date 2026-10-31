@@ -5,8 +5,8 @@ Usage: python -m bench.stt_bench ENGINE [--condition raw|normalized] [--hints]
 
 With --hints the private glossary (bench/data/glossary.txt, one term per line) is given to the
 engine as a hint where it has one. bench/data/truncated.txt lists sentence ids whose recording was
-cut off by the glasses before the sentence ended; they are reported apart and kept out of the WER
-totals. Everything under bench/data is local and gitignored.
+cut off by the glasses before the sentence ended (also detected automatically: speech still
+going in the last 100 ms); they are reported apart and kept out of the WER totals. Everything under bench/data is local and gitignored.
 """
 
 import json
@@ -19,7 +19,7 @@ from pathlib import Path
 import jiwer
 import psutil
 
-from bench.audio import load_mono, normalize_peak, peak_dbfs
+from bench.audio import Floats, load_mono, normalize_peak, peak_dbfs
 from bench.models import ROOT
 from bench.stt_engines import make_engine
 from bench.textnorm import clean
@@ -38,6 +38,14 @@ def contains_terms(text: str, terms: list[str]) -> list[str]:
     """Glossary terms present in `text` as whole-word sequences, after normalisation."""
     padded = f" {clean(text)} "
     return [t for t in terms if f" {clean(t)} " in padded]
+
+
+def cut_off(samples: Floats) -> bool:
+    """Speech still going in the last 100 ms: the glasses ended the session mid-sentence."""
+    if len(samples) < 16000:
+        return False
+    loud = abs(samples)
+    return bool(loud.max() > 0 and loud[-1600:].mean() > 0.1 * loud.max())
 
 
 def wer_of(pairs: list[tuple[str, str]]) -> float | None:
@@ -91,7 +99,7 @@ def run(engine_key: str, condition: str, use_hints: bool) -> dict[str, object]:
             "file": wav.name, "audio_s": round(seconds, 2),
             "peak_dbfs": round(peak_dbfs(samples), 1), "wall_s": round(wall, 3),
             "rtf": round(wall / seconds, 3), "text": text, "reference": ref_text,
-            "kind": "glossary" if expected else "ordinary", "truncated": wav.stem in truncated,
+            "kind": "glossary" if expected else "ordinary", "truncated": wav.stem in truncated or cut_off(samples),
             "terms_expected": expected, "terms_hit": contains_terms(text, expected),
             "wer": round(jiwer.wer(clean(ref_text), clean(text)), 3),
         })  # fmt: skip

@@ -78,3 +78,9 @@ README quickstart, privacy switches (cloud vision, saving audio/transcripts), cl
 | Cloud cost or runaway loop | turn cap and token cap planned |
 | GPL components (espeak-ng, phonemizer) | fine for personal use; would matter if distributed |
 | One BLE connection at a time | the Cyan app and the phone's Bluetooth must stay off |
+
+## Recognition errors and the glossary (round 2)
+`aiglasses assistant echo --stt <engine> --glossary` runs the deterministic corrector after STT and
+prints raw and corrected text. Phase B puts `Glossary.prompt_note()` into the LLM system prompt so
+the model also reads near-miss words as the user's terms. Hard limit found: the glasses stop a
+voice session about 4.8 s after the click, so requests must be short (see STT_TTS_BENCHMARK.md).
