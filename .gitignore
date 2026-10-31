@@ -18,3 +18,10 @@ config.toml
 bugreport*.zip
 btsnoop*
 bug-reports/
+apk/
+apk-analysis/
+jadx-out/
+*.apk
+*.xapk
+*.apks
+*.dex
