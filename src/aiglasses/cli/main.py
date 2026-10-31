@@ -400,7 +400,16 @@ def capture_analyze(
 
     async def go() -> None:
         names = load_handle_names(gatt_dump or settings.log_dir / "gatt_dump.json")
-        analysis = analyze_records(read_btsnoop(log), address or settings.device_address, names)
+        records = read_btsnoop(log)
+        if not records:
+            console.print(
+                "[red]The Bluetooth log is valid but contains 0 packets.[/] "
+                "Likely cause (not confirmed): the snoop log is buffered and only written out "
+                "when Bluetooth is switched off. Switch Bluetooth off for a few seconds right "
+                "after your last action, then take the bug report. See docs/CAPTURE.md."
+            )
+            raise typer.Exit(1)
+        analysis = analyze_records(records, address or settings.device_address, names)
         segs = segment(analysis.rows, gap)
         found = max(segs) + 1 if segs else 0
         labels = [a.strip() for a in actions.split(",")] if actions else []

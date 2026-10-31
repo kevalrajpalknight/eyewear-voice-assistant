@@ -112,3 +112,12 @@ bleak on Windows reports each characteristic's **declaration** handle. The ATT v
 captures show ATT handles, so `capture analyze` maps value handle = dump handle + 1. INFERRED from the attribute layout; to be
 confirmed by the first capture.
 
+## Phone capture attempts
+
+- 2026-10-31, OnePlus Nord CE 2 (Android 13), on-phone bug report taken at 10:33:40: **no usable capture.** The only Bluetooth log
+  (`BT_HCI_2026_1031_100407.cfa`) is a valid btsnoop header with 0 packets, there is no text snoop section, and the logcat covers
+  only 09:37 to 10:08. The Cyan app wrote no logcat lines. Actions done: connect, photo, audio recording, smart recognition,
+  video recording (10:30 to 10:33). Next: smoke test with Bluetooth switched off before the report (see docs/CAPTURE.md).
+- The only glasses-related line in the report is `BtGatt.GattService onWriteCharacteristic() ... D0:4B:1B:C3:23:24` at 09:59:58, which shows the
+  app wrote a characteristic that morning but not what.
+

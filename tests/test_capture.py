@@ -166,3 +166,17 @@ def test_find_known_values() -> None:
     assert any(n.startswith("MAC reversed") for n in names)
     assert "app version text '2512271030'" in names
     assert sum(1 for n in names if n.startswith("battery")) == 1
+
+
+def test_empty_cfa_log_gives_clear_message(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import struct
+
+    monkeypatch.chdir(tmp_path)
+    header = b"btsnoop" + bytes(1) + struct.pack(">II", 1, 1002)
+    archive = tmp_path / "bugreport.zip"
+    with zipfile.ZipFile(archive, "w") as zf:
+        zf.writestr("FS/data/misc/bluetooth/logs/BT_HCI_2026_1031_100407.cfa", header)
+    assert read_btsnoop(archive) == []
+    result = CliRunner().invoke(cli.app, ["capture", "analyze", str(archive)])
+    assert result.exit_code == 1
+    assert "0 packets" in result.output and "Bluetooth off" in result.output.replace("\n", " ")

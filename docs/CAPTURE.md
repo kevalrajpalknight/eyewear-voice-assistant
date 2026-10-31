@@ -1,9 +1,13 @@
 # Capturing the official app (Phase 3)
 
 Goal: record what the Cyan Glasses app sends to the glasses, so we learn the real commands instead of guessing.
-This is passive. Nothing is written to the glasses by this project. These steps are written for a **Samsung Galaxy S24 FE**
-(One UI). Items marked "(check)" are from general Samsung behaviour and not yet verified on your exact build; if one of them
-differs on your phone, tell me what you see.
+This is passive. Nothing is written to the glasses by this project. These steps are written for a **OnePlus Nord CE 2**
+(Android 13, ColorOS/Oxygen OS), captured **without adb** using the phone's own bug report. Items marked "(check)" are
+general Android or Samsung behaviour not yet verified on your exact build; if one differs, tell me what you see.
+
+**Status of the first attempt (2026-10-31): the bug report contained an empty Bluetooth log (a valid header and 0 packets), so
+nothing could be analyzed.** Its logcat covered only 09:37 to 10:08, and the app wrote no log lines of its own. The fix to try
+is the "Bluetooth off before the report" step in section 4, tested first with the smoke test there.
 
 ## 0. What you need
 
@@ -58,7 +62,23 @@ Then wait 10 seconds and stop. Do not touch the glasses buttons or the phone's B
 **Do not** do any of these during the capture: firmware update, factory reset, unbind or remove the device, or anything that
 looks like an update or OTA. Skip prompts to update the glasses or the app.
 
-## 4. Pull the log
+## 4. Get the log to the PC
+
+### Without adb (the route used on the OnePlus)
+
+1. Right after your **last action**, switch the phone's **Bluetooth off** and wait about 5 seconds. The snoop log is probably
+   buffered and only completely written when the Bluetooth stack shuts down (likely cause of the empty first attempt; not
+   yet confirmed). The bug report still includes the log with Bluetooth off.
+2. Developer options > **Take bug report** > **Full report**. A notification appears after about a minute; tap it to share, or
+   find the `.zip` in the phone's storage and copy it to the PC over USB (file transfer), Drive, or Telegram.
+3. On OnePlus/Oppo the log is `FS/data/misc/bluetooth/logs/BT_HCI_<date>.cfa`. It is a normal btsnoop file despite the name.
+   The analyzer finds it automatically. **A healthy one is much larger than 16 bytes; 16 bytes means empty.**
+
+**Smoke test before the full script (3 minutes):** enable snoop logging, toggle Bluetooth off then on, connect the glasses in
+the app, take one photo, switch Bluetooth off, take the bug report, and run
+`uv run aiglasses capture analyze <zip>`. If it says 0 packets, stop and tell me; there is no point repeating the full script.
+
+### With adb (optional)
 
 On the PC, with the phone connected by USB and USB debugging approved:
 
