@@ -12,6 +12,7 @@ from aiglasses.domain.models import (
     MediaCounts,
 )
 from aiglasses.protocol.registry import allowlist_from, load_commands
+from aiglasses.protocol.voice import VoiceDecoder
 from aiglasses.safety import WriteGuard
 from aiglasses.services import (
     AudioService,
@@ -22,6 +23,7 @@ from aiglasses.services import (
     FrameChannel,
     PhotoResult,
 )
+from aiglasses.services.voice import VoiceUtterance, voice_requests
 from aiglasses.transport.base import AudioIO, BleTransport
 from aiglasses.transport.bleak_transport import BleakTransport
 from aiglasses.transport.retry import connect_with_retry
@@ -57,6 +59,14 @@ class Glasses:
     def events(self) -> AsyncIterator[GlassesEvent]:
         """Typed events: `async for event in glasses.events():`."""
         return self._events.events()
+
+    def voice_requests(self, decoder: VoiceDecoder | None = None) -> AsyncIterator[VoiceUtterance]:
+        """One decoded utterance per rear-click session. Read-only; needs the `research` extra."""
+        if decoder is None:
+            from aiglasses.research.voice_decode import OpusVoiceDecoder
+
+            decoder = OpusVoiceDecoder()
+        return voice_requests(self.events(), decoder, disconnected=self.transport.disconnected)
 
     async def read_battery(self) -> BatteryStatus:
         """Read-only request (CONFIRMED). Needs `connect(..., dry_run=False)`."""
