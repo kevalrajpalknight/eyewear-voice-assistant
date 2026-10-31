@@ -30,7 +30,7 @@ commands:
     bytes: "bc4103001050020101"
     direction: write
     status: CONFIRMED
-    source: probe runs 2026-10-31: 07:10Z (shutter, reply, count event) and the clean test 08:44Z / 14:56 IST (one shutter, reply bc4105000c4c020101ffff in 0.05 s, count event 1.9 s later; photos 6 to 7, read C 7; one clean trial, n=1)
+    source: "probe runs 2026-10-31, 07:10Z (shutter, reply, count event) and the clean test at 07:44:56Z = 13:14:56 IST (one shutter, reply bc4105000c4c020101ffff in 0.05 s, count event 1.9 s later, photos 6 to 7, read C 7; one clean trial, n=1)"
     safe_to_send: false
   - name: video_start
     characteristic: de5bf72a-d711-4e47-af26-65e3012a5dc7
