@@ -32,6 +32,18 @@ EXPECTED_REPLY_CMD: dict[str, int] = {
     "photo": 0x41,
 }
 STATE_CHANGING = {"photo"}
+CONTROL_CMD = 0x41
+
+# Meaning of the activity byte in a control reply, from the app's own messages (INFERRED).
+ACTIVITY_NAMES = {
+    1: "photo mode",
+    2: "video recording",
+    4: "transfer mode",
+    5: "firmware update mode",
+    7: "AI conversation mode",
+    8: "audio recording",
+    255: "none reported",
+}
 
 
 @dataclass
@@ -54,6 +66,7 @@ class ProbeResult:
     replies: list[Reply] = field(default_factory=list)
     latency_seconds: float | None = None
     baseline_source: str = "none"
+    notes: list[str] = field(default_factory=list)
     verdict: str = "not sent"
 
     @property
@@ -76,9 +89,20 @@ def decode_reply(name: str, frame: BcFrame) -> tuple[bool, str]:
     if name == "photo":
         if len(p) < 4 or p[1] != 1:
             return False, f"unexpected control reply (raw {p.hex()})"
-        meaning = {0: "accepted", 255: "busy"}.get(p[3], "unknown")
-        busy = f", busy with activity {p[4]}" if len(p) > 4 and p[3] == 255 else ""
-        return p[3] in (0, 255), f"function {p[2]}, error code {p[3]} ({meaning}){busy}"
+        activity = p[4] if len(p) > 4 else None
+        shown = ACTIVITY_NAMES.get(activity, "unknown") if activity is not None else "absent"
+        return p[3] in (0, 255), (
+            f"function {p[2]}, error code {p[3]}, activity byte {activity} ({shown}); "
+            "meaning inferred from the app, not confirmed"
+        )
+    if name == "media_counts_read":
+        counts = counts_from_frame(frame)
+        if counts is None:
+            return False, f"not a media-count reply (raw {p.hex()})"
+        return True, (
+            f"media counts: photos {counts['photos']}, videos {counts['videos']}, "
+            f"audio recordings {counts['audio']}"
+        )
     if name == "device_info_read":
         if len(p) < 9:
             return False, f"too short ({len(p)} bytes)"
@@ -105,6 +129,7 @@ def _audit(path: Path, result: ProbeResult) -> None:
         "sent": result.sent,
         "latency_seconds": result.latency_seconds,
         "baseline_source": result.baseline_source,
+        "notes": result.notes,
         "replies": [r.__dict__ for r in result.replies],
         "verdict": result.verdict,
     }
@@ -112,17 +137,80 @@ def _audit(path: Path, result: ProbeResult) -> None:
         fh.write(json.dumps(entry) + "\n")
 
 
-def _counts(result: ProbeResult, start: int = 0) -> dict[str, int] | None:
-    """The most recent media-count event seen at or after index `start`: {photos, videos, audio}."""
-    for r in reversed(result.replies[start:]):
-        if r.cmd == EVENT_CMD:
+def counts_from_frame(frame: BcFrame) -> dict[str, int] | None:
+    """Media counts from a 0x73 type-1 event or a control reply of type 4, else None."""
+    p = frame.payload
+    if frame.cmd == EVENT_CMD:
+        event = decode_event(p)
+        if event.kind == "media_counts":
+            return {k: int(event.fields[k]) for k in ("photos", "videos", "audio")}
+    if frame.cmd == CONTROL_CMD and len(p) >= 8 and p[1] == 4:
+        le = int.from_bytes
+        return {
+            "photos": le(p[2:4], "little"),
+            "videos": le(p[4:6], "little"),
+            "audio": le(p[6:8], "little"),
+        }
+    return None
+
+
+def _counts(result: ProbeResult, start: int = 0, stop: int | None = None) -> dict[str, int] | None:
+    """The most recent media counts seen in replies[start:stop]: {photos, videos, audio}."""
+    for r in reversed(result.replies[start:stop]):
+        if r.cmd not in (EVENT_CMD, CONTROL_CMD):
+            continue
+        try:
+            counts = counts_from_frame(parse_bc_frame(bytes.fromhex(r.hex)))
+        except ProtocolError:
+            continue
+        if counts is not None:
+            return counts
+    return None
+
+
+def history_path(audit_path: Path) -> Path:
+    return audit_path.with_name("media_counts.jsonl")
+
+
+def last_recorded(path: Path) -> dict[str, object] | None:
+    if not path.exists():
+        return None
+    lines = path.read_text(encoding="utf-8").splitlines()
+    return json.loads(lines[-1]) if lines else None
+
+
+def _record_counts(path: Path, counts: dict[str, int], source: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps({**stamps(), **counts, "source": source}) + "\n")
+
+
+def _finalize(
+    result: ProbeResult, audit_path: Path, previous: dict[str, object] | None, cutoff: int
+) -> None:
+    """Note a count change seen on connect, record every count seen, then write the audit."""
+    history = history_path(audit_path)
+    # A read cannot change the counts, so counts seen during a read are the connect-time state.
+    state_cutoff = cutoff if result.name in STATE_CHANGING else len(result.replies)
+    connect = _counts(result, 0, state_cutoff)
+    if connect is not None and previous is not None:
+        before = {k: previous.get(k) for k in ("photos", "videos", "audio")}
+        if before != connect:
+            result.notes.append(
+                f"counts changed since last recorded at {previous.get('local')}: "
+                f"{before} -> {connect}. Not caused by this run's write (a button click, "
+                "the app or the AI can change them)."
+            )
+    for index, r in enumerate(result.replies):
+        if r.cmd in (EVENT_CMD, CONTROL_CMD):
             try:
-                event = decode_event(parse_bc_frame(bytes.fromhex(r.hex)).payload)
+                counts = counts_from_frame(parse_bc_frame(bytes.fromhex(r.hex)))
             except ProtocolError:
                 continue
-            if event.kind == "media_counts":
-                return {k: int(event.fields[k]) for k in ("photos", "videos", "audio")}
-    return None
+            if counts is not None:
+                when = "before the write" if index < cutoff else "after the write"
+                _record_counts(history, counts, f"{result.name}, {when}")
+    _audit(audit_path, result)
 
 
 async def run_probe(
@@ -140,6 +228,7 @@ async def run_probe(
     expected_cmd = EXPECTED_REPLY_CMD[name]
     got_reply = asyncio.Event()
     started = 0.0
+    previous = last_recorded(history_path(audit_path))
 
     def on_notify(_uuid: str, data: bytes) -> None:
         stamp = stamps()
@@ -169,7 +258,7 @@ async def run_probe(
         await transport.subscribe(NOTIFY_CHAR, on_notify)
     except GlassesError as exc:
         result.verdict = f"notifications could not be enabled, nothing sent: {exc}"
-        _audit(audit_path, result)
+        _finalize(result, audit_path, previous, len(result.replies))
         return result
     result.notifications_active = True
 
@@ -187,7 +276,7 @@ async def run_probe(
     result.link_up_before_write = transport.is_connected and not transport.disconnected.is_set()
     if not result.link_up_before_write:
         result.verdict = "the link is not up right before the write; nothing sent"
-        _audit(audit_path, result)
+        _finalize(result, audit_path, previous, len(result.replies))
         return result
 
     guard.approve(name, command.characteristic, command.payload)
@@ -199,7 +288,7 @@ async def run_probe(
         await asyncio.wait_for(got_reply.wait(), REPLY_TIMEOUT_SECONDS)
     except asyncio.TimeoutError:
         result.verdict = f"no reply within {REPLY_TIMEOUT_SECONDS:.0f}s; stopped without retrying"
-        _audit(audit_path, result)
+        _finalize(result, audit_path, previous, write_index)
         return result
     observe = STATE_CHANGE_OBSERVE_SECONDS if name in STATE_CHANGING else GRACE_SECONDS
     await asyncio.sleep(observe)
@@ -222,5 +311,5 @@ async def run_probe(
                     f"; photo count {shown_before} -> {after['photos']}"
                     f" (before: {result.baseline_source})"
                 )
-    _audit(audit_path, result)
+    _finalize(result, audit_path, previous, write_index)
     return result

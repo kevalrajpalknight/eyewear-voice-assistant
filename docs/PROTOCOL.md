@@ -260,16 +260,21 @@ Commands 0x01 to 0x05 (firmware update), 0x25, 0x26, 0x30 to 0x35 and 0x80 to 0x
 ### Replies to our requests (INFERRED, from how the app parses them)
 - **Battery (0x42):** payload `[percent 0 to 100][charging 1 or 0]`.
 - **Device info (0x43):** payload `[1 byte][len16 firmware][len16 hardware][len16 Wi-Fi firmware][len16 Wi-Fi hardware]` followed by the four UTF-8 strings. The `wifi: 2512271030`
-  line on the app's home screen is probably the Wi-Fi firmware version string.
+  line on the app's home screen is NOT in this reply on our unit (the two Wi-Fi strings were empty); its source is an open question.
 - **Camera status (0x4A):** payload `[1 byte][1 = earphone camera open][2 = rotation open]`. It concerns an earphone-camera feature; it is not a recording-state flag.
-- **Control (0x41) reply:** type 1 is a result `[function id][error code: 0 ok, 255 busy][what the glasses are busy with]`; type 4 is the media counts (photos, videos, audio, file-list type,
-  "only access-point import" flag); type 3 carries an IP (the app parses it oddly, so use the 0x73 type 8 event instead).
-- **What "busy" names:** 1 photo, 2 video, 4 Wi-Fi/album transfer, 5 firmware update, 8 audio-only recording (other values unknown).
+- **Control (0x41) reply:** type 1 is `[function id][error code][activity byte]`; type 4 is the media counts (photos, videos, audio, file-list type, "only access-point import" flag);
+  type 3 carries an IP (the app parses it oddly, so use the 0x73 type 8 event instead).
+- **What the app does with error code and activity byte (INFERRED, from its message texts):** error codes 0 and 255 are handled identically (both go on to read the activity byte); any other
+  code gives a generic failure message. Activity values and the app's wording: 1 "photo mode", 2 "video recording", 4 "transfer mode", 5 "firmware update mode", 7 "AI conversation mode",
+  8 "recording mode" (audio) - each shown as "in this mode, end it before importing". Activity 255 is skipped in that list and, for the video command, falls through to the plain
+  "device start recording" message. So `ff ff` most plausibly means "accepted, nothing else running". It is NOT "busy". The app's photo handler ignores the reply contents completely, so there is
+  no photo-specific evidence. All of this is inferred from other handlers and unconfirmed.
 
-### Stopping recordings (INFERRED)
-- The app has no command to stop video or audio-only recording; it only starts them. Starting again while busy returns "busy" and names the activity (2 = video, 8 = audio), so
-  the command is not a toggle. Recording is stopped on the glasses (a single click on the front button, per the manual).
-- Therefore `02 01 02` (video) and `02 01 08` (audio recording) are only to be tested with the user present, who stops the recording with the front button.
+### Stopping recordings (INFERRED; corrected 2026-10-31)
+- No separate stop command was found, but the app's handling of the video command suggests the SAME command toggles: when the reply's activity byte is 2 (video recording), the app
+  announces "device end recording", otherwise "device start recording". So sending `02 01 02` while recording may end it. This reverses the earlier note that the command is not a toggle.
+  Unverified. Audio-only recording (`02 01 08`) is similar by name only.
+- Rule unchanged: no recording command is sent unless the user is present and ready to stop the recording with a single click on the front button.
 - `02 01 09` is what the app sends right after a download finishes, just before it drops the Wi-Fi Direct group: probably "end the Wi-Fi/album session". It would be part of the rollback
   and needs its own approval.
 
@@ -366,3 +371,27 @@ Evidence from the decompiled app (names only):
 ## Open questions (low priority)
 - Where does `wifi: 2512271030` on the app's home screen come from? It is not in the device-info reply (the Wi-Fi strings there are empty). Candidates: another request or an event (not read yet), or a
   value the app builds itself. Parked until we have a reason to chase it.
+
+### Photo probe result (2026-10-31): `bc4103001050020101` (CONFIRMED reaction; exactly +1 per command is OPEN)
+Run at 07:10:43.233Z / 12:40:43.233 IST (+05:30), written once, no retry, link and notifications verified first. Baseline source: an earlier frame (4 photos at 12:10:14 IST; no connect-time frame arrived).
+Everything that arrived (decoded and raw):
+- 07:10:43.323Z, 0.09 s after the write: `bc4105000c4c020101ffff`, control reply type 1, function 1, error code 255, activity byte 255 (see the corrected reading above; not "busy").
+- 07:10:45.250Z / 12:40:45.250 IST, 1.9 s after the write: `bc73080077c70106000000010001`, media counts: photos 6, videos 0, audio recordings 1, file-list type 1.
+- 07:10:45.718Z / 12:40:45.718 IST: `bc7303004931056300`, type 5 event: battery 99 percent, not charging (the first real battery event; the layout read from the app matches).
+The user heard the shutter (how many sounds was not stated), pressed nothing during the run, and did not intentionally take photos between 12:10 and 12:40 IST. Whether the front button was pressed to wake
+the glasses before the earlier runs is not confirmed ("probably").
+- CONFIRMED: the command triggers a shutter reaction and a media-count event after it.
+- OPEN: "exactly +1 photo per command". The count went 4 to 6 against a 30-minute-old baseline, so one earlier unrecorded photo, or two photos from the command, cannot be told apart.
+  A clean test needs a fresh baseline taken just before the command (see "Clean photo test" in docs/PHASE4_PLAN.md).
+- INFERRED: the photo field is the first of the three counts.
+
+### Counts can change without any BLE write
+A single click on the right front button while the glasses are on takes a photo (per the manual), and AI image captures and the app also add files. So the counts can change between our runs
+without a write from this tool. When waking the glasses, avoid clicking the front button while they are already on. Every run now records the counts it sees in `logs/media_counts.jsonl` and prints a
+note if the counts seen on connect differ from the last recorded ones.
+
+### Album read (`02 04`), proposed for approval (INFERRED, not sent)
+Frame `bc41020001130204` (cmd 0x41, payload `02 04`). Evidence that it is a pure read: the app sends it only inside its read-only connect sync (next to the battery request, the volume-settings read and the
+wear-support read) and when the Album tab opens; it carries no arguments; its reply handler only stores the counts, the file-list type and the "only access-point" flag and logs the total. Caveat: its
+first byte is 2, the value other commands use for writes, so side effects cannot be excluded from the app alone; the glasses firmware decides. Not approved or sent.
+

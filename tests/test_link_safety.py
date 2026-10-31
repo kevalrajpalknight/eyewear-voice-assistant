@@ -101,7 +101,7 @@ async def test_photo_probe_compares_counts_before_and_after(tmp_path: Path) -> N
     )
     assert len(transport.writes) == 1
     assert transport.writes[0][1] == bytes.fromhex("bc4103001050020101")
-    assert "function 1, error code 0 (accepted)" in result.verdict
+    assert "function 1, error code 0" in result.verdict
     assert "photo count 4 -> 5" in result.verdict
 
 
@@ -211,3 +211,46 @@ async def test_other_count_than_expected_is_reported_as_is(tmp_path: Path) -> No
         known_photo_count=4,
     )
     assert "photo count 4 -> 6" in result.verdict
+
+
+def test_photo_reply_ff_ff_is_not_called_busy() -> None:
+    from aiglasses.protocol.bcframe import parse_bc_frame
+    from aiglasses.research.probe import decode_reply
+
+    frame = parse_bc_frame(bytes.fromhex("bc4105000c4c020101ffff"))
+    sane, text = decode_reply("photo", frame)
+    assert sane and "busy" not in text.lower()
+    assert "error code 255" in text and "activity byte 255 (none reported)" in text
+    assert "not confirmed" in text
+
+
+def test_media_counts_reply_decoding_and_history(tmp_path: Path) -> None:
+    from aiglasses.protocol.bcframe import parse_bc_frame
+    from aiglasses.research.probe import counts_from_frame, decode_reply
+
+    reply = parse_bc_frame(build_bc_frame(0x41, bytes([2, 4, 6, 0, 0, 0, 1, 0, 1, 0])))
+    assert counts_from_frame(reply) == {"photos": 6, "videos": 0, "audio": 1}
+    assert decode_reply("media_counts_read", reply)[1].startswith("media counts: photos 6")
+    event = parse_bc_frame(build_bc_frame(0x73, bytes([1, 6, 0, 0, 0, 1, 0, 1])))
+    assert counts_from_frame(event) == {"photos": 6, "videos": 0, "audio": 1}
+    assert counts_from_frame(parse_bc_frame(build_bc_frame(0x42, bytes([100, 0])))) is None
+
+
+async def test_count_change_seen_on_connect_is_noted_and_recorded(tmp_path: Path) -> None:
+    from aiglasses.research.probe import history_path
+
+    audit = tmp_path / "a.jsonl"
+    history = history_path(audit)
+    history.write_text(
+        '{"ts": "x", "local": "12:10 IST", "photos": 4, "videos": 0, "audio": 1, "source": "old"}\n'
+    )
+    connect_frame = build_bc_frame(0x73, bytes([1, 6, 0, 0, 0, 1, 0, 1]))
+    reply = build_bc_frame(0x42, bytes([99, 0]))
+    transport = Scripted([(0.02, reply)], baseline=connect_frame)
+    # a read probe does not wait for the connect-time frame, so let it arrive first
+    await transport.connect()
+    result = await run_probe(
+        transport, guard_for(transport, tmp_path), command("battery_read"), audit
+    )
+    assert any("counts changed" in n and "'photos': 4" in n for n in result.notes)
+    assert history.read_text().count("\n") >= 2  # the old line plus the newly seen counts

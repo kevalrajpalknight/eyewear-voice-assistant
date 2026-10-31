@@ -24,6 +24,13 @@ version strings (firmware `AM01G1_9.40.00_260114` as read over GATT, Wi-Fi firmw
 - Expected: a shutter sound or light on the glasses; a 0x41 reply (type 1, error code 0); a 0x73 media-count event about 4 s later with the photo count up by one. No stop needed.
 - Rollback: none needed (the photo stays on the glasses; delete it with the app if wanted).
 
+## Clean photo test (needs approval of the album read frame first; each its own run)
+
+1. Album read A (`bc41020001130204`), wait, album read B. A and B must match; if they differ, stop and report (do not take the photo).
+2. One photo command (`bc4103001050020101`) with `--known-photos` set to the photo count from read B.
+3. Album read C. Expected: C = B + 1 photo. The user says whether one or two shutter sounds were heard.
+4. Stop and wait. Wi-Fi Direct is the next separate approval.
+
 ## Step 2: Wi-Fi Direct enable plus the PC connection (together)
 
 - Bytes for approval: `bc410400935c02010401` (cmd 0x41, payload `02 01 04 01`).

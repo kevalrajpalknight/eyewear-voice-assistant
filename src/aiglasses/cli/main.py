@@ -628,6 +628,8 @@ def probe_cmd(
             mark = "reply" if r.expected else "other"
             when = both(datetime.fromisoformat(r.time))
             console.print(f"  {when} [{mark}] {r.hex}  {escape(r.decoded)}")
+        for note in result.notes:
+            console.print(f"[yellow]note: {escape(note)}[/]")
         console.print(f"verdict: {escape(result.verdict)}")
         console.print("Next run: wait about 30 s; the glasses need time to advertise again.")
 
