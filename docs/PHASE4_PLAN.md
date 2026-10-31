@@ -42,13 +42,13 @@ Every run: wake the glasses first, write once, link check, no retries, report ev
 - After an import the app sends `02 01 09` and drops the Wi-Fi group. The app's own text says to import resources to free memory on the glasses ("Insufficient memory, please import resources from the
   APP album"), and our counts fell from 8 photos and 2 videos to nothing after the phone's import. So the glasses probably clear imported files, and `02 01 09` is the prime suspect. It is **not
   proven safe**, so it is denylisted and will not be sent. It is also unknown whether merely ending the Wi-Fi session clears files.
-- Risk to accept before Step 2: media on the glasses may disappear after an import. Currently 6 photos and 1 audio recording are counted.
+- Risk accepted by the user (2026-10-31): media on the glasses may disappear after an import. The 6 photos and 1 audio recording currently counted are test data. The HTTP client stays GET-only and `02 01 09` stays blocked.
 
 ## Step 2: Wi-Fi Direct enable plus the PC connection (together; needs approval and the dependency decision in ADR 0006)
 
-- Dependency: `winrt-Windows.Devices.WiFiDirect` and the winrt family must be pinned to versions at least two weeks old. Option B (wait until 2026-11-07, 4.x set, Python 3.11 or newer) is
-  recommended; option A pins 3.2.1 and replaces the BLE stack's winrt packages. Nothing is pinned yet.
-- Pre-flight (read-only): `aiglasses wifi preflight` reports the PC's band and channel. On 2026-10-31 the PC was on **5 GHz, channel 157, 802.11ac**. The glasses may be 2.4 GHz only (V821 spec;
+- Dependency: **option B chosen by the user (2026-10-31): nothing is pinned or changed before 2026-11-07**, the date the 4.x winrt set (released 2026-10-24) turns two weeks old. Then pin
+  `winrt-Windows.Devices.WiFiDirect` and the winrt family to the 4!10.0.28000.2705 / 4.0.3 set (Python 3.11 or newer; the dev environment is 3.12). ADR 0006 stays as written.
+- Band handling is deferred to Step 2 (the user switches the PC to 2.4 GHz or disconnects Wi-Fi first). Pre-flight (read-only): `aiglasses wifi preflight` reports the PC's band and channel. On 2026-10-31 the PC was on **5 GHz, channel 157, 802.11ac**. The glasses may be 2.4 GHz only (V821 spec;
   our unit unverified) and one adapter usually cannot hold a 5 GHz connection and a 2.4 GHz group at once, so before Step 2 the user either connects the PC to a 2.4 GHz network or disconnects from Wi-Fi.
 - Bytes for approval: the enable `bc410400935c02010401` (cmd 0x41, payload `02 01 04 01`). The end-session frame `bc4103001196020109` is **not** part of the pair for now (see Deletion safety).
 - PC side: look for the peer named `AIMB-G2_D04B1BC32324`, connect with push-button setup, with the group-owner intent set to the **maximum (15)** so the PC is group owner and the glasses join as client
