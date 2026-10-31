@@ -35,10 +35,10 @@ model exists only when `LLM_FAST_MODEL` is set.
 ## Router
 | Variable | Default | Meaning |
 |---|---|---|
-| `ROUTER_MODE` | `rules` | `off` (always main), `rules`, `model` (classifier call, adds latency) |
+| `ROUTER_MODE` | `rules` | `off` (always main), `rules`, `model` (classifier call, adds latency), `local_first` |
 | `ROUTER_MAX_EASY_WORDS` | `8` | Requests up to this many words may go to the fast model |
 | `ROUTER_HARD_KEYWORDS` | search, latest, news, weather, price, look, see, compare, explain in detail, ... | Comma list; a hit sends the request to the main model |
-| `ROUTER_MODEL_PROVIDER` / `_MODEL` / `_API_KEY` / `_BASE_URL` | inherit `LLM_FAST_*`, then `LLM_*` | The classifier for `ROUTER_MODE=model` |
+| `ROUTER_MODEL_PROVIDER`, `ROUTER_MODEL_MODEL`, `ROUTER_MODEL_API_KEY`, `ROUTER_MODEL_BASE_URL` | inherit `LLM_FAST_*`, then `LLM_*` | The classifier for `ROUTER_MODE=model` |
 | `ROUTER_TIMEOUT_S` | `3` | Classifier time limit, seconds |
 | `ROUTER_FALLBACK` | `strong` | `strong` or `fast`: where to go if the classifier fails |
 
@@ -68,9 +68,15 @@ model exists only when `LLM_FAST_MODEL` is set.
 | `AUDIO_VOLUME_LIMIT` | `1.0` | Ceiling 0 to 1 applied before the speaker |
 | `TURN_JOIN_WINDOW_S` | `4` | A click within this many seconds after a cut-off request is joined to it |
 
+Note on `AUDIO_OUTPUT=pc`: it plays through the Windows default output device. Once the glasses
+are paired as an audio device and are the default ("Headphones (AIMB-G2_2324)"), "pc" means the
+glasses speaker. Keep `AUDIO_VOLUME_LIMIT` low in your own `.env`; `assistant check` prints the
+default device. The glossary file format is one term per line with spoken forms after a single
+`|` (`RapDuo SM | rap duo s m, rap do`); `assistant check` explains it and warns about extra pipes.
+
 ## Assistant behaviour
 `PERSONA_PATH` (empty: the persona in the package), `ASSISTANT_TIMEZONE` (`Asia/Kolkata`),
-`HISTORY_TURNS` (`6` earlier exchanges sent to the model), `MAX_TURNS_PER_SESSION` (`50`),
+`MAX_TURNS_PER_SESSION` (`50`),
 `MAX_REPLY_SECONDS` (`25` seconds of speech at most), and the three fixed lines spoken on
 failures: `FALLBACK_LLM_ERROR`, `FALLBACK_NO_SPEECH`, `FALLBACK_TTS_ERROR`.
 
@@ -78,3 +84,39 @@ failures: `FALLBACK_LLM_ERROR`, `FALLBACK_NO_SPEECH`, `FALLBACK_TTS_ERROR`.
 `LOG_LEVEL` (`INFO`), `LOG_TRANSCRIPTS` (`false`: logs hold lengths and timings only),
 `DEBUG_SAVE_AUDIO` (`false`: input audio is not kept). The log filter also removes the configured
 keys and anything shaped like an API key from every log line.
+
+## Memory
+`MEMORY_MAX_TURNS` (`10` exchanges; the old name `HISTORY_TURNS` still works), `MEMORY_TTL_S`
+(`600` seconds), `MEMORY_MAX_TOKENS` (`1500` tokens for the local context). Whichever limit hits
+first applies; expiry is silent and memory lives in RAM only.
+
+## Reply length
+`REPLY_TARGET_SENTENCES` (`2`) goes into the persona; `REPLY_MAX_SENTENCES` (`5`) is a hard cut at
+a sentence boundary for every lane.
+
+## Local model (llama.cpp)
+`LOCAL_LLM_BIN_DIR` (`tools/llama.cpp`), `LOCAL_LLM_MODEL` (a name from the registry; empty means no
+local model), `LOCAL_LLM_THREADS` (empty = physical cores), `LOCAL_LLM_CTX` (`4096` tokens),
+`LOCAL_LLM_PORT` (`8081`, bound to 127.0.0.1), `LOCAL_LLM_BATCH` (`512`), `LOCAL_LLM_PRELOAD`
+(`true`), `LOCAL_LLM_PROMPT_CACHE` (`true`), `LOCAL_FIRST_TOKEN_TIMEOUT_S` (`2.5`), `MODELS_DIR`
+(`models`), `MODEL_REGISTRY_PATH` (the shipped `models.yaml`), `MODEL_DOWNLOAD_BUDGET_GB` (`8`),
+`ESCALATION_FILLER` (spoken while the cloud answers). `ROUTER_MODE=local_first` enables the lanes.
+
+## Agent loop and tools
+`AGENT_MAX_STEPS` (`3`, at most 10), `AGENT_TIME_BUDGET_S` (`8`), `TOOLS_ENABLED` (comma list;
+default only read-only tools), `TOOL_MAX_CALLS_PER_TURN` (`3`), `TOOL_TIMEOUT_S` (`10`),
+`ALLOW_RECORDING_TOOLS` (`false`), `PHOTO_MIN_INTERVAL_S` (`10`), `PHOTO_MAX_PER_SESSION` (`10`),
+`INTENTS_PATH` (empty = the shipped intents file), `TURN_END_SILENCE_MS` (`300`).
+
+## Search
+`SEARCH_PROVIDER` (`ddgs`, no key), `SEARCH_MAX_RESULTS` (`5`), `SEARCH_REGION` (`wt-wt`),
+`SEARCH_CACHE_TTL_S` (`300`), `SEARCH_TIMEOUT_S` (`5`).
+
+## Vision
+`VISION_PROVIDER` (`off`, `local` or `cloud`; cloud sends the image to your provider),
+`VISION_MAX_IMAGE_SIDE` (`768` pixels).
+
+## Live calls and reasoning effort
+`LIVE_CALL_BUDGET` (`3`) is the lifetime number of real calls `assistant check` may make; reset it
+with `assistant check --reset-live-budget`. `LLM_REASONING_EFFORT` and `LLM_FAST_REASONING_EFFORT`
+(empty = not sent) are passed to the provider only when set and supported.

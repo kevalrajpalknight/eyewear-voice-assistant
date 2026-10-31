@@ -372,13 +372,23 @@ def assistant_run(
 @assistant_app.command("check")
 def assistant_check(
     live: bool = typer.Option(
-        False, "--live", help="Make one neutral call per configured LLM role (3 in total, ever)"
+        False,
+        "--live",
+        help="Make one neutral call per configured LLM role (LIVE_CALL_BUDGET in all)",
+    ),
+    reset_live_budget: bool = typer.Option(
+        False, "--reset-live-budget", help="Set the live-call counter back to zero, then exit"
     ),
 ) -> None:
     """Validate settings, models, packages and audio. Secrets show only as set / NOT set."""
-    from aiglasses.assistant.check import run_check
+    from aiglasses.assistant import check as check_module
 
-    code = run_check(AssistantSettings(), live=live, log_dir=Settings().log_dir, console=console)
+    log_dir = Settings().log_dir
+    if reset_live_budget:
+        check_module.reset_live_budget(log_dir / "live_calls.count")
+        console.print("Live-call counter reset to zero.")
+        raise typer.Exit(0)
+    code = check_module.run_check(AssistantSettings(), live=live, log_dir=log_dir, console=console)
     raise typer.Exit(code)
 
 

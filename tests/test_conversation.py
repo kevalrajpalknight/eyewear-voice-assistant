@@ -188,7 +188,7 @@ async def test_empty_speech_gets_the_no_speech_line() -> None:
 
 
 async def test_history_keeps_only_the_configured_number_of_exchanges() -> None:
-    rig = Rig(history_turns=2, llm=FakeLlm([(f"Reply {i}. ",) for i in range(4)]))
+    rig = Rig(memory_max_turns=2, llm=FakeLlm([(f"Reply {i}. ",) for i in range(4)]))
     for turn in range(1, 5):
         await rig.pipeline.run_turn(utterance(), turn)
     assert len(rig.llm.requests[3]) == 1 + 2 * 2 + 1

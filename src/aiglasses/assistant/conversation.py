@@ -183,7 +183,7 @@ class ConversationPipeline:
             persona,
             glossary,
         )
-        self.history = History(settings.history_turns)
+        self.history = History(settings.memory_max_turns)
         self._turn_log, self._debug = turn_log, debug
         self._on_record, self._on_correction = on_record, on_correction
         self._clock = clock or (lambda tz: datetime.now(tz))

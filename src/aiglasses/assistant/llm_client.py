@@ -92,6 +92,11 @@ def _require_model(role: LlmRole) -> str:
     return role.model
 
 
+def _effort(role: LlmRole) -> dict[str, str]:
+    """Reasoning effort goes to the provider only when the user set it."""
+    return {"reasoning_effort": role.reasoning_effort} if role.reasoning_effort else {}
+
+
 def _openai_like(role: LlmRole) -> Any:
     from langchain_openai import ChatOpenAI
 
@@ -99,7 +104,7 @@ def _openai_like(role: LlmRole) -> Any:
         model=_require_model(role), api_key=_require_key(role),
         base_url=role.base_url or PROVIDER_BASE_URLS.get(role.provider),
         temperature=role.temperature, max_completion_tokens=role.max_tokens,
-        timeout=role.timeout_s, max_retries=0,
+        timeout=role.timeout_s, max_retries=0, **_effort(role),
     )  # fmt: skip
 
 
@@ -109,7 +114,7 @@ def _anthropic(role: LlmRole) -> Any:
     return ChatAnthropic(
         model=_require_model(role), api_key=_require_key(role), base_url=role.base_url,
         temperature=role.temperature, max_tokens=role.max_tokens,
-        timeout=role.timeout_s, max_retries=0,
+        timeout=role.timeout_s, max_retries=0, **_effort(role),
     )  # fmt: skip
 
 
@@ -119,7 +124,7 @@ def _google(role: LlmRole) -> Any:
     return ChatGoogleGenerativeAI(
         model=_require_model(role), api_key=_require_key(role), base_url=role.base_url,
         temperature=role.temperature, max_tokens=role.max_tokens,
-        timeout=role.timeout_s, retries=0,
+        timeout=role.timeout_s, retries=0, **_effort(role),
     )  # fmt: skip
 
 

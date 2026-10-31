@@ -28,7 +28,6 @@ from aiglasses.assistant.registry import (
 )
 from aiglasses.settings import ROLES, AssistantSettings, LlmRole
 
-LIVE_CALL_BUDGET = 3  # lifetime cap on real provider calls made through `check --live`
 LIVE_PROMPT = "Reply with the word ok."
 LIVE_MAX_TOKENS = 5
 HINTS = {
@@ -65,9 +64,15 @@ def role_row(role: LlmRole, configured: bool) -> list[str]:
     ]  # fmt: skip
 
 
-def live_budget_left(counter: Path) -> int:
+def live_budget_left(counter: Path, budget: int) -> int:
     used = int(counter.read_text()) if counter.exists() else 0
-    return max(LIVE_CALL_BUDGET - used, 0)
+    return max(budget - used, 0)
+
+
+def reset_live_budget(counter: Path) -> None:
+    """Start counting again from zero. Only the user asks for this (`--reset-live-budget`)."""
+    counter.parent.mkdir(parents=True, exist_ok=True)
+    counter.write_text("0")
 
 
 def spend_live_call(counter: Path) -> None:
@@ -79,23 +84,24 @@ def spend_live_call(counter: Path) -> None:
 async def live_call(role: LlmRole) -> tuple[bool, str]:
     client = LangChainLlmClient(role)
     started = time.perf_counter()
+    first: float | None = None
+    reply = ""
     try:
-        reply = "".join(
-            [
-                d
-                async for d in client.stream(
-                    [Message("user", LIVE_PROMPT)], max_tokens=LIVE_MAX_TOKENS
-                )
-            ]
-        )
+        async for delta in client.stream(
+            [Message("user", LIVE_PROMPT)], max_tokens=LIVE_MAX_TOKENS
+        ):
+            if first is None:
+                first = time.perf_counter() - started
+            reply += delta
     except LlmError as exc:
         hint = next((h for kind, h in HINTS.items() if isinstance(exc, kind)), "see the message")
         return False, f"{type(exc).__name__}: {exc}\n    hint: {hint}"
     except Exception as exc:  # configuration errors etc.
         return False, f"{type(exc).__name__}: {exc}"
-    return (
-        True,
-        f"reply of {len(reply.strip())} characters in {time.perf_counter() - started:.2f} s",
+    first_text = "no text" if first is None else f"{first:.2f} s"
+    return True, (
+        f"reply of {len(reply.strip())} characters; first token {first_text}, "
+        f"total {time.perf_counter() - started:.2f} s"
     )
 
 
@@ -145,6 +151,10 @@ def run_check(assistant: AssistantSettings, *, live: bool, log_dir: Path, consol
     ]
     if assistant.glossary_enabled and not assistant.glossary_path.exists():
         problems.append(f"GLOSSARY_PATH {assistant.glossary_path} does not exist")
+    console.print(
+        "Glossary format: one term per line; spoken forms after a single '|', separated by "
+        "commas (RapDuo SM | rap duo s m, rap do)."
+    )
     if assistant.glossary_path.exists():
         lines = assistant.glossary_path.read_text(encoding="utf-8").splitlines()
         for warning in glossary_warnings(lines):
@@ -171,8 +181,8 @@ async def _live(assistant: AssistantSettings, log_dir: Path, console: Console) -
         roles.append(assistant.llm_role("router"))
     failures = []
     for role in roles:
-        if live_budget_left(counter) == 0:
-            failures.append(f"live-call budget of {LIVE_CALL_BUDGET} is used up")
+        if live_budget_left(counter, assistant.live_call_budget) == 0:
+            failures.append(f"live-call budget of {assistant.live_call_budget} is used up")
             break
         spend_live_call(counter)
         ok, message = await live_call(role)

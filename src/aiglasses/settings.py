@@ -7,7 +7,7 @@ come only from the environment or `.env` and are held as `SecretStr` so they nev
 from pathlib import Path
 from typing import Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, SecretStr
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -35,6 +35,7 @@ class LlmRole(BaseModel):
     max_tokens: int
     timeout_s: float
     max_retries: int
+    reasoning_effort: str | None = None
 
 
 class AssistantSettings(BaseSettings):
@@ -44,6 +45,7 @@ class AssistantSettings(BaseSettings):
         extra="ignore",
         toml_file="config.toml",
         env_ignore_empty=True,  # `KEY=` in .env means "not set"
+        populate_by_name=True,
     )
 
     # LLM, main
@@ -55,6 +57,7 @@ class AssistantSettings(BaseSettings):
     llm_max_tokens: int = Field(300, gt=0)
     llm_timeout_s: float = Field(30.0, gt=0)
     llm_max_retries: int = Field(2, ge=0)
+    llm_reasoning_effort: str | None = None  # passed to the provider only when set
 
     # LLM, fast (optional; every unset field inherits from the main LLM_* value)
     llm_fast_provider: Provider | None = None
@@ -65,9 +68,10 @@ class AssistantSettings(BaseSettings):
     llm_fast_max_tokens: int | None = Field(None, gt=0)
     llm_fast_timeout_s: float | None = Field(None, gt=0)
     llm_fast_max_retries: int | None = Field(None, ge=0)
+    llm_fast_reasoning_effort: str | None = None
 
     # Router
-    router_mode: Literal["off", "rules", "model"] = "rules"
+    router_mode: Literal["off", "rules", "model", "local_first"] = "rules"
     router_max_easy_words: int = Field(8, gt=0)
     router_hard_keywords: str = (
         "search,latest,news,weather,price,look,see,compare,explain in detail,translate,"
@@ -108,12 +112,63 @@ class AssistantSettings(BaseSettings):
     # Assistant behaviour
     persona_path: Path | None = None  # None = the persona shipped in the package
     assistant_timezone: str = "Asia/Kolkata"
-    history_turns: int = Field(6, ge=0)
     max_turns_per_session: int = Field(50, gt=0)
     max_reply_seconds: float = Field(25.0, gt=0)
     fallback_llm_error: str = "Sorry, I could not reach my brain just now. Please try again."
     fallback_no_speech: str = "Sorry, I did not catch that. Could you say it again?"
     fallback_tts_error: str = "Sorry, I lost my voice for a moment."
+
+    # Memory (RAM only; one format for every lane)
+    memory_max_turns: int = Field(
+        10, ge=0, validation_alias=AliasChoices("MEMORY_MAX_TURNS", "HISTORY_TURNS")
+    )
+    memory_ttl_s: float = Field(600.0, gt=0)
+    memory_max_tokens: int = Field(1500, gt=0)  # cap for the local model's context
+
+    # Reply length
+    reply_target_sentences: int = Field(2, ge=1)
+    reply_max_sentences: int = Field(5, ge=1)
+
+    # Local model and server (llama.cpp)
+    local_llm_bin_dir: Path = Path("tools/llama.cpp")
+    local_llm_model: str | None = None  # a name from the model registry
+    local_llm_threads: int | None = Field(None, gt=0)  # None = physical cores
+    local_llm_ctx: int = Field(4096, gt=0)
+    local_llm_port: int = Field(8081, gt=0, lt=65536)
+    local_llm_batch: int = Field(512, gt=0)
+    local_llm_preload: bool = True
+    local_llm_prompt_cache: bool = True
+    local_first_token_timeout_s: float = Field(2.5, gt=0)
+    models_dir: Path = Path("models")
+    model_registry_path: Path = Path("src/aiglasses/assistant/models.yaml")
+    model_download_budget_gb: float = Field(8.0, gt=0)
+    escalation_filler: str = "One moment, let me think about that."
+
+    # Agent loop and tools
+    agent_max_steps: int = Field(3, ge=1, le=10)
+    agent_time_budget_s: float = Field(8.0, gt=0)
+    tools_enabled: str = "read_battery,read_media_counts,forget_all_that"
+    tool_max_calls_per_turn: int = Field(3, ge=1)
+    tool_timeout_s: float = Field(10.0, gt=0)
+    allow_recording_tools: bool = False
+    photo_min_interval_s: float = Field(10.0, ge=0)
+    photo_max_per_session: int = Field(10, ge=0)
+    intents_path: Path | None = None  # None = the intents file shipped in the package
+    turn_end_silence_ms: int = Field(300, ge=0)
+
+    # Search
+    search_provider: str = "ddgs"
+    search_max_results: int = Field(5, ge=1, le=10)
+    search_region: str = "wt-wt"
+    search_cache_ttl_s: float = Field(300.0, ge=0)
+    search_timeout_s: float = Field(5.0, gt=0)
+
+    # Vision
+    vision_provider: Literal["off", "local", "cloud"] = "off"
+    vision_max_image_side: int = Field(768, gt=0)
+
+    # Live calls (cloud or search) made through `assistant check`
+    live_call_budget: int = Field(3, ge=0)
 
     # Logging and privacy
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
@@ -137,6 +192,15 @@ class AssistantSettings(BaseSettings):
         )
 
     @property
+    def history_turns(self) -> int:
+        """Old name of MEMORY_MAX_TURNS."""
+        return self.memory_max_turns
+
+    @property
+    def enabled_tools(self) -> tuple[str, ...]:
+        return tuple(t.strip() for t in self.tools_enabled.split(",") if t.strip())
+
+    @property
     def hard_keywords(self) -> tuple[str, ...]:
         return tuple(k.strip().lower() for k in self.router_hard_keywords.split(",") if k.strip())
 
@@ -149,6 +213,7 @@ class AssistantSettings(BaseSettings):
             api_key=self.llm_api_key, base_url=self.llm_base_url,
             temperature=self.llm_temperature, max_tokens=self.llm_max_tokens,
             timeout_s=self.llm_timeout_s, max_retries=self.llm_max_retries,
+            reasoning_effort=self.llm_reasoning_effort,
         )  # fmt: skip
         if role == "main":
             return main
@@ -163,6 +228,7 @@ class AssistantSettings(BaseSettings):
                 "max_tokens": _first(self.llm_fast_max_tokens, main.max_tokens),
                 "timeout_s": _first(self.llm_fast_timeout_s, main.timeout_s),
                 "max_retries": _first(self.llm_fast_max_retries, main.max_retries),
+                "reasoning_effort": self.llm_fast_reasoning_effort or main.reasoning_effort,
             }
         )
         if role == "fast":
@@ -177,6 +243,7 @@ class AssistantSettings(BaseSettings):
                 "timeout_s": self.router_timeout_s,
                 "max_tokens": _ROUTER_REPLY_TOKENS,
                 "temperature": 0.0,
+                "reasoning_effort": None,
             }
         )
 

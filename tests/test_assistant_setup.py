@@ -5,7 +5,7 @@ from rich.console import Console
 
 from aiglasses.assistant import check as check_module
 from aiglasses.assistant import registry
-from aiglasses.assistant.check import LIVE_CALL_BUDGET, run_check
+from aiglasses.assistant.check import reset_live_budget, run_check
 from aiglasses.assistant.fakes import FakeStt, FakeTts
 from aiglasses.assistant.router import RoutedLlmClient
 from aiglasses.assistant.runtime import build_llm
@@ -133,7 +133,7 @@ def test_live_check_makes_one_call_per_role_and_stops_at_the_budget(
     assert code == 0 and calls == ["main", "fast"] and "live main: ok" in text
     code, text = report(both, tmp_path, live=True)
     assert calls == ["main", "fast", "main"] and code == 1 and "budget" in text
-    assert LIVE_CALL_BUDGET == 3 and len(calls) == LIVE_CALL_BUDGET
+    assert len(calls) == both.live_call_budget == 3
 
 
 def test_live_check_is_skipped_while_the_settings_are_incomplete(tmp_path: Path) -> None:
@@ -163,3 +163,14 @@ async def test_a_failed_live_call_gives_a_hint_and_never_the_key(
     role = settings(llm_model="m", llm_api_key=SECRET).llm_role("main")
     ok, message = await check_module.live_call(role)
     assert not ok and "LLM_API_KEY" in message and SECRET not in message
+
+
+def test_the_budget_comes_from_settings_and_can_be_reset(tmp_path: Path) -> None:
+    from aiglasses.assistant.check import live_budget_left, spend_live_call
+
+    counter = tmp_path / "live_calls.count"
+    spend_live_call(counter)
+    spend_live_call(counter)
+    assert live_budget_left(counter, 3) == 1 and live_budget_left(counter, 2) == 0
+    reset_live_budget(counter)
+    assert live_budget_left(counter, 3) == 3
