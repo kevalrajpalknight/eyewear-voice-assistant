@@ -34,6 +34,7 @@ audio_app = typer.Typer(help="Bluetooth audio.")
 wifi_app = typer.Typer(help="Glasses Wi-Fi link.")
 capture_app = typer.Typer(help="Official-app capture analysis.")
 voice_app = typer.Typer(help="Offline experiments on the voice stream.")
+ai_voice_app = typer.Typer(help="AI voice button (read-only).")
 apk_app = typer.Typer(help="Static analysis of the official app (read-only).")
 for name, sub in (
     ("video", video_app),
@@ -42,6 +43,7 @@ for name, sub in (
     ("wifi", wifi_app),
     ("capture", capture_app),
     ("voice", voice_app),
+    ("ai-voice", ai_voice_app),
     ("apk", apk_app),
 ):
     app.add_typer(sub, name=name)
@@ -263,6 +265,40 @@ def listen_cmd(
         for uuid, payloads in by_uuid.items():
             table.add_row(uuid, str(len(payloads)), "\n".join(sorted({p.hex() for p in payloads})))
         console.print(table if by_uuid else "No notifications received.")
+
+    _run(go())
+
+
+@ai_voice_app.command("record")
+def ai_voice_record(
+    wait: float = typer.Option(60.0, help="Seconds to wait for you to hold the rear click"),
+    out_dir: Path = typer.Option(None, help="Default captures/"),
+) -> None:
+    """Wait for one AI voice burst (rear click), decode it and save a WAV. Sends nothing."""
+    from aiglasses.services.voice import record_burst
+
+    settings = Settings()
+    target_dir = out_dir or Path("captures")
+
+    async def go() -> None:
+        async with Glasses.connect(settings) as g:
+            console.print(f"Connected. Hold the rear click and speak within {wait:.0f}s ...")
+            burst = await record_burst(g.events(), wait_seconds=wait)
+        started = datetime.fromtimestamp(burst.started_at, timezone.utc)
+        console.print(
+            f"burst at {both(started)}: {len(burst.packets)} packets, {burst.seconds:.2f}s of audio, "
+            f"ended by {burst.ended_by}"
+        )
+        import soundfile as sf
+
+        from aiglasses.research.voice_decode import APP_SAMPLE_RATE, OpusVoiceDecoder
+
+        audio = OpusVoiceDecoder().decode(burst.packets)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        path = target_dir / f"ai_voice_{started.strftime('%Y%m%dT%H%M%SZ')}.wav"
+        sf.write(path, audio.samples, APP_SAMPLE_RATE, subtype="PCM_16")
+        console.print(f"saved {path} ({len(audio.samples) / APP_SAMPLE_RATE:.2f}s, 16 kHz mono)")
+        console.print("[yellow]Codec stays UNVERIFIED until you confirm it is intelligible.[/]")
 
     _run(go())
 
