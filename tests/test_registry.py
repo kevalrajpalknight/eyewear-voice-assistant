@@ -21,8 +21,8 @@ def test_packaged_registry_statuses_and_allowlist() -> None:
 
     commands = load_commands()
     confirmed = {c.name for c in commands if c.status is Confidence.CONFIRMED}
-    assert confirmed == {"battery_read"}  # promoted only after a real reply
-    assert [c.name for c in allowlist_from(commands)] == ["battery_read"]
+    assert confirmed == {"battery_read", "device_info_read"}  # only after a real reply
+    assert [c.name for c in allowlist_from(commands)] == ["battery_read", "device_info_read"]
     for command in commands:
         frame = parse_bc_frame(command.payload)  # valid length and CRC
         assert denied_reason(command.payload) is None, command.name

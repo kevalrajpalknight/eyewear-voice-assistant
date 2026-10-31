@@ -577,6 +577,9 @@ def apk_methods(
 def probe_cmd(
     name: str = typer.Argument(..., help="An approved probe: see `aiglasses probe --help`"),
     send: bool = typer.Option(False, "--send", help="Actually send. Without it nothing is sent."),
+    known_photos: int = typer.Option(
+        None, help="Photo count seen earlier, if none arrives on connect"
+    ),
 ) -> None:
     """Send ONE approved request and show the reply. Dry run unless --send. Never repeated."""
     from aiglasses.protocol.registry import load_commands
@@ -611,11 +614,16 @@ def probe_cmd(
     async def go() -> None:
         async with Glasses.connect(settings, dry_run=False) as g:
             result = await run_probe(
-                g.transport, g.guard, command, settings.log_dir / "probe_audit.jsonl"
+                g.transport,
+                g.guard,
+                command,
+                settings.log_dir / "probe_audit.jsonl",
+                known_photo_count=known_photos,
             )
         console.print(f"notifications active before the write: {result.notifications_active}")
         console.print(f"link up immediately before the write: {result.link_up_before_write}")
         console.print(f"sent: {result.sent} (once, timeout {REPLY_TIMEOUT_SECONDS:.0f}s)")
+        console.print(f"baseline for counts: {result.baseline_source}")
         for r in result.replies:
             mark = "reply" if r.expected else "other"
             when = both(datetime.fromisoformat(r.time))

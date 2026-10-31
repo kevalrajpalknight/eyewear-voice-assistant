@@ -338,3 +338,15 @@ Fields in order: 1 (bytes 1-2), 2 (bytes 3-4), 3 (bytes 5-6), each a 16-bit litt
 ### The glasses sleep or power off when idle
 They stop advertising when idle or after a session. Wake them (or take them out of the case) and start a probe straight away. If they are not advertising after the retries, the tool stops
 without scanning further and says what to do: wake or power on, phone Bluetooth off, Cyan app closed.
+
+
+### device_info_read, `bc43020001b00000` (CONFIRMED)
+Run at 07:05:05.868Z / 12:35:05.868 IST (+05:30). Connected at 07:05:05, link up immediately before the write, one write, reply 0.05 s later, then our own disconnect.
+Reply: `bc4329002d9c0015000b0000000000414d303147315f392e34302e30305f323630313134414d303147315f56392e34` (cmd 0x43, 41-byte payload, CRC ok, no bytes left over):
+- string lengths (16-bit little-endian): firmware 21, hardware 11, Wi-Fi firmware 0, Wi-Fi hardware 0;
+- firmware `AM01G1_9.40.00_260114` and hardware `AM01G1_V9.4`, **identical to the GATT Device Information values** read earlier, so the layout read from the app is right;
+- the two Wi-Fi strings are **empty**. So the `wifi: 2512271030` line on the app's home screen does not come from this reply; its source is still unknown (an earlier guess that it is the Wi-Fi firmware
+  version is withdrawn).
+- No connect-time media-count frame arrived in this run (it was seen in only one of the four runs so far), so the photo test cannot rely on it. The probe now accepts `--known-photos N` to use
+  a count seen earlier (last seen: 4 photos at 12:10:14 IST) and says which source it used.
+Promoted to CONFIRMED in `commands.yaml`.

@@ -7,7 +7,7 @@
 | GATT dump | CONFIRMED | `aiglasses gatt-dump` -> `logs/gatt_dump.json` | 2A05 indicate needs bonding |
 | Notifications | CONFIRMED | `aiglasses listen`: 8 of 9 CCCD enables succeed | Frames are `BC cmd len16 crc16 payload` (CRC verified on 756/756); event meanings partly inferred |
 | Voice stream decoding | INFERRED | `aiglasses voice candidates` uses the app's exact settings (16 kHz mono, 40-byte Opus packets): 0 errors | Not yet confirmed by listening; very low level |
-| Device info | CONFIRMED | 0x180A read: hardware, firmware | Serial empty; no battery service |
+| Device info | CONFIRMED | GATT 0x180A read, and `aiglasses probe device_info_read` (reply gives the same firmware and hardware strings) | Serial empty; Wi-Fi version strings empty in the reply; no standard battery service |
 | Battery | CONFIRMED | `aiglasses probe battery_read`: reply `bc4202002b706400` = 100 percent, not charging, 3 runs, user confirmed | Read-only request; not to be repeated needlessly |
 | Photo / video | INFERRED | Commands read from the app (02 01 01, 02 01 02); not yet sent | Stop-recording command not found |
 | Media download | INFERRED | App code: plain HTTP on port 80, `/files/media.config` then `/files/<name>` | Needs Wi-Fi Direct up first; plan in docs/PHASE4_PLAN.md |

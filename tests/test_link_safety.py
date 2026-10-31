@@ -172,3 +172,17 @@ def test_not_found_hint_tells_the_user_what_to_do() -> None:
 
     for needle in ("wake", "Bluetooth is off", "app is closed", "not scanning further"):
         assert needle in NOT_FOUND_HINT
+
+
+async def test_photo_probe_uses_a_known_count_when_no_connect_frame_arrives(tmp_path: Path) -> None:
+    after = build_bc_frame(0x73, bytes([1, 5, 0, 0, 0, 1, 0, 1]))
+    control_reply = build_bc_frame(0x41, bytes([2, 1, 1, 0, 0]))
+    transport = Scripted([(0.02, control_reply), (0.1, after)])
+    result = await run_probe(
+        transport,
+        guard_for(transport, tmp_path),
+        photo(),
+        tmp_path / "a.jsonl",
+        known_photo_count=4,
+    )
+    assert "photo count 4 -> 5" in result.verdict and "earlier frame" in result.verdict

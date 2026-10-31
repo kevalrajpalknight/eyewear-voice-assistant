@@ -17,7 +17,7 @@ from aiglasses.transport.base import BleTransport
 NOTIFY_CHAR = "de5bf729-d711-4e47-af26-65e3012a5dc7"
 REPLY_TIMEOUT_SECONDS = 5.0
 GRACE_SECONDS = 1.0
-STATE_CHANGE_OBSERVE_SECONDS = 10.0  # watch for the follow-up event after a state-changing write
+STATE_CHANGE_OBSERVE_SECONDS = 15.0  # watch for the follow-up event after a state-changing write
 BASELINE_WAIT_SECONDS = 1.5  # the glasses send media counts soon after connecting
 
 # The user approved exactly these frames. Anything else is refused.
@@ -55,6 +55,7 @@ class ProbeResult:
     sent: bool = False
     replies: list[Reply] = field(default_factory=list)
     latency_seconds: float | None = None
+    baseline_source: str = "none"
     verdict: str = "not sent"
 
     @property
@@ -109,6 +110,7 @@ def _audit(path: Path, result: ProbeResult) -> None:
         "link_up_before_write": result.link_up_before_write,
         "sent": result.sent,
         "latency_seconds": result.latency_seconds,
+        "baseline_source": result.baseline_source,
         "replies": [r.__dict__ for r in result.replies],
         "verdict": result.verdict,
     }
@@ -134,6 +136,7 @@ async def run_probe(
     guard: WriteGuard,
     command: Command,
     audit_path: Path,
+    known_photo_count: int | None = None,
 ) -> ProbeResult:
     """Enable notifications, check the link, write the approved frame ONCE, wait up to 5 s."""
     name = command.name
@@ -182,6 +185,11 @@ async def run_probe(
             await asyncio.sleep(0.1)
             waited += 0.1
     baseline = _counts(result)
+    if baseline is None and known_photo_count is not None:
+        baseline = {"photos": known_photo_count, "videos": -1, "audio": -1}  # from an earlier frame
+        result.baseline_source = "earlier frame (no connect-time frame arrived)"
+    elif baseline is not None:
+        result.baseline_source = "connect-time frame"
     result.link_up_before_write = transport.is_connected and not transport.disconnected.is_set()
     if not result.link_up_before_write:
         result.verdict = "the link is not up right before the write; nothing sent"
@@ -210,6 +218,7 @@ async def run_probe(
             before = baseline["photos"] if baseline else None
             result.verdict += (
                 f"; photo count {before if before is not None else '?'} -> {after['photos']}"
+                f" (before: {result.baseline_source})"
             )
     _audit(audit_path, result)
     return result

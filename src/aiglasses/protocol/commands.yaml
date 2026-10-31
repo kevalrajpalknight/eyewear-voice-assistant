@@ -15,9 +15,9 @@ commands:
     characteristic: de5bf72a-d711-4e47-af26-65e3012a5dc7
     bytes: "bc43020001b00000"
     direction: write
-    status: INFERRED
-    source: apk-static (syncDeviceInfo, cmd 0x43, payload 00 00)
-    safe_to_send: false
+    status: CONFIRMED
+    source: probe run 2026-10-31 07:05Z (reply decoded as firmware AM01G1_9.40.00_260114 and hardware AM01G1_V9.4, equal to the GATT Device Information values)
+    safe_to_send: true
   - name: camera_status_read
     characteristic: de5bf72a-d711-4e47-af26-65e3012a5dc7
     bytes: "bc4a01007e8001"
