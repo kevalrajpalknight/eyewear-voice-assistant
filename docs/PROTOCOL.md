@@ -450,3 +450,16 @@ The user heard **one shutter sound**. Videos and audio were unchanged, so **one 
 Counts change with physical input as well as BLE commands (a front-button click takes a photo; recordings add audio or video). So the album read (`02 04`) is always done before any state-changing
 test, and the previous counts are kept in `logs/media_counts.jsonl`.
 
+
+## Recording and light commands, search 2026-11-01 (INFERRED, names only; nothing sent)
+Read-only search of the decompiled app (packages `ble`, `home`, `setting`, `ai`; identifiers only).
+- **Light, flash, LED or lamp commands for the glasses: none found.** The only hits are Android
+  camera torch and flash-mode calls (`setTorchMode`, `supportedFlashModes`, `setFlashMode`) and UI
+  theme flags (`isLight`, `titleIsLightColor`), which concern the phone, not the glasses. The
+  glassesControl payloads listed above contain no light function. Unverified on the device.
+- **Stop commands for video or audio recording: none found.** `stopRecord` and `stopRecording`
+  exist only in the translate screens and call the phone microphone recorder
+  (`AudioRecorderManager`); `stopAudioVisualization` is a wave animation. This agrees with the
+  earlier note that the video command may toggle and that the front-button click stops a recording.
+- Consequence: the assistant has no light tool and no stop tool. See
+  `docs/APPROVAL_REQUEST_RECORDING.md` for the recording start commands (blocked, unapproved).

@@ -1,0 +1,48 @@
+# Deterministic device and memory commands (lane 0). Data, not code: edit freely.
+# A request matches when ANY `match` pattern fits the lower-cased words AND no `reject` pattern does.
+# `reject` exists for near misses such as "I took a photo yesterday".
+intents:
+  take_photo:
+    tool: take_photo
+    match:
+      - '^(?:please |can you |could you |go ahead and )*(?:take|snap|capture|shoot) (?:a |one |another |me a )?(?:photo|picture|pic|photograph)\b'
+      - '^(?:please )?(?:photo|picture) (?:now|please)\b'
+    reject:
+      - '\b(?:took|taken|taking|have|had|did|yesterday|last|earlier|ago|how|when|why|what|where)\b'
+      - '\b(?:don''t|do not|never|stop|not)\b'
+  read_battery:
+    tool: read_battery
+    match:
+      - '\b(?:battery|charge)\b.*\b(?:level|left|percent|percentage|status)\b'
+      - '\bhow much (?:battery|charge)\b'
+      - '\bbattery\b'
+    reject:
+      - '\b(?:phone|laptop|remote|car)\b'
+  read_media_counts:
+    tool: read_media_counts
+    match:
+      - '\bhow many (?:photos|pictures|videos|recordings)\b'
+    reject:
+      - '\b(?:phone|laptop|gallery on)\b'
+  forget_last:
+    tool: forget_all_that
+    args: {scope: last_exchange}
+    match:
+      - '^(?:please )?forget (?:that|this|what i (?:just )?said)\b'
+      - '^(?:please )?ignore (?:that|what i (?:just )?said)\b'
+      - '^(?:please )?(?:scratch|disregard) that\b'
+  forget_everything:
+    tool: forget_all_that
+    args: {scope: everything}
+    match:
+      - '\b(?:clear|wipe|reset) (?:your |my )?memory\b'
+      - '^(?:please )?let''?s start over\b'
+      - '^(?:please )?(?:forget everything|start over|start again)\b'
+  describe_scene:
+    tool: describe_scene
+    match:
+      - '\bwhat (?:am i|are we) (?:looking|looking at)\b'
+      - '\bwhat do you see\b'
+      - '^(?:please )?(?:look at|describe) (?:this|what i(?:''m| am) looking at)\b'
+    reject:
+      - '\b(?:yesterday|last)\b'
