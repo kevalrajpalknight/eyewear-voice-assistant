@@ -16,7 +16,7 @@ FIRST_MIN = 3
 MIN_WORDS, MAX_WORDS = 4, 10
 
 
-def _ends_sentence(word: str) -> bool:
+def ends_sentence(word: str) -> bool:
     if word.lower() in TITLES or DOTTED_ABBREVIATION.match(word):
         return False
     return SENTENCE_END.search(word) is not None
@@ -32,7 +32,7 @@ def split_clauses(text: str, first_max_words: int) -> list[str]:
         first = not clauses
         low, high = (FIRST_MIN, first_max_words) if first else (MIN_WORDS, MAX_WORDS)
         following = words[index + 1].lower().strip(",.") if index + 1 < len(words) else ""
-        if _ends_sentence(word):
+        if ends_sentence(word):
             cut = True
         elif CLAUSE_END.search(word):
             cut = len(current) >= low
@@ -44,7 +44,7 @@ def split_clauses(text: str, first_max_words: int) -> list[str]:
             clauses.append(current)
             current = []
     if current:
-        if clauses and len(current) == 1 and not _ends_sentence(clauses[-1][-1]):
+        if clauses and len(current) == 1 and not ends_sentence(clauses[-1][-1]):
             clauses[-1].extend(current)
         else:
             clauses.append(current)

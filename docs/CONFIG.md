@@ -98,7 +98,7 @@ a sentence boundary for every lane.
 `LOCAL_LLM_BIN_DIR` (`tools/llama.cpp`), `LOCAL_LLM_MODEL` (a name from the registry; empty means no
 local model), `LOCAL_LLM_THREADS` (empty = physical cores), `LOCAL_LLM_CTX` (`4096` tokens),
 `LOCAL_LLM_PORT` (`8081`, bound to 127.0.0.1), `LOCAL_LLM_BATCH` (`512`), `LOCAL_LLM_MAX_TOKENS` (`120` tokens per local step), `LOCAL_LLM_PRELOAD`
-(`true`), `LOCAL_LLM_PROMPT_CACHE` (`true`), `LOCAL_FIRST_TOKEN_TIMEOUT_S` (`2.5`), `MODELS_DIR`
+(`true`), `LOCAL_LLM_PROMPT_CACHE` (`true`), `LOCAL_FIRST_TOKEN_TIMEOUT_S` (`6`), `MODELS_DIR`
 (`models`), `MODEL_REGISTRY_PATH` (the shipped `models.yaml`), `MODEL_DOWNLOAD_BUDGET_GB` (`8`),
 `ESCALATION_FILLER` (spoken while the cloud answers). `ROUTER_MODE=local_first` enables the lanes.
 
@@ -111,6 +111,12 @@ default only read-only tools), `TOOL_MAX_CALLS_PER_TURN` (`3`), `TOOL_TIMEOUT_S`
 ## Search
 `SEARCH_PROVIDER` (`ddgs`, no key), `SEARCH_MAX_RESULTS` (`5`), `SEARCH_REGION` (`wt-wt`),
 `SEARCH_CACHE_TTL_S` (`300`), `SEARCH_TIMEOUT_S` (`5`).
+
+## Weather
+`WEATHER_LOCATION` (empty: the assistant asks which city), `WEATHER_GEOCODING_URL` and
+`WEATHER_FORECAST_URL` (a free public forecast service, no key). Tools `get_time` and `get_weather`
+are enabled by default together with `search_web`; if your `.env` sets `TOOLS_ENABLED` itself, add
+them there.
 
 ## Vision
 `VISION_PROVIDER` (`off`, `local` or `cloud`; cloud sends the image to your provider),

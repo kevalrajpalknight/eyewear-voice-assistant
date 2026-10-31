@@ -18,6 +18,17 @@ class Intent:
     args: dict[str, Any]
     match: tuple[re.Pattern[str], ...]
     reject: tuple[re.Pattern[str], ...] = field(default=())
+    capture: tuple[re.Pattern[str], ...] = field(default=())  # named groups become tool args
+
+    def args_for(self, text: str) -> dict[str, Any]:
+        """Fixed args from the file plus named groups caught in the words (e.g. a place name)."""
+        args = dict(self.args)
+        for pattern in self.capture:
+            found = pattern.search(text)
+            if found:
+                args.update({k: v.strip() for k, v in found.groupdict().items() if v})
+                break
+        return args
 
     def matches(self, text: str) -> bool:
         return any(p.search(text) for p in self.match) and not any(
@@ -53,6 +64,7 @@ class Intents:
                         args=dict(body.get("args") or {}),
                         match=tuple(re.compile(p) for p in body["match"]),
                         reject=tuple(re.compile(p) for p in body.get("reject") or []),
+                        capture=tuple(re.compile(p) for p in body.get("capture") or []),
                     )
                     for name, body in raw.items()
                 ]

@@ -66,6 +66,7 @@ class TurnReport:
     local_first_token_s: float | None = None
     local_total_s: float | None = None
     cloud_first_token_s: float | None = None
+    tools: list[tuple[str, str]] = field(default_factory=list)  # (tool, outcome category)
     skip_memory: bool = False
     notes: list[str] = field(default_factory=list)
 
@@ -99,6 +100,21 @@ class LocalFirstClient:
         self._clock = clock
         self.report = TurnReport()
 
+    async def prime(self, system_content: str) -> None:
+        """Process the stable prompt prefix once so the first real turn reuses the cache."""
+        if self.local is None:
+            return
+        prefix = system_content.partition("\n\n" + TIME_MARKER)[0]
+        tools = [t for t in self.settings.enabled_tools if self.registry.risk(t) is not None]
+        convo = [
+            Message("system", self._local_system(prefix, self.settings.enabled_tools)),
+            Message("user", "Hello"),
+        ]
+        try:
+            await self.local.step(convo, tools, max_tokens=20, time_left_s=120.0)
+        except Exception:  # priming is a courtesy; real turns handle failures themselves
+            return
+
     # --- the entry point --------------------------------------------------------------------
 
     async def stream(self, messages: list[Message], *, max_tokens: int) -> AsyncIterator[str]:
@@ -128,6 +144,8 @@ class LocalFirstClient:
         except Escalate as escalation:
             reason = escalation.reason
             report.category = escalation.category
+        finally:
+            report.tools = list(ctx.log)
         report.lane, report.action = 2, "cloud"
         yield self.settings.escalation_filler + " "
         async for text in self._cloud_lane(
@@ -156,7 +174,7 @@ class LocalFirstClient:
         if intent is None or intent.tool not in enabled:
             return
         report.lane, report.action, report.category = 0, "tool", intent.tool
-        outcome = await self._call(intent.tool, intent.args, ctx, enabled)
+        outcome = await self._call(intent.tool, intent.args_for(text), ctx, enabled)
         for said in drain():
             yield said + " "
         report.steps = 1
@@ -317,6 +335,7 @@ class LocalFirstClient:
         )
         native: Any = getattr(self.cloud, "stream_with_tools", None) if tools else None
         started = self._clock()
+        spoke = False
         for _ in range(self.settings.tool_max_calls_per_turn + 1):
             calls: list[ToolCall] = []
             if native is not None:
@@ -326,13 +345,17 @@ class LocalFirstClient:
                     else:
                         if report.cloud_first_token_s is None:
                             report.cloud_first_token_s = self._clock() - started
+                        spoke = spoke or bool(event.strip())
                         yield event
             else:
                 async for delta in self.cloud.stream(convo, max_tokens=max_tokens):
                     if report.cloud_first_token_s is None:
                         report.cloud_first_token_s = self._clock() - started
+                    spoke = spoke or bool(delta.strip())
                     yield delta
             if not calls:
+                if not spoke:
+                    yield self.settings.fallback_llm_error
                 return
             convo.append(Message("assistant", "", tool_calls=tuple(calls)))
             for call in calls:

@@ -82,6 +82,10 @@ class AssistantTurnRecord:
     router_s: float = 0.0
     action: str = ""
     steps: int = 0
+    stt: str = ""
+    tts: str = ""
+    brain: str = ""  # who answered: rules, local <model>, cloud <provider:model>
+    tools: str = ""  # tool names and outcomes, e.g. "read_battery:ok"
     local_first_token_s: float | None = None
     cloud_first_token_s: float | None = None
     corrections: int = 0
@@ -102,6 +106,8 @@ class AssistantTurnRecord:
             "chars_out": self.chars_out, "clauses": self.clauses, "corrections": self.corrections,
             "tier": self.tier, "route_role": self.route_role, "route_reason": self.route_reason,
             "router_s": round(self.router_s, 3), "action": self.action, "steps": self.steps,
+            "stt": self.stt, "tts": self.tts,
+            "brain": self.brain, "tools": self.tools,
             "local_first_token_s": self.local_first_token_s,
             "cloud_first_token_s": self.cloud_first_token_s,
             "decode_s": self._gap(self.t_received, self.t_end),
@@ -170,7 +176,18 @@ class ConversationPipeline:
         if record is not None:
             record.t_router = time.time()
             record.tier, record.route_role = decision.tier, decision.role
+            if decision.role != "local":
+                role = self.settings.llm_role("fast" if decision.role == "fast" else "main")
+                record.brain = f"cloud {role.provider}:{role.model}"
             record.route_reason, record.router_s = decision.reason, decision.router_s
+
+    def _brain(self, lane: int) -> str:
+        if lane == 0:
+            return "rules (no model)"
+        if lane == 1:
+            return f"local model {self.settings.local_llm_model}"
+        role = self.settings.llm_role("main")
+        return f"cloud {role.provider}:{role.model}"
 
     def _absorb_report(self, record: AssistantTurnRecord) -> TurnReport | None:
         """Lane details from a local-first client; other clients have none."""
@@ -184,6 +201,8 @@ class ConversationPipeline:
         )
         record.route_role = ("rules", "local", "cloud")[report.lane]
         record.steps = report.steps
+        record.tools = ", ".join(f"{name}:{outcome}" for name, outcome in report.tools)
+        record.brain = self._brain(report.lane)
         record.local_first_token_s = report.local_first_token_s
         record.cloud_first_token_s = report.cloud_first_token_s
         return report
@@ -299,6 +318,7 @@ class ConversationPipeline:
             utterance.end_marker_at or utterance.ended_at, time.time(),
         )  # fmt: skip
         self._current = record
+        record.stt, record.tts = self.stt.name, self.tts.name
         producer: asyncio.Task[None] | None = None
         spoken: list[str] = []
         text = ""

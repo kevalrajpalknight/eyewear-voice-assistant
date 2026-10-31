@@ -46,3 +46,13 @@ intents:
       - '^(?:please )?(?:look at|describe) (?:this|what i(?:''m| am) looking at)\b'
     reject:
       - '\b(?:yesterday|last)\b'
+  get_weather:
+    tool: get_weather
+    match:
+      - '\bweather\b'
+      - '\bforecast\b'
+      - '\bis it (?:raining|sunny|hot|cold)\b'
+    reject:
+      - '\b(?:yesterday|last (?:week|year)|history|climate)\b'
+    capture:
+      - '\b(?:in|at|for) (?P<location>[a-z]+(?: [a-z]+)??)(?: right now| today| tonight| tomorrow| now)?$'

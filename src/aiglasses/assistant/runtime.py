@@ -96,12 +96,17 @@ def describe(record: AssistantTurnRecord) -> str:
             "first_audio_s", "playback_start_s",
         )
     }  # fmt: skip
-    route = f"{record.route_role or '-'} ({record.route_reason or '-'})"
+    why = f" ({record.route_reason})" if record.route_reason else ""
+    lane = f"lane {record.tier}" if record.tier is not None else "no lane"
     return (
-        f"turn {record.turn}: {record.outcome}; {record.words_in} words in, {record.chars_out} "
-        f"characters out, {record.clauses} clauses; route {route}\n"
-        f"  end marker to sound {parts['end_to_sound_s']} = decode {parts['decode_s']} + stt "
-        f"{parts['stt_s']} + router {parts['router_s']} + llm first token "
+        f"turn {record.turn}: {record.outcome}\n"
+        f"  heard:  {record.words_in} words, speech to text {record.stt or '-'} "
+        f"in {parts['stt_s']}\n"
+        f"  brain:  {record.brain or '-'} ({lane}{why}), {record.chars_out} characters back\n"
+        f"  tools:  {record.tools or 'none called'}\n"
+        f"  voice:  {record.tts or '-'}, {record.clauses} clauses\n"
+        f"  timing: end marker to sound {parts['end_to_sound_s']} = decode {parts['decode_s']} + "
+        f"stt {parts['stt_s']} + router {parts['router_s']} + llm first token "
         f"{parts['llm_first_token_s']} + first audio {parts['first_audio_s']} + start "
         f"{parts['playback_start_s']}"
     )
@@ -155,6 +160,10 @@ async def run_assistant(
     wav: Path | None,
 ) -> None:
     holder = DeviceHolder()
+    # dry run refuses every write, even the CONFIRMED reads; open the guard only for device tools
+    device_tools = any(
+        t in assistant.enabled_tools for t in ("read_battery", "read_media_counts", "take_photo")
+    )
     memory = Memory(assistant.memory_max_turns, assistant.memory_ttl_s, assistant.memory_max_tokens)
     server: LocalServer | None = None
     local_mode = assistant.router_mode == "local_first" and not no_router and force_role is None
@@ -182,6 +191,8 @@ async def run_assistant(
         memory=memory if local_mode else None,
     )  # fmt: skip
     app = AssistantApp(pipeline, assistant)
+    if isinstance(llm, LocalFirstClient):
+        await llm.prime(pipeline._messages("hello")[0].content)
     try:
         if wav is not None:
             await app.handle(utterance_from_wav(wav))
@@ -190,7 +201,7 @@ async def run_assistant(
 
         @asynccontextmanager
         async def open_glasses(on_start):  # type: ignore[no-untyped-def]
-            async with Glasses.connect(ble) as glasses:
+            async with Glasses.connect(ble, dry_run=not device_tools) as glasses:
                 holder.bind(glasses)
                 try:
                     yield glasses.voice_requests(on_start=on_start)

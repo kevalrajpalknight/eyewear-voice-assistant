@@ -139,7 +139,7 @@ class AssistantSettings(BaseSettings):
     local_llm_max_tokens: int = Field(120, gt=0)  # per local step; one step is a short JSON
     local_llm_preload: bool = True
     local_llm_prompt_cache: bool = True
-    local_first_token_timeout_s: float = Field(2.5, gt=0)
+    local_first_token_timeout_s: float = Field(6.0, gt=0)
     models_dir: Path = Path("models")
     model_registry_path: Path = Path("src/aiglasses/assistant/models.yaml")
     model_download_budget_gb: float = Field(8.0, gt=0)
@@ -148,7 +148,9 @@ class AssistantSettings(BaseSettings):
     # Agent loop and tools
     agent_max_steps: int = Field(3, ge=1, le=10)
     agent_time_budget_s: float = Field(8.0, gt=0)
-    tools_enabled: str = "read_battery,read_media_counts,forget_all_that"
+    tools_enabled: str = (
+        "read_battery,read_media_counts,forget_all_that,get_time,get_weather,search_web"
+    )
     tool_max_calls_per_turn: int = Field(3, ge=1)
     tool_timeout_s: float = Field(10.0, gt=0)
     allow_recording_tools: bool = False
@@ -163,6 +165,11 @@ class AssistantSettings(BaseSettings):
     search_region: str = "wt-wt"
     search_cache_ttl_s: float = Field(300.0, ge=0)
     search_timeout_s: float = Field(5.0, gt=0)
+
+    # Weather (free public forecast service, no key)
+    weather_location: str = ""  # default city when none is spoken; empty = ask
+    weather_geocoding_url: str = "https://geocoding-api.open-meteo.com/v1/search"
+    weather_forecast_url: str = "https://api.open-meteo.com/v1/forecast"
 
     # Vision
     vision_provider: Literal["off", "local", "cloud"] = "off"

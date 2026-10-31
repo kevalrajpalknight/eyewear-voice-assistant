@@ -1,6 +1,6 @@
 """Cut a streaming LLM reply into speakable clauses while it is still arriving."""
 
-from aiglasses.assistant.chunker import split_clauses
+from aiglasses.assistant.chunker import ends_sentence, split_clauses
 
 
 class ClauseStream:
@@ -19,7 +19,10 @@ class ClauseStream:
             head, _, _partial = text.rpartition(" ")
             text = head  # the last word may still be growing
         clauses = split_clauses(text, self._first_max)
-        ready = clauses[self._emitted : -1]
+        finished = (
+            self._buffer[-1:].isspace() and bool(clauses) and ends_sentence(clauses[-1].split()[-1])
+        )
+        ready = clauses[self._emitted :] if finished else clauses[self._emitted : -1]
         self._emitted += len(ready)
         return ready
 

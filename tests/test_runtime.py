@@ -80,7 +80,7 @@ async def test_run_assistant_with_transcripts_on_prints_and_logs_the_text(
 
 def fake_glasses(clicks: list[VoiceUtterance]) -> SimpleNamespace:
     @asynccontextmanager
-    async def connect(settings: Settings) -> AsyncIterator[SimpleNamespace]:
+    async def connect(settings: Settings, **_: object) -> AsyncIterator[SimpleNamespace]:
         async def voice_requests(on_start: Any = None) -> AsyncIterator[VoiceUtterance]:
             for click in clicks:
                 yield click
