@@ -5,6 +5,11 @@ This is passive. Nothing is written to the glasses by this project. These steps 
 (Android 13, ColorOS/Oxygen OS), captured **without adb** using the phone's own bug report. Items marked "(check)" are
 general Android or Samsung behaviour not yet verified on your exact build; if one differs, tell me what you see.
 
+**Decision (2026-10-31): no further OnePlus Bluetooth-capture attempts for now.** The log stayed empty across several bug reports,
+including after toggling Bluetooth. The OnePlus Nord CE 2 stays available as a backup capture device, to be used only after the APK
+analysis (docs/APK_ANALYSIS.md) produces hypotheses to confirm, or if a `.cfa` larger than 16 bytes shows up in the phone's file
+manager. The Samsung Galaxy S24 FE is **not available**; the Samsung notes below are kept only for reference.
+
 **Status of the first attempt (2026-10-31): the bug report contained an empty Bluetooth log (a valid header and 0 packets), so
 nothing could be analyzed.** Its logcat covered only 09:37 to 10:08, and the app wrote no log lines of its own. The fix to try
 is the "Bluetooth off before the report" step in section 4, tested first with the smoke test there.

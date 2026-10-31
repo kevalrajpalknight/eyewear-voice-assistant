@@ -11,7 +11,7 @@
 | Battery | UNVERIFIED | | Needs captured command |
 | Photo / video | UNVERIFIED | | Needs capture (Phase 3) |
 | Media download | UNVERIFIED | | Needs Wi-Fi hotspot discovery (Phase 4) |
-| Wi-Fi link | INFERRED | Phone bug report: the app connects to the glasses over **Wi-Fi Direct** (phone is group owner, glasses join as client) | Not hotspot/SoftAP as first assumed; trigger and PC-side route (Wi-Fi Direct API) untested |
+| Wi-Fi link | INFERRED | Phone bug report: the app connects to the glasses over **Wi-Fi Direct** (phone is group owner, glasses join as client) | Not hotspot/SoftAP as first assumed; trigger and PC-side route untested. This PC's adapter supports Wi-Fi Direct device, group owner and client (read-only check) |
 | Audio endpoints | CONFIRMED | `aiglasses audio devices` after Windows pairing | WASAPI: `Headphones (AIMB-G2_2324)` 48 kHz stereo (A2DP), `Headset (AIMB-G2_2324)` 16 kHz mono (HFP) |
 | Audio playback | INFERRED | `aiglasses audio play` opened the A2DP stream and finished without error | Audible result not yet confirmed by the user; HFP and A2DP cannot run at the same time |
 | Audio record | UNVERIFIED | `aiglasses audio record` recorded 5.0 s at 16 kHz but the signal was silent (peak 0.0006), likely because nobody spoke | Needs a retest while speaking; HFP is low bandwidth |
