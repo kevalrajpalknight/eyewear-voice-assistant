@@ -12,11 +12,25 @@ uv run aiglasses info            # device name / hardware / firmware (read-only)
 uv run aiglasses gatt-dump       # logs/gatt_dump.json
 uv run aiglasses listen --duration 60
 uv run aiglasses capabilities    # what is CONFIRMED on this unit
+uv run aiglasses photo           # ONE photo; asks you to confirm you are watching (you type the answer)
+uv run aiglasses ai-voice record # read-only: hold the rear click, saves a WAV under captures/
 uv run aiglasses voice candidates   # offline: decode the logged voice bursts to logs/decode_candidates/
 uv run aiglasses capture analyze captures\bugreport.zip   # Phase 3, see docs/CAPTURE.md
 ```
 
 Turn Bluetooth on in Windows and make sure the glasses are awake and not connected to a phone.
+
+## Library
+
+```python
+async with Glasses.connect(Settings(), dry_run=False) as g:
+    print(await g.read_battery(), await g.read_device_info(), await g.read_media_counts())
+    async for event in g.events():            # typed 0x73 events and the 0x59 voice stream
+        print(event.kind, event.fields)
+    # await g.take_photo(confirm=True)        # state-changing: only when the person present agrees
+```
+
+Every request goes through WriteGuard; only the three confirmed reads and the confirmed photo are sendable.
 
 ## Development
 

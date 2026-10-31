@@ -9,6 +9,7 @@
 | Voice stream decoding | INFERRED | `aiglasses voice candidates` uses the app's exact settings (16 kHz mono, 40-byte Opus packets): 0 errors | Not yet confirmed by listening; very low level |
 | Device info | CONFIRMED | GATT 0x180A read, and `aiglasses probe device_info_read` (reply gives the same firmware and hardware strings) | Serial empty; Wi-Fi version strings empty in the reply; no standard battery service |
 | Battery | CONFIRMED | `aiglasses probe battery_read`: reply `bc4202002b706400` = 100 percent, not charging, 3 runs, user confirmed | Read-only request; not to be repeated needlessly |
+| Media counts | CONFIRMED | `aiglasses probe media_counts_read` (reads A, B, C in the clean test): photos, videos and audio recordings; also pushed as a 0x73 type-1 event after a photo | Counts change with physical button clicks too, so always read them before a state-changing test |
 | Photo | CONFIRMED | Clean test 2026-10-31: read 6, photo command, read 7; one shutter; reply and count event | One clean trial (n = 1); the earlier 4 to 6 jump is unexplained; the reply `02 01 01 ff ff` is inferred to mean accepted |
 | Video | INFERRED | Start command read from the app (`02 01 02`); it may toggle start and stop | Only with the user present to stop it with the front button |
 | Media download | INFERRED | App code: plain HTTP on port 80, `/files/media.config` then `/files/<name>` | Needs Wi-Fi Direct up first; plan in docs/PHASE4_PLAN.md |
@@ -18,4 +19,6 @@
 | Audio record | UNVERIFIED | `aiglasses audio record` recorded 5.0 s at 16 kHz but the signal was silent (peak 0.0006), likely because nobody spoke | Needs a retest while speaking; HFP is low bandwidth |
 | Audio-only recording on the glasses ("Recording" in the app) | INFERRED | Start command read from the app (02 01 08) | No stop command exists; only test with the user present to stop it with the front button |
 | AI translation | UNVERIFIED | Listed in the app's Function settings | Probably runs in the phone app using the voice stream; needs capture |
-| Events (photo counts, temperature, volume, AI voice start/end) | INFERRED | Event types read from the app and matched to our captures (touch-pad volume is visible over BLE) | Promote after decoding live; battery (type 5) and IP (type 8) events not yet seen |
+| Events (photo counts, temperature, volume, AI voice start/end, battery) | INFERRED | `Glasses.events()` decodes them; unit-tested on one recorded frame per type from our traces; media counts, battery and temperature were seen live | Promote per type after a live run with a known trigger; IP (type 8) not yet seen |
+| AI voice WAV (`ai-voice record`) | UNVERIFIED | Read-only command decodes a rear-click burst with the app's settings | Codec is marked CONFIRMED only after the user reports the audio is intelligible |
+| Wi-Fi Direct (PC side) | UNVERIFIED | Interface, fake, preflight checks and rollback are written and unit-tested | No real radio code; winrt unpinned until 2026-11-07; Step 2 not approved |
