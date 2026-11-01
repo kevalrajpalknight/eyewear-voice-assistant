@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EVA Eyewear Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Plan: a lab notebook for a hardware-and-inference project. Cool slate ink on pale steel,
+   one teal accent for structure, amber reserved for latency and warnings.
+   Layout: sticky top bar with section tabs, one 880px reading column, wide data blocks scroll inside themselves. */
+:root{
+  --bg:#f2f5f7; --surface:#ffffff; --ink:#14212b; --muted:#566673; --line:#d5dde3;
+  --accent:#0b7a89; --accent-soft:#d8eef1; --warn:#c2571b; --warn-soft:#fbe6d8; --good:#22794a; --good-soft:#dcf1e5;
+  --display:"IBM Plex Sans Condensed","Arial Narrow",sans-serif; --body:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e151b; --surface:#16202a; --ink:#e6edf2; --muted:#93a4b1; --line:#2a3946;
+  --accent:#43c3d2; --accent-soft:#12353b; --warn:#f08a4b; --warn-soft:#3b2417; --good:#59c58a; --good-soft:#143324; color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#0e151b; --surface:#16202a; --ink:#e6edf2; --muted:#93a4b1; --line:#2a3946;
+  --accent:#43c3d2; --accent-soft:#12353b; --warn:#f08a4b; --warn-soft:#3b2417; --good:#59c58a; --good-soft:#143324; color-scheme:dark;}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.6 var(--body)}
+a{color:var(--accent)}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+header.top{position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+.bar{max-width:1080px;margin:0 auto;padding:10px 16px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.brand{font:700 20px var(--display);letter-spacing:.02em;margin-right:auto}
+.brand small{display:block;font:400 12px var(--mono);color:var(--muted);letter-spacing:0}
+nav{display:flex;gap:4px;flex-wrap:wrap}
+nav button{font:500 14px var(--body);border:1px solid transparent;background:none;color:var(--muted);padding:6px 11px;border-radius:6px;cursor:pointer}
+nav button:hover{color:var(--ink);background:var(--accent-soft)}
+nav button[aria-selected="true"]{color:var(--ink);background:var(--accent-soft);border-color:var(--accent)}
+main{max-width:1080px;margin:0 auto;padding:28px 16px 80px}
+section.view{display:none}
+section.view.on{display:block}
+h1{font:700 40px/1.1 var(--display);margin:0 0 10px;text-wrap:balance}
+h2{font:600 26px/1.2 var(--display);margin:34px 0 10px;text-wrap:balance}
+h3{font:600 18px var(--display);margin:0 0 6px}
+p{max-width:68ch;margin:0 0 12px}
+.lede{font-size:18px;color:var(--muted);max-width:62ch}
+.mono{font-family:var(--mono)}
+.muted{color:var(--muted)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:22px 0}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px}
+.tile b{display:block;font:600 28px var(--display);font-variant-numeric:tabular-nums}
+.tile span{font-size:13px;color:var(--muted)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px;margin:14px 0}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.pill{display:inline-block;font:500 12px var(--mono);padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent)}
+.pill.warn{background:var(--warn-soft);color:var(--warn);border-color:var(--warn)}
+.pill.good{background:var(--good-soft);color:var(--good);border-color:var(--good)}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:600 13px var(--mono);color:var(--muted);white-space:nowrap}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.chip{font:500 13px var(--body);border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:5px 11px;border-radius:999px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.flow{display:flex;gap:0;flex-wrap:wrap;margin:14px 0}
+.node{flex:1 1 118px;min-width:118px;background:var(--surface);border:1px solid var(--line);padding:10px;cursor:pointer;text-align:left;font:inherit;color:inherit;border-radius:0}
+.node:first-child{border-radius:8px 0 0 8px}.node:last-child{border-radius:0 8px 8px 0}
+.node b{display:block;font:600 14px var(--display)}
+.node span{font:12px var(--mono);color:var(--muted)}
+.node[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent)}
+.detail{border-left:4px solid var(--accent);padding:6px 14px;margin:6px 0 12px;background:var(--surface);border-radius:0 8px 8px 0}
+.rows{display:grid;gap:8px;margin:12px 0}
+.row{display:grid;grid-template-columns:150px 1fr 70px;gap:10px;align-items:center;font-size:14px}
+.row .label{font:13px var(--mono);color:var(--muted)}
+.track{background:var(--bg);border:1px solid var(--line);border-radius:4px;height:22px;position:relative;overflow:hidden}
+.fill{position:absolute;left:0;top:0;bottom:0;background:var(--accent);transition:width .35s}
+.fill.warn{background:var(--warn)}.fill.good{background:var(--good)}
+.fill.mark{background:transparent;border-right:3px solid var(--ink)}
+.val{font:13px var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+details{background:var(--surface);border:1px solid var(--line);border-radius:8px;margin:10px 0}
+summary{cursor:pointer;padding:12px 16px;font:600 17px var(--display);list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"+";display:inline-block;width:20px;color:var(--accent);font-family:var(--mono)}
+details[open] summary::before{content:"-"}
+details .body{padding:0 16px 14px;display:grid;gap:10px}
+.kv{display:grid;grid-template-columns:90px 1fr;gap:10px}
+.kv b{font:600 12px var(--mono);color:var(--accent);text-transform:uppercase;padding-top:3px}
+code{font-family:var(--mono);font-size:.9em;background:var(--accent-soft);padding:1px 5px;border-radius:4px}
+.ext{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.ext button{text-align:left;font:inherit;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px;cursor:pointer}
+.ext button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.ext b{display:block;font:600 15px var(--display)}
+.ext span{font-size:13px;color:var(--muted)}
+.diagram{display:grid;gap:8px}
+.lane{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch}
+.box{flex:1 1 140px;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:10px;font-size:14px}
+.box b{display:block;font:600 14px var(--display)}
+.box.future{border-style:dashed;color:var(--muted)}
+.arrow{align-self:center;font:500 13px var(--mono);color:var(--muted)}
+footer{margin-top:50px;color:var(--muted);font-size:13px}
+@media (max-width:560px){h1{font-size:30px}.row{grid-template-columns:96px 1fr 58px}.kv{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){.fill{transition:none}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="bar">
+    <div class="brand">EVA Eyewear Assistant<small>local-first voice agent for smart glasses</small></div>
+    <nav id="tabs" aria-label="Sections"></nav>
+  </div>
+</header>
+<main>
+
+<section class="view" id="overview">
+  <h1>A voice assistant that lives in your glasses and thinks on your own hardware</h1>
+  <p class="lede">EVA listens through a wake phrase, answers in a natural voice, looks through the glasses camera, searches the web and checks the weather. Most of the thinking runs on a CPU-only PC. The cloud model is called only when a request really needs it.</p>
+  <div class="tiles">
+    <div class="tile"><b>1.0 s</b><span>first words of a simple answer (local model)</span></div>
+    <div class="tile"><b>3.0 s</b><span>from the end of speech to sound, simple turn</span></div>
+    <div class="tile"><b>16 / 16</b><span>correct tool choices after the fix (was 8 / 16)</span></div>
+    <div class="tile"><b>~12 tok/s</b><span>local generation, 4 GB model, 4 CPU threads</span></div>
+    <div class="tile"><b>518</b><span>automated tests, strict typing, linted</span></div>
+    <div class="tile"><b>-2,100</b><span>lines deleted after finding a better route</span></div>
+  </div>
+  <h2>What it is</h2>
+  <p>The glasses (an AIMB-G2 unit) have a camera, microphones, speakers and a Bluetooth link. The vendor app works only with its own cloud. This project talks to the glasses directly: it decodes their Bluetooth protocol, streams the wearer's voice, takes photos, and plugs the result into an AI agent built with LangChain.</p>
+  <p>Everything is designed to be extended: new abilities are added as tools, and the same code can later sit behind a phone and a server.</p>
+  <h2>Why it is built this way</h2>
+  <div class="grid2">
+    <div class="panel"><h3>Local first</h3><p>Privacy, cost and speed. Pictures never leave the PC. Simple questions never touch the cloud.</p></div>
+    <div class="panel"><h3>Safe by construction</h3><p>Only approved Bluetooth commands can be sent. Anything that could update, erase or reset the glasses is blocked in code.</p></div>
+    <div class="panel"><h3>Measured, not guessed</h3><p>Every claim on these pages comes from a run on the real machine. Where something was not measured, it says so.</p></div>
+    <div class="panel"><h3>Small, auditable code</h3><p>Eight packages, one place for the AI framework, ADRs for each major decision, a test that guards the boundaries.</p></div>
+  </div>
+</section>
+
+<section class="view" id="architecture">
+  <h1>How a request flows</h1>
+  <p class="lede">Click a stage to see what it does and what it costs. The stage times come from the real turn logs.</p>
+  <div class="flow" id="flow" role="group" aria-label="Pipeline stages"></div>
+  <div class="detail" id="flowDetail"></div>
+
+  <h2>Where time goes in a turn</h2>
+  <div class="chips" id="scenarioChips" role="group" aria-label="Scenario"></div>
+  <div class="rows" id="scenarioRows"></div>
+  <p class="muted" id="scenarioNote"></p>
+
+  <h2>Today and the planned shape</h2>
+  <div class="panel">
+    <div class="diagram">
+      <div class="lane"><div class="box"><b>Glasses</b>mic, camera, speaker</div><span class="arrow">BLE</span><div class="box"><b>This PC (now)</b>BLE link, agent, speech models, local LLM</div><span class="arrow">A2DP audio</span><div class="box"><b>Glasses speaker</b></div></div>
+      <div class="lane"><div class="box future"><b>Glasses</b></div><span class="arrow">BLE</span><div class="box future"><b>Phone relay</b>thin Bluetooth bridge, foreground service</div><span class="arrow">WebSocket over VPN</span><div class="box future"><b>Server</b>same agent code, 8 or 16 GB</div><span class="arrow">audio back</span><div class="box future"><b>Phone, then glasses</b></div></div>
+    </div>
+    <p class="muted">The lower lane is planned, not built. The Bluetooth layer is already an interface, so a remote transport can replace the local one without touching the agent.</p>
+  </div>
+
+  <h2>Code map</h2>
+  <div class="scroll"><table id="codeMap"></table></div>
+</section>
+
+<section class="view" id="models">
+  <h1>Models and measurements</h1>
+  <p class="lede">Hardware: a Windows PC, 8 logical cores, 12 GB RAM, no GPU. Free memory during development was often only 2 to 5 GB, which shaped most choices.</p>
+  <div class="chips" id="roleChips" role="group" aria-label="Filter models by role"></div>
+  <div class="scroll"><table id="modelTable"></table></div>
+
+  <h2>Local model speed by thread count</h2>
+  <p>Seconds to the first token of a ~300-token prompt, with two other CPU-heavy processes running (like speech recognition and synthesis would be). More threads did not help.</p>
+  <div class="chips" id="threadChips" role="group" aria-label="Prompt state"></div>
+  <div class="rows" id="threadRows"></div>
+  <p class="muted">Generation speed stayed at 9 to 11.5 tokens per second for every setting: decoding is limited by memory bandwidth, not by cores.</p>
+
+  <h2>Tool choice accuracy (16 test requests)</h2>
+  <div class="rows" id="accRows"></div>
+  <p class="muted">Test: a real local model, fake tools, requests such as "do I need an umbrella in Mumbai" or "look at this packet and tell me if it is healthy". A case counts as correct only when the right tools, and no others, were called.</p>
+</section>
+
+<section class="view" id="optimizations">
+  <h1>What made it faster and more reliable</h1>
+  <div class="grid2" id="optCards"></div>
+</section>
+
+<section class="view" id="challenges">
+  <h1>Challenges and how they were solved</h1>
+  <p class="lede">Each card: the problem, what caused it, the fix and the measured result.</p>
+  <div id="challengeList"></div>
+</section>
+
+<section class="view" id="features">
+  <h1>Features and what can be stacked next</h1>
+  <h2>Working today</h2>
+  <div class="grid2">
+    <div class="panel"><h3>Voice</h3><ul><li>Always listening with a wake phrase, sleeps after 3 s of quiet</li><li>Speak over it to interrupt</li><li>Ignores its own echo, background sounds and "um"</li><li>Natural voice with pauses between sentences</li></ul></div>
+    <div class="panel"><h3>Agent</h3><ul><li>Instant rules for time, date, camera, weather, thanks</li><li>Local model for everything else</li><li>Cloud model for research and when the local one fails</li><li>Narrates each step ("Let me look…") and says when it is still working</li></ul></div>
+    <div class="panel"><h3>Tools</h3><ul><li>Look through the camera and describe it (local vision)</li><li>Web search with a Wikipedia fallback</li><li>Weather, time, battery, photo count, take a photo</li><li>Multi-step plans: look, then search, then answer</li></ul></div>
+    <div class="panel"><h3>Engineering</h3><ul><li>Per-stage timing in every turn log, colour-coded by who answered</li><li>Offline <code>diagnose</code> that traces a phrase without sending anything</li><li>Config check, pinned dependencies, ADRs</li><li>Write guard with a hard "never send" list</li></ul></div>
+  </div>
+  <h2>Extension map</h2>
+  <p>Click an idea to see where it plugs in and how big the job is.</p>
+  <div class="ext" id="extList" role="group" aria-label="Extension ideas"></div>
+  <div class="detail" id="extDetail"></div>
+  <h2>Honest limits</h2>
+  <ul>
+    <li>The glasses send a 384 by 288 picture by default, so small print is hard to read. A larger size is one approved setting away and still to be tested.</li>
+    <li>A 2 billion parameter model is weak at deciding when to use tools. The fix (forced tool plans from word cues) is reliable for the cases it covers, not for open-ended requests.</li>
+    <li>Always-on listening uses the PC microphone. The glasses' own microphone only streams after a button press or the firmware wake phrase.</li>
+    <li>Latency for tool turns (10 to 19 s) is long. Narration covers the wait; shortening it is the next piece of work.</li>
+  </ul>
+</section>
+
+<footer>All numbers come from runs on the development machine in October and November 2026. Source: the project repository, docs folder (ADRs, protocol notes, configuration).</footer>
+</main>
+
+<script>
+const $=(s,e=document)=>e.querySelector(s), el=(t,c,h)=>{const n=document.createElement(t);if(c)n.className=c;if(h!==undefined)n.innerHTML=h;return n};
+const TABS=[["overview","Overview"],["architecture","Flow"],["models","Models and metrics"],["optimizations","Optimizations"],["challenges","Challenges"],["features","Features and roadmap"]];
+
+/* ---------- tabs with a plain #hash ---------- */
+const tabs=$("#tabs");
+TABS.forEach(([id,label])=>{const b=el("button","",label);b.dataset.id=id;b.setAttribute("role","tab");b.onclick=()=>show(id);tabs.append(b)});
+function show(id){
+  if(!TABS.some(t=>t[0]===id)) id="overview";
+  document.querySelectorAll("section.view").forEach(s=>s.classList.toggle("on",s.id===id));
+  tabs.querySelectorAll("button").forEach(b=>b.setAttribute("aria-selected",String(b.dataset.id===id)));
+  if(location.hash!=="#"+id) history.replaceState(null,"","#"+id);
+  window.scrollTo(0,0);
+}
+addEventListener("hashchange",()=>show(location.hash.slice(1)));
+
+/* ---------- pipeline ---------- */
+const STAGES=[
+ ["Glasses mic","BLE voice","Rear click or wake phrase starts a voice stream. Opus audio arrives as 40-byte packets; the decoder was verified on 289 of 289 captured packets."],
+ ["Detect speech","energy VAD","An adaptive detector finds where a request starts and ends (0.8 s of quiet ends it). A guard ignores the assistant's own voice and sounds like \"um\"."],
+ ["Speech to text","0.1 to 0.45 s","NVIDIA Parakeet TDT v2 (int8) on CPU. A wake phrase gate decides whether the request is for the assistant."],
+ ["Rules","instant","Time, date, camera, weather, thanks and similar phrases are answered by pattern rules with no model call. This path is exact and free."],
+ ["Agent","1.0 s to first words","A LangChain agent. The local model answers simple things and calls tools; word cues can force the right first tool. The cloud model takes over for research or when the local one fails."],
+ ["Tools","1 to 15 s","Camera look (photo over Bluetooth, local vision model), web search, weather, device status. Each call is checked against risk rules before it runs."],
+ ["Voice out","0.05 to 0.3 s","Piper (alba voice) turns each sentence into audio as soon as it is complete. Narration lines are flushed immediately so there is no silent wait."]
+];
+const flow=$("#flow"), detail=$("#flowDetail");
+STAGES.forEach((s,i)=>{const b=el("button","node",`<b>${s[0]}</b><span>${s[1]}</span>`);b.type="button";b.setAttribute("aria-pressed",i===4);b.onclick=()=>pickStage(i);flow.append(b)});
+function pickStage(i){flow.querySelectorAll("button").forEach((b,j)=>b.setAttribute("aria-pressed",j===i));detail.innerHTML=`<b>${STAGES[i][0]}.</b> ${STAGES[i][2]}`}
+pickStage(4);
+
+const SCEN={
+ simple:{label:"Simple question",rows:[["speech to text",0.15],["LLM first token",1.03],["first audio",1.17],["playback start",0.66]],total:3.01,first:null,note:"Measured live: \"why is the sky blue\". The four stages add up to the 3.01 s from end of speech to sound."},
+ tool:{label:"One tool (weather, search)",rows:[["first words",5.0],["total",12.5]],total:12.5,first:5.0,note:"Measured with the evaluation harness (fake tools), five runs: first text 4.5 to 5.8 s, total 10 to 14 s. Narration now plays before the first model call, which should move the first words earlier; not yet re-measured."},
+ multi:{label:"Look, then search",rows:[["first words",3.7],["total",17.5]],total:17.5,first:3.7,note:"Measured: first text 3.6 to 3.9 s, total 15.8 to 19.5 s across three runs. Real search adds up to 6 s on top of the fake tool."}
+};
+const chips=$("#scenarioChips"), srows=$("#scenarioRows"), snote=$("#scenarioNote");
+Object.entries(SCEN).forEach(([k,v],i)=>{const b=el("button","chip",v.label);b.type="button";b.setAttribute("aria-pressed",i===0);b.onclick=()=>drawScenario(k);b.dataset.k=k;chips.append(b)});
+function drawScenario(k){
+  chips.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.k===k));
+  const s=SCEN[k],max=20;srows.innerHTML="";
+  let acc=0;
+  s.rows.forEach(([name,sec],i)=>{
+    const cum=k==="simple";const start=cum?acc:0;if(cum)acc+=sec;
+    const r=el("div","row",`<span class="label">${name}</span><div class="track"><div class="fill ${name==="total"?"warn":""}" style="left:${start/max*100}%;width:${sec/max*100}%"></div></div><span class="val">${sec.toFixed(2)} s</span>`);
+    srows.append(r)});
+  const scale=el("div","row",`<span class="label">scale</span><div class="track" style="height:10px"><div class="fill good" style="width:100%;opacity:.25"></div></div><span class="val">${max} s</span>`);
+  srows.append(scale);snote.textContent=s.note;
+}
+drawScenario("simple");
+
+const CODE=[["agent/","Brain: AgentClient, model routing middleware, tool adapters, tool cues (hints.yaml), turn state"],["conversation/","Turn pipeline, runner and logs, memory, intents, escalation rules, persona, app loop"],["speech/","STT and TTS engines, factory, clean-up, chunking, speaker worker process"],["listening/","Microphone worker, voice detector, wake phrases, echo guard, filters"],["llm/","Cloud chat models, managed local llama-server, model registry and downloads"],["tools/","Device, memory, search, vision, time and weather tools; registry that enforces rules"],["run/","Start-up, config check, offline diagnosis, benchmark sessions"],["testing/","Fakes for tests and diagnosis"]];
+$("#codeMap").innerHTML="<tr><th>Package</th><th>Responsibility</th></tr>"+CODE.map(c=>`<tr><td class="mono">${c[0]}</td><td>${c[1]}</td></tr>`).join("");
+
+/* ---------- models ---------- */
+const MODELS=[
+ ["stt","Parakeet TDT v2 (int8)","Speech to text","Chosen","0.10 to 0.45 s per request on CPU, no network. The default after two benchmark rounds on recorded sentences."],
+ ["stt","Moonshine, faster-whisper","Speech to text","Evaluated","Compared in the same two benchmark rounds; Parakeet became the default."],
+ ["tts","Piper en_GB alba (medium)","Text to speech","Chosen","273 MB, first audio about 0.19 s, real-time factor 0.05. Chosen by listening after a bake-off."],
+ ["tts","Kokoro 82M (onnx)","Text to speech","Rejected","First audio about 1.7 s, real-time factor 0.47 to 0.52, 339 to 675 MB. Kept as a fallback engine."],
+ ["llm","Gemma 4 E2B, Q4_K_M","Chat, tools and vision","Chosen","3.1 GB plus 1.0 GB image projector. 11 to 13 tokens per second. The only registered model that also reads pictures."],
+ ["llm","Qwen3 1.7B, Q4_K_M","Chat","Rejected","Very fast (1 to 1.5 s per answer) but called a tool in 0 of 11 tool cases: 5 of 16 correct overall."],
+ ["llm","GPT-5 nano (cloud)","Escalation","Chosen","Used only for research requests, when the local model fails, or when the agent asks for a stronger model. Magenta in the logs."],
+ ["vision","Gemma 4 E2B with projector","Describe a picture","Chosen","4 to 5 s per picture at 384 by 288. Names the object; cannot read small print at that size."]
+];
+const ROLES=[["all","All"],["stt","Speech in"],["tts","Speech out"],["llm","Language"],["vision","Vision"]];
+const rc=$("#roleChips");ROLES.forEach(([k,l],i)=>{const b=el("button","chip",l);b.type="button";b.dataset.k=k;b.setAttribute("aria-pressed",i===0);b.onclick=()=>drawModels(k);rc.append(b)});
+function drawModels(k){
+  rc.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.k===k));
+  const rows=MODELS.filter(m=>k==="all"||m[0]===k);
+  $("#modelTable").innerHTML="<tr><th>Model</th><th>Job</th><th>Verdict</th><th>Evidence</th></tr>"+rows.map(m=>`<tr><td><b>${m[1]}</b></td><td>${m[2]}</td><td><span class="pill ${m[3]==="Chosen"?"good":m[3]==="Rejected"?"warn":""}">${m[3]}</span></td><td>${m[4]}</td></tr>`).join("");
+}
+drawModels("all");
+
+const THREADS={cold:{label:"Cold prompt (nothing cached)",data:[["2 threads",6.14],["4 threads",4.68],["6 threads",4.98]],max:7},warm:{label:"Warm prompt (prefix cached)",data:[["2 threads",0.55],["4 threads",0.43],["6 threads",0.52]],max:1}};
+const tc=$("#threadChips"),tr=$("#threadRows");
+Object.entries(THREADS).forEach(([k,v],i)=>{const b=el("button","chip",v.label);b.type="button";b.dataset.k=k;b.setAttribute("aria-pressed",i===0);b.onclick=()=>drawThreads(k);tc.append(b)});
+function drawThreads(k){tc.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.k===k));const v=THREADS[k];tr.innerHTML="";const best=Math.min(...v.data.map(d=>d[1]));
+  v.data.forEach(([n,s])=>tr.append(el("div","row",`<span class="label">${n}</span><div class="track"><div class="fill ${s===best?"good":""}" style="width:${s/v.max*100}%"></div></div><span class="val">${s.toFixed(2)} s</span>`)))}
+drawThreads("cold");
+
+const ACC=[["Gemma, model alone",8,"warn","Skipped the camera and search; once wrote a tool call as spoken text."],["Qwen3 1.7B",5,"warn","Said \"I'll check\" but never called a tool."],["Gemma + word cues",16,"good","Cues force the first tool; later steps stay free."]];
+$("#accRows").innerHTML=ACC.map(a=>`<div class="row"><span class="label">${a[0]}</span><div class="track"><div class="fill ${a[2]}" style="width:${a[1]/16*100}%"></div></div><span class="val">${a[1]} / 16</span></div><div class="muted" style="margin:-4px 0 4px 160px;font-size:13px">${a[3]}</div>`).join("");
+
+/* ---------- optimizations ---------- */
+const OPT=[
+ ["Switched off hidden thinking","Gemma sometimes spent all 120 tokens on invisible reasoning, then answered nothing: about 10 s lost, and the turn fell back to the cloud.","The server flag did not stop it. A per-request field (thinking budget 0) did.","35 tokens and about 3 s instead of 120 tokens and 10 s."],
+ ["Prompt cache by design","The system prompt is about 650 tokens. Re-reading it every turn costs 5 to 8 s.","Keep the start of the prompt identical every turn, move the changing time line out of it, and warm the cache at start-up.","0.3 to 0.5 s for the cached part."],
+ ["Streaming instead of one JSON block","Earlier design made the model answer in JSON, so nothing could be spoken until it finished.","Native tool calling streams plain text. First words start while the rest is written.","First words about 1.0 s; was 4 to 6 s."],
+ ["Speak narration at once","A 2-word line like \"Searching now.\" was held back by the sentence merger until more text came, so it played after a 16 s search.","A flush marker that the chunker obeys, and narration that plays while a tool runs.","No silent waits; a \"still working\" line after 6 s."],
+ ["Forced tool plans from word cues","The small model skipped tools it should have called.","A data file of cues. When matched, the next model step is offered only that tool and must call it. A look-then-search plan is a chain.","8 of 16 to 16 of 16 correct."],
+ ["Right thread count and timeouts","6 threads were slower than 4 when other work was running. A 5 s HTTP read limit killed every cold prompt.","4 threads, a 60 s read limit with the agent's own step budget on top, and 30 s for tools that take a photo.","Cold prompt 4.7 s instead of 6.1 s; no false failures."],
+ ["Photos over Bluetooth, not Wi-Fi","Wi-Fi Direct needed a custom helper, a second Python environment and never found the glasses.","Read the vendor app's code: AI pictures travel over Bluetooth as small JPEG chunks.","A picture in 1.1 to 2.3 s; 2,100 lines removed."],
+ ["Short, safe sentences","Long spoken answers and half sentences sounded robotic.","Whole-sentence chunks, pauses between sentences, soft length limits that never stop mid-sentence.","Piper runs at 0.05 real-time factor, so speech stays ahead of playback."]
+];
+$("#optCards").innerHTML=OPT.map(o=>`<div class="panel"><h3>${o[0]}</h3><p class="muted"><b>Problem.</b> ${o[1]}</p><p><b>Fix.</b> ${o[2]}</p><p><span class="pill good">${o[3]}</span></p></div>`).join("");
+
+/* ---------- challenges ---------- */
+const CH=[
+ ["Talking to hardware with no documentation","The glasses use a private Bluetooth protocol.","Frames are a start byte, command, length and a CRC16-MODBUS checksum. Found by capturing the vendor app, then reading its decompiled code.","A typed protocol layer. The voice decoder matches 289 of 289 captured packets. Commands are CONFIRMED, INFERRED or blocked, and only confirmed or explicitly approved bytes can be sent."],
+ ["Never brick the glasses","A wrong byte could start a firmware update, delete files or reset the unit.","A write guard allows only listed or session-approved frames, never repeats an approved one unless told, and refuses a hard list: updates, deletes, factory reset, restart, end-of-import.","Every write is checked against the guard and logged to an audit file; new frames were sent only after exact-byte approval."],
+ ["A dead end that taught the best route","Full-size photos use Wi-Fi Direct. Weeks went into a helper, an isolated environment and supervised runs.","The glasses never appeared as a peer. Reading the vendor app showed that its AI features never use Wi-Fi: they fetch a small thumbnail over Bluetooth.","The Wi-Fi stack was deleted. Pictures now take 1 to 2 s."],
+ ["Frames split across notifications","Each 1,024-byte picture chunk arrives as a header notification plus raw continuation bytes, so the parser saw garbage.","Reassemble by the declared length, check the CRC, drop a half frame after 1 s of silence.","Pictures of 11 to 20 chunks arrive intact."],
+ ["A model that stalled in its head","Some local answers took 16 s and timed out.","Found by streaming raw chunks: the tokens were reasoning, not an answer.","Fixed per request; local answers became reliable."],
+ ["Small models and tools","A 2B model neither picks tools reliably nor writes valid tool syntax.","Word cues force the first tool. A guard catches tool syntax written as speech (three formats seen) and repeats the turn on the cloud model. llama-server ignored an object-style tool choice, so the single tool is offered and required instead.","16 of 16 on the evaluation set."],
+ ["Hearing its own voice","With speakers on, the assistant transcribed itself and interrupted itself in a loop.","A text guard drops speech that is mostly words it said in the last 30 s. The barge-in bar adapts to the measured echo level and ignores the first 1.2 s of speech.","Self-interruptions stopped in the live runs; speaking over it works when you are clearly louder than the echo."],
+ ["An accent that breaks a wake word","\"EVA\" was heard as Shiva, Emma, Favour, Hei Iwa and more.","Wider accepted spellings, a short call ending with the name also wakes it, and a training command that learns your spellings, with a never-list of ordinary words after one bad result (\"how\", \"you\").","Catches more variants, but misses remain. A true acoustic keyword spotter is the planned next step."],
+ ["Keeping a 12 GB PC alive","The model, speech engines and a browser compete for memory; starts sometimes took minutes.","Measured free memory before runs, trimmed context, one model for chat and vision, a model registry with sizes and checksums.","Start-up took 14 to 70 s; twice it failed to start within two minutes when free memory was very low."],
+ ["Dependency and change discipline","Fast-moving AI libraries break builds.","Every package is pinned, at least 14 days old, recorded in an ADR. A test forbids importing the agent framework outside two folders. A global date cutoff once downgraded unrelated packages, so new packages are pinned by exact version.","Locks only ever gained packages; 12 ADRs."]
+];
+$("#challengeList").innerHTML=CH.map((c,i)=>`<details${i===0?" open":""}><summary>${c[0]}</summary><div class="body"><div class="kv"><b>Problem</b><span>${c[1]}</span></div><div class="kv"><b>Cause and fix</b><span>${c[2]}</span></div><div class="kv"><b>Result</b><span>${c[3]}</span></div></div></details>`).join("");
+
+/* ---------- extension map ---------- */
+const EXT=[
+ ["MCP servers and APIs","Add as tools","Use the LangChain MCP adapter to load tools from any MCP server. Give each a risk class so the existing rules (untrusted text, \"you must have asked\") apply.","Small: one adapter module and a config list."],
+ ["Phone and server mode","Swap the Bluetooth layer","A phone app relays raw Bluetooth over a WebSocket. A remote transport implements the same interface, so the agent and guard run unchanged on a server.","Large: an Android foreground service, auth and a VPN."],
+ ["Persistent memory","Memory interface","Replace the in-process memory with a database behind the same interface. Kept out until it is needed.","Medium."],
+ ["Vector search over notes","New tool","A retrieval tool backed by a vector store, tainted like web results.","Medium."],
+ ["Acoustic wake word","Listening package","A keyword spotter (sherpa-onnx has an open-vocabulary one) in front of speech to text, to cut accent misses and idle cost.","Medium; needs trials on your voice."],
+ ["Bigger pictures","One approved setting","Raise the glasses' thumbnail size so packaging text is readable; the code path and tests exist.","Small, pending a hardware test."],
+ ["Faster brain","Model registry","A smaller chat model plus Gemma for pictures only, or a GPU server. The evaluation harness decides.","Medium."],
+ ["More senses","New tools","Translation, reading text aloud, navigation prompts, reminders.","Small each."]
+];
+const ex=$("#extList"),ed=$("#extDetail");
+EXT.forEach((e,i)=>{const b=el("button","",`<b>${e[0]}</b><span>${e[1]}</span>`);b.type="button";b.setAttribute("aria-pressed",i===0);b.onclick=()=>{ex.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));ed.innerHTML=`<b>${e[0]}.</b> ${e[2]} <span class="pill">${e[3]}</span>`};ex.append(b)});
+ed.innerHTML=`<b>${EXT[0][0]}.</b> ${EXT[0][2]} <span class="pill">${EXT[0][3]}</span>`;
+
+show(location.hash.slice(1));
+</script>
+</body>
+</html>
