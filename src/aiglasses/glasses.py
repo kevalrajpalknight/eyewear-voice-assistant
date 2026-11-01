@@ -23,6 +23,7 @@ from aiglasses.services import (
     FrameChannel,
     PhotoResult,
 )
+from aiglasses.services.thumbnail import ThumbnailResult, ThumbnailService
 from aiglasses.services.voice import VoiceUtterance, voice_requests
 from aiglasses.transport.base import AudioIO, BleTransport
 from aiglasses.transport.bleak_transport import BleakTransport
@@ -54,6 +55,7 @@ class Glasses:
         self.audio = AudioService(audio)
         self.channel = FrameChannel(transport)
         self.control = ControlService(self.guard, self.channel, load_commands())
+        self.thumbnail = ThumbnailService(self.guard, self.channel)
         self._events = EventService(self.channel)
 
     def events(self) -> AsyncIterator[GlassesEvent]:
@@ -84,6 +86,10 @@ class Glasses:
     async def read_media_counts(self) -> MediaCounts:
         """Read-only request (CONFIRMED): photos, videos and audio recordings on the glasses."""
         return await self.control.read_media_counts()
+
+    async def fetch_thumbnail(self) -> ThumbnailResult:
+        """Read the latest AI-photo thumbnail over Bluetooth (needs `dry_run=False`)."""
+        return await self.thumbnail.fetch()
 
     async def enable_wifi_direct(self, *, approved_frame: str) -> None:
         """Send the one user-approved Wi-Fi Direct enable frame (needs dry_run=False)."""

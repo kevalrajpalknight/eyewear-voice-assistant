@@ -488,3 +488,12 @@ Oudmon `LargeDataHandler`. No code copied. Nothing was sent to the glasses.
   are new writes that need your approval of the exact bytes: `bc450200c2400701` (heartbeat,
   command 0x45) and the existing frame for `02 01 0B`. Not in `commands.yaml` as sendable.
   Until then requests stay short and cut-off requests are joined (see `TURN_JOIN_WINDOW_S`).
+
+## AI-photo thumbnail over Bluetooth (user-approved 2026-11-01, untested on hardware)
+From the app code (`MainActivity` event type 2, `LargeDataHandler.getPictureThumbnails`): after an image-recognition
+capture the app sends command `0xFD` with payload `01 <index u16 LE>`, index 0 first, and repeats with index+1 until
+index+1 equals the total. Reply payload (INFERRED): `[marker][total u16 LE][index u16 LE][JPEG bytes]`. The full-size
+Wi-Fi Direct path is only for the Album import. Approved bytes: `bcfd03002000010000` and the same frame with a higher
+index, nothing else. Each chunk is requested once, never retried. Run: `uv run aiglasses thumbnail fetch`, then
+double-click the rear button. UNVERIFIED: that a chunk fits one notification (a split frame would show as "invalid
+frame" in the frame counts), the payload offsets, the thumbnail size setting (`02 0B s s`, not sent).

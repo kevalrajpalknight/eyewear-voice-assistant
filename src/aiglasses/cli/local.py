@@ -234,3 +234,57 @@ def wifi_direct_full(
 ) -> None:
     """C: photo -> count rise -> enable -> join -> list -> download newest -> restore."""
     _run_wifi_direct("full", pc_hosts)
+
+
+thumbnail_app = typer.Typer(help="AI-photo thumbnail over Bluetooth (no Wi-Fi).")
+CAPTURE_WAIT_S = 60.0
+
+
+@thumbnail_app.command("fetch")
+def thumbnail_fetch(
+    wait: bool = typer.Option(True, help="Wait for you to double-click the rear button first"),
+) -> None:
+    """Wait for an AI capture (rear double click), then read its thumbnail chunk by chunk."""
+    import asyncio
+    from datetime import datetime
+
+    from aiglasses.glasses import Glasses
+    from aiglasses.services.thumbnail import jpeg_size
+
+    ble = Settings()
+
+    async def main() -> None:
+        async with Glasses.connect(ble, dry_run=False) as glasses:
+            events = glasses.events()
+            if wait:
+                console.print("Double-click the rear button now (waiting up to 60 s)...")
+
+                async def until_capture() -> None:
+                    async for event in events:
+                        console.print(f"event: {event.kind}", markup=False)
+                        if event.kind == "image_capture_ready":
+                            return
+
+                await asyncio.wait_for(until_capture(), CAPTURE_WAIT_S)
+            result = await glasses.fetch_thumbnail()
+            folder = ble.captures_dir / "thumbnails"
+            folder.mkdir(parents=True, exist_ok=True)
+            path = folder / f"Thumb_{datetime.now():%Y%m%d_%H%M%S}.jpg"
+            path.write_bytes(result.jpeg)
+            size = jpeg_size(result.jpeg)
+            timings = ", ".join(f"{s:.2f}" for s in result.chunk_seconds[:12])
+            lines = [
+                f"Thumbnail: {len(result.jpeg)} bytes in {result.chunks} chunk(s), "
+                f"{result.seconds:.2f} s total",
+                f"JPEG valid: {result.valid}; size: {size or 'unknown'}",
+                f"Chunk seconds (first 12): {timings}",
+                f"Saved: {path}",
+                f"Frames seen: { {k: v.count for k, v in glasses.channel.stats.items()} }",
+            ]
+            console.print("\n".join(lines), markup=False)
+
+    try:
+        asyncio.run(main())
+    except (GlassesError, TimeoutError) as exc:
+        console.print(f"[red]{exc!r}[/]")
+        raise typer.Exit(1) from exc

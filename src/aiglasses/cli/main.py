@@ -15,7 +15,7 @@ from rich.markup import escape
 from rich.table import Table
 
 from aiglasses.capabilities import CAPABILITIES
-from aiglasses.cli.local import llm_server_app, models_app, wifi_direct_app
+from aiglasses.cli.local import llm_server_app, models_app, thumbnail_app, wifi_direct_app
 from aiglasses.config import Settings, save_device_address
 from aiglasses.domain.errors import GlassesError
 from aiglasses.domain.models import Confidence
@@ -56,6 +56,7 @@ for name, sub in (
     ("models", models_app),
     ("llm-server", llm_server_app),
     ("wifi-direct", wifi_direct_app),
+    ("thumbnail", thumbnail_app),
 ):
     app.add_typer(sub, name=name)
 
