@@ -366,3 +366,15 @@ async def test_a_new_turn_cancelling_the_previous_one_leaves_no_tasks_behind() -
     await rig.app.runner.wait()
     await rig.app.close()
     assert [t for t in asyncio.all_tasks() if t is not asyncio.current_task()] == []
+
+
+async def test_cloud_gets_no_search_tool_after_a_search_and_announces_once() -> None:
+    cloud = FakeCloudLlm([["Here is the news."]])
+    rig = Rig(
+        [Step(action="escalate", reason="think")],
+        said="search for the gold rate today",
+        cloud=cloud,
+    )
+    await rig.turn()
+    assert all(t["tool"] != "search_web" for t in cloud.tool_lists[0])
+    assert rig.spoken.count("Let me look that up") <= 1

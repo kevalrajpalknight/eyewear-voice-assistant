@@ -423,6 +423,65 @@ def assistant_mic_test(
     _run(main())
 
 
+@assistant_app.command("wake-train")
+def assistant_wake_train(
+    samples: int = typer.Option(8, help="How many times you say the wake phrase"),
+) -> None:
+    """Say "hey EVA" a few times in your own voice; the way speech recognition writes it is learned.
+
+    Nothing is sent anywhere and no model is changed: the spellings it produced for your accent
+    are saved to a small local file and accepted as the wake name from then on.
+    """
+    from aiglasses.assistant.listener import EnergyVad, MicStream
+    from aiglasses.assistant.registry import build_stt
+    from aiglasses.assistant.wake import WakePhrases, learn_names, read_learned, save_learned
+
+    assistant = AssistantSettings()
+    phrases = WakePhrases.load(assistant.wake_phrases_path, assistant.wake_learned_path)
+    greetings = ["hey", "hello", "hi", "okay", "ok", "hay", "he"]
+
+    async def main() -> None:
+        console.print("Loading speech recognition ...")
+        stt = await asyncio.to_thread(build_stt, assistant)
+        mic = MicStream(assistant.mic_device)
+        await mic.start()
+        vad = EnergyVad(
+            min_rms=assistant.vad_min_rms,
+            ratio=assistant.vad_ratio,
+            end_silence_s=assistant.vad_end_silence_ms / 1000,
+        )
+        heard: list[str] = []
+        loop = asyncio.get_running_loop()
+        try:
+            frames = mic.frames()
+            for number in range(1, samples + 1):
+                console.print(f'Say "hey {assistant.assistant_name}" now ({number}/{samples}) ...')
+                async for frame in frames:
+                    events = vad.feed(frame, loop.time())
+                    segment = next(
+                        (e for e in events if e.kind == "end" and e.pcm is not None), None
+                    )
+                    if segment is not None and segment.pcm is not None:
+                        text = (await stt.transcribe(segment.pcm, 16000)).text
+                        heard.append(text)
+                        woke = phrases.strip(text).woke
+                        console.print(
+                            f"  heard: {text!r}  {'(already recognised)' if woke else '(new)'}"
+                        )
+                        break
+        finally:
+            await mic.close()
+        learned = learn_names(heard, greetings)
+        new = [n for n in learned if not phrases.strip(n).woke]
+        save_learned(assistant.wake_learned_path, read_learned(assistant.wake_learned_path) + new)
+        console.print(
+            f"Learned {len(set(new))} new spelling(s): {sorted(set(new)) or 'none'}. "
+            f"Saved to {assistant.wake_learned_path}."
+        )
+
+    _run(main())
+
+
 @assistant_app.command("check")
 def assistant_check(
     live: bool = typer.Option(

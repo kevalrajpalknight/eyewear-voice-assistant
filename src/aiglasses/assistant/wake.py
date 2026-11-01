@@ -21,6 +21,34 @@ class WakeResult:
     only_wake: bool
 
 
+def read_learned(path: Path | None) -> list[str]:
+    """Names your own voice produced during `assistant wake-train` (a small local file)."""
+    if path is None or not path.exists():
+        return []
+    try:
+        names = (yaml.safe_load(path.read_text(encoding="utf-8")) or {}).get("names") or []
+    except (OSError, yaml.YAMLError) as exc:
+        raise ConfigError(f"learned wake names file is invalid: {type(exc).__name__}") from exc
+    return [str(n).lower() for n in names]
+
+
+def save_learned(path: Path, names: list[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump({"names": sorted(set(names))}), encoding="utf-8")
+
+
+def learn_names(transcripts: list[str], greetings: list[str]) -> list[str]:
+    """The word each transcript used for the name: after an optional greeting, the first word."""
+    found: list[str] = []
+    for text in transcripts:
+        words = re.findall(r"[a-z']+", text.lower())
+        if words and words[0] in greetings and len(words) > 1:
+            words = words[1:]
+        if words:
+            found.append(words[0])
+    return found
+
+
 class WakePhrases:
     def __init__(self, names: list[str], greetings: list[str], listen_words: list[str]) -> None:
         name = "|".join(re.escape(n) for n in names)
@@ -32,7 +60,7 @@ class WakePhrases:
         )
 
     @classmethod
-    def load(cls, path: Path | None = None) -> "WakePhrases":
+    def load(cls, path: Path | None = None, learned: Path | None = None) -> "WakePhrases":
         try:
             text = (
                 path.read_text(encoding="utf-8")
@@ -42,7 +70,8 @@ class WakePhrases:
                 .read_text("utf-8")
             )
             raw = yaml.safe_load(text)
-            return cls(list(raw["names"]), list(raw["greetings"]), list(raw["listen_words"]))
+            names = list(raw["names"]) + read_learned(learned)
+            return cls(names, list(raw["greetings"]), list(raw["listen_words"]))
         except (OSError, KeyError, TypeError, yaml.YAMLError) as exc:
             raise ConfigError(f"wake phrases file is invalid: {type(exc).__name__}") from exc
 

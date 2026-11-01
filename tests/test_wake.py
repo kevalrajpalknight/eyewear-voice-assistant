@@ -1,7 +1,9 @@
+from pathlib import Path
+
 import pytest
 
 from aiglasses.assistant.fakes import FakeLlm, FakeStt
-from aiglasses.assistant.wake import WakePhrases
+from aiglasses.assistant.wake import WakePhrases, learn_names, read_learned, save_learned
 from tests.test_conversation import Rig, utterance
 
 
@@ -67,3 +69,16 @@ def test_the_persona_names_the_assistant_from_settings() -> None:
     )
     assert "Your name is EVA, short for Eyewear Voice Assistant" in prompt
     assert "{" not in prompt
+
+
+def test_names_learned_from_your_own_voice_are_added(tmp_path: Path) -> None:
+    said = ["Hey Eeva.", "Shiva?", "hello Iva, are you there", "Eva"]
+    assert learn_names(said, ["hey", "hello"]) == ["eeva", "shiva", "iva", "eva"]
+    path = tmp_path / "learned.yaml"
+    assert read_learned(path) == []
+    save_learned(path, ["kiva", "kiva", "zeva"])
+    assert read_learned(path) == ["kiva", "zeva"]
+    phrases: WakePhrases = WakePhrases.load(None, path)
+    assert phrases.strip("hey Kiva what time is it").woke  # noqa: B005
+    assert phrases.strip("Iva").only_wake and phrases.strip("emma, hello").woke  # noqa: B005
+    assert not WakePhrases.load(None, None).strip("hey Kiva").woke

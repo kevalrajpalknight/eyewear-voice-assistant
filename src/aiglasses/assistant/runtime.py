@@ -173,7 +173,7 @@ def make_pipeline(
         on_heard=_show_heard if show_text else None,
         on_said=_show_said if show_text else None,
         on_ignored=_show_ignored if show_text else None,
-        wake=WakePhrases.load(assistant.wake_phrases_path),
+        wake=WakePhrases.load(assistant.wake_phrases_path, assistant.wake_learned_path),
     )  # fmt: skip
 
 

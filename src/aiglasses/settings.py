@@ -128,6 +128,7 @@ class AssistantSettings(BaseSettings):
     vad_end_silence_ms: int = Field(800, gt=0)  # this much quiet ends a request
     wake_required: bool = False  # true: ignore speech that does not start with a wake phrase
     wake_phrases_path: Path | None = None  # None = the list shipped in the package
+    wake_learned_path: Path = Path("captures/wake_learned.yaml")  # made by `assistant wake-train`
     wake_ack: str = "Yes?"  # said when only the wake phrase was heard
     followup_window_s: float = Field(0.0, ge=0.0)  # reserved: needs a safe way to restart sessions
     persona_path: Path | None = None  # None = the persona shipped in the package

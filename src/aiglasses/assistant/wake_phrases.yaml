@@ -1,6 +1,6 @@
 # Wake phrases (data). Matched on the start of what the user said, lower-cased, punctuation removed.
 # `names` are what the assistant is called plus how speech recognition tends to mishear it.
-names: [eva, ava, eve, evo, ever, eba]
+names: [eva, ava, eve, evo, ever, eba, iva, eeva, ewa, iwa, yeva, ieva, evah, eevah, ivah, evar, emma, shiva]
 # Words that may come before the name.
 greetings: [hey, hello, hi, okay, ok, hay, he]
 # Extra command words that may follow the name and mean "I am talking to you".

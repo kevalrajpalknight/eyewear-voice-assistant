@@ -19,6 +19,7 @@ class Intent:
     match: tuple[re.Pattern[str], ...]
     reject: tuple[re.Pattern[str], ...] = field(default=())
     capture: tuple[re.Pattern[str], ...] = field(default=())  # named groups become tool args
+    allow: tuple[re.Pattern[str], ...] = field(default=())  # looser: lets a MODEL call the tool
 
     def args_for(self, text: str) -> dict[str, Any]:
         """Fixed args from the file plus named groups caught in the words (e.g. a place name)."""
@@ -29,6 +30,12 @@ class Intent:
                 args.update({k: v.strip() for k, v in found.groupdict().items() if v})
                 break
         return args
+
+    def allows(self, text: str) -> bool:
+        """The words ask for this tool, loosely enough for a model that heard them to act."""
+        if any(p.search(text) for p in self.reject):
+            return False
+        return any(p.search(text) for p in (*self.match, *self.allow))
 
     def matches(self, text: str) -> bool:
         return any(p.search(text) for p in self.match) and not any(
@@ -65,6 +72,7 @@ class Intents:
                         match=tuple(re.compile(p) for p in body["match"]),
                         reject=tuple(re.compile(p) for p in body.get("reject") or []),
                         capture=tuple(re.compile(p) for p in body.get("capture") or []),
+                        allow=tuple(re.compile(p) for p in body.get("allow") or []),
                     )
                     for name, body in raw.items()
                 ]
@@ -79,4 +87,4 @@ class Intents:
     def requests(self, tool: str, utterance: str) -> bool:
         """True when the user's words ask for this tool (used for state-changing tools)."""
         text = normalise(utterance)
-        return any(i.tool == tool and i.matches(text) for i in self._intents)
+        return any(i.tool == tool and i.allows(text) for i in self._intents)

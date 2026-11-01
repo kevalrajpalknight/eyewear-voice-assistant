@@ -92,3 +92,22 @@ def test_a_broken_file_is_a_config_error(tmp_path: "pytest.TempPathFactory") -> 
 def test_more_ways_to_ask_for_a_photo_or_the_camera(phrase: str, tool: str) -> None:
     match = Intents.load().find(phrase)
     assert match is not None and match.tool == tool
+
+
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "Here, please use glasses camera to identify the phone.",
+        "Then you identify the phone in front of him.",
+        "can you see what I am holding",
+        "start now and describe this",
+    ],
+)
+def test_a_model_may_look_when_the_words_ask_for_it_loosely(phrase: str) -> None:
+    assert Intents.load().requests("describe_scene", normalise(phrase))
+
+
+def test_loose_looking_words_do_not_allow_unrelated_requests() -> None:
+    intents = Intents.load()
+    assert not intents.requests("describe_scene", normalise("what is the weather today"))
+    assert not intents.requests("take_photo", normalise("identify the phone"))
