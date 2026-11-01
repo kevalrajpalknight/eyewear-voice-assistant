@@ -114,10 +114,6 @@ class Glasses:
         """Read the latest AI-photo thumbnail over Bluetooth (needs `dry_run=False`)."""
         return await self.thumbnail.fetch()
 
-    async def enable_wifi_direct(self, *, approved_frame: str) -> None:
-        """Send the one user-approved Wi-Fi Direct enable frame (needs dry_run=False)."""
-        await self.control.enable_wifi_direct(approved_frame=approved_frame)
-
     async def take_photo(self, *, confirm: bool) -> PhotoResult:
         """Take ONE photo. Changes the glasses' state, so it needs an explicit confirm=True."""
         return await self.control.take_photo(confirm=confirm)

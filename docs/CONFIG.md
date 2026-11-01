@@ -140,9 +140,8 @@ them there.
 
 ## Vision
 `VISION_PROVIDER` (`off`, `local` or `cloud`; cloud sends the image to your provider),
-`VISION_ALLOW_CLOUD` (`false`; cloud vision also needs this), `WIFI_DIRECT_ENABLED` (`false`),
-`WIFI_DIRECT_HELPER_PYTHON` (the isolated helper's Python), `VISION_MAX_IMAGE_SIDE` (`768` pixels).
-Pictures come over Bluetooth (the AI-photo thumbnail) unless `WIFI_DIRECT_ENABLED` is true.
+`VISION_ALLOW_CLOUD` (`false`; cloud vision also needs this), `VISION_MAX_IMAGE_SIDE` (`768` pixels).
+Pictures come over Bluetooth: the glasses' AI-photo thumbnail.
 `VISION_CAPTURE` (`wait` waits for your rear double click, the default; `ai_photo` asks the glasses for the photo, hands-free, using the one frame you approved) and
 `VISION_CAPTURE_WAIT_S` (`30`).
 

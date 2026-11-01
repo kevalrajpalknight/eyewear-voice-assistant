@@ -210,10 +210,6 @@ class AssistantSettings(BaseSettings):
     # Vision
     vision_provider: Literal["off", "local", "cloud"] = "off"
     vision_allow_cloud: bool = False  # cloud vision only if this is true as well
-    wifi_direct_enabled: bool = (
-        False  # fetch photos over Wi-Fi Direct (needs the helper, unverified)
-    )
-    wifi_direct_helper_python: Path = Path("tools/wifidirect-env/Scripts/python.exe")
     vision_max_image_side: int = Field(768, gt=0)
     # how a picture is made for describe_scene: "ai_photo" asks the glasses for it (hands-free),
     # "wait" waits for you to double-click the rear button

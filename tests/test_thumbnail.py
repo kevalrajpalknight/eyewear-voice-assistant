@@ -13,7 +13,7 @@ from aiglasses.domain.errors import (
 from aiglasses.protocol.bcframe import parse_bc_frame
 from aiglasses.protocol.uuids import GLASSES_NOTIFY
 from aiglasses.services.control import APPROVED_AI_PHOTO_FRAME
-from aiglasses.services.photo_fetch import BleThumbnailImageSource
+from aiglasses.services.image_source import BleThumbnailImageSource
 from aiglasses.services.thumbnail import (
     APPROVED_FIRST_REQUEST,
     MAX_CHUNKS,
@@ -204,9 +204,9 @@ async def test_only_the_ai_photo_frame_repeats_and_other_frames_still_do_not(
     device = AiPhotoDevice()
     g = glasses(device, tmp_path)
     await g.capture_ai_photo(approved_frame=APPROVED_AI_PHOTO_FRAME)
-    await g.enable_wifi_direct(approved_frame="bc410400935c02010401")
+    await g.set_picture_clarity(level=3, approved_frame="bc41040030af020b0303")
     with pytest.raises(WriteBlockedError):
-        await g.enable_wifi_direct(approved_frame="bc410400935c02010401")
+        await g.set_picture_clarity(level=3, approved_frame="bc41040030af020b0303")
 
 
 async def test_wrong_frame_dry_run_and_silent_glasses_are_refused(tmp_path: Path) -> None:

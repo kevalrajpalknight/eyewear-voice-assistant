@@ -1,6 +1,8 @@
 # 0011 Isolated environment for the Wi-Fi Direct helper (updates ADR 0006)
 
-Status: accepted 2026-11-01 (the user approved an isolated environment; this replaces the wait
+Status: SUPERSEDED 2026-11-01 (the Wi-Fi Direct helper, its commands and tests were removed: the
+glasses' AI pictures come over Bluetooth, see docs/PROTOCOL.md; the isolated environment under
+`tools/wifidirect-env` can be deleted). Originally: accepted 2026-11-01 (the user approved an isolated environment; this replaces the wait
 until 2026-11-07 for that environment only, never for the main BLE environment).
 
 ## Decision

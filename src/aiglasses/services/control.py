@@ -94,18 +94,6 @@ class ControlService:
         )
         return parse_media_counts(reply.payload)
 
-    async def enable_wifi_direct(self, *, approved_frame: str) -> None:
-        """Send the ONE approved Wi-Fi Direct enable frame. The caller must pass the exact hex."""
-        command = self._commands.get("wifi_direct_on")  # INFERRED in the registry; the user's
-        if command is None:  # written approval of these exact bytes stands in for CONFIRMED
-            raise NotSupportedError("wifi_direct_on is not in the command registry")
-        if self._guard.dry_run:
-            raise GlassesError("dry run: connect with dry_run=False to send requests")
-        if approved_frame != APPROVED_WIFI_DIRECT_FRAME or command.payload.hex() != approved_frame:
-            raise ConfirmationRequired("only the frame the user approved may be sent")
-        self._guard.approve(command.name, command.characteristic, command.payload)
-        await self._guard.write(command.characteristic, command.payload, response=False)
-
     async def set_picture_clarity(self, *, level: int, approved_frame: str) -> str:
         """Set the AI picture size level. Only the approved level and frame are ever sent.
 
@@ -204,12 +192,6 @@ class ControlService:
         return PhotoResult(
             before, after, describe_control_reply(reply.payload), reply.payload.hex()
         )
-
-
-# Approved in writing by the user on 2026-11-01 for supervised runs only: glassesControl payload
-# 02 01 04 01 (start Wi-Fi Direct), write without response, ONCE per run, never retried. Nothing
-# else (no heartbeat, no 02 01 09, no access-point mode) is approved.
-APPROVED_WIFI_DIRECT_FRAME = "bc410400935c02010401"
 
 
 def parse_event_counts(event: BcFrame) -> MediaCounts:

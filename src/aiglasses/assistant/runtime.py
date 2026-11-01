@@ -48,17 +48,9 @@ from aiglasses.assistant.tools.factory import build_registry
 from aiglasses.assistant.vision import ImageSource, build_vision
 from aiglasses.assistant.wake import WakePhrases
 from aiglasses.config import Settings
-from aiglasses.domain.errors import ConfigError, GlassesError, NotSupportedError
+from aiglasses.domain.errors import ConfigError, GlassesError
 from aiglasses.glasses import Glasses
-from aiglasses.runtime_paths import HELPER_SCRIPT
-from aiglasses.services.photo_fetch import (
-    BleThumbnailImageSource,
-    HelperWifiDirect,
-    PhotoFetcher,
-    SubprocessHelper,
-    WifiDirectImageSource,
-    enable_not_approved,
-)
+from aiglasses.services.image_source import BleThumbnailImageSource
 from aiglasses.settings import AssistantSettings
 
 console = Console()
@@ -443,8 +435,6 @@ def _registry(
         holder, assistant.vision_capture, assistant.vision_capture_wait_s,
         Path("captures") / "thumbnails",
     )  # fmt: skip
-    if assistant.wifi_direct_enabled:
-        source = _wifi_direct_source(assistant, holder)
     if assistant.vision_provider == "local":
         vision = build_vision(assistant, base_url)
     elif assistant.vision_provider == "cloud" and assistant.vision_allow_cloud:
@@ -453,22 +443,3 @@ def _registry(
         assistant, device=holder, memory=memory, intents=Intents.load(assistant.intents_path),
         search=search, image_source=source, vision=vision,
     )  # fmt: skip
-
-
-class _NoIpEvents:
-    """The BLE IP event is not wired until the Wi-Fi Direct enable command is approved."""
-
-    async def wait_ip(self, timeout: float) -> str:
-        raise NotSupportedError("waiting for the glasses' IP is not wired yet")
-
-
-def _wifi_direct_source(assistant: AssistantSettings, holder: DeviceHolder) -> ImageSource:
-    helper = SubprocessHelper([str(assistant.wifi_direct_helper_python), "-I", str(HELPER_SCRIPT)])
-    adapter = HelperWifiDirect(helper)
-    fetcher = PhotoFetcher(
-        take_photo=lambda: holder.take_photo(confirm=True),
-        enable_discovery=enable_not_approved,  # a BLE write: needs the user's approval of the bytes
-        wifi=adapter, host=adapter, events=_NoIpEvents(), save_dir=Path("captures") / "photos",
-        peer_prefix="AIMB-G2",
-    )  # fmt: skip
-    return WifiDirectImageSource(fetcher)
