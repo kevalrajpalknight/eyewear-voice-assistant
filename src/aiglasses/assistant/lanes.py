@@ -221,7 +221,8 @@ class LocalFirstClient:
         intent = self.intents.find(utterance)
         if intent is not None and intent.tool == "search_web":
             found = intent.args_for(normalise(utterance)).get("query")
-            return str(found) if found else utterance
+            query = str(found) if found else utterance
+            return None if self.rules.vague_query(query) else query
         return utterance if self.rules.time_sensitive(utterance) else None
 
     def _precheck(self, utterance: str) -> None:
@@ -331,6 +332,8 @@ class LocalFirstClient:
                     raise Escalate("empty_answer")
                 if time_sensitive and not searched:
                     raise Escalate("current_facts", "answered a time-sensitive question unaided")
+                if not ctx.log and self.rules.claims_action(text):
+                    raise Escalate("claimed_action", "said it did something without a tool")
                 report.category = "answered"
                 yield text
                 return

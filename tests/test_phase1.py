@@ -1,166 +1,141 @@
-import asyncio
-import json
-from pathlib import Path
-
+import httpx
 import pytest
-from bleak.exc import BleakBluetoothNotAvailableError, BleakError
 
-from aiglasses.domain.errors import (
-    BluetoothUnavailableError,
-    ConnectionFailedError,
-    GlassesError,
-    NotSupportedError,
-    PairingRequiredError,
+from aiglasses.assistant.conversation import AssistantTurnRecord  # noqa: F401
+from aiglasses.assistant.escalation import EscalationRules
+from aiglasses.assistant.fakes import FakeLlm
+from aiglasses.assistant.fragments import Fragments
+from aiglasses.assistant.intents import Intents, normalise
+from aiglasses.assistant.local_llm import Step
+from aiglasses.assistant.search import (
+    FakeSearch,
+    FallbackSearch,
+    SearchError,
+    SearchHit,
+    WikipediaSearch,
 )
-from aiglasses.domain.models import GattCharacteristic, GattService
-from aiglasses.protocol import uuids
-from aiglasses.research.gatt_dump import dump_gatt, write_dump
-from aiglasses.research.listen import listen
-from aiglasses.services.device import DeviceService
-from aiglasses.transport.bleak_transport import map_bleak_error
-from aiglasses.transport.fakes import FakeBleTransport
-from aiglasses.transport.retry import connect_with_retry
-from aiglasses.transport.tracing import TracingTransport
-from tests.conftest import AE02, SERVICE_CHANGED
+from aiglasses.assistant.wake import learn_names, read_learned, save_learned
+from tests.test_conversation import Rig, utterance
+from tests.test_lanes import Rig as LaneRig
 
 
-async def test_gatt_dump_reads_only_readable_and_never_writes(
-    gatt_services: list[GattService], gatt_reads: dict[str, bytes], tmp_path: Path
-) -> None:
-    transport = FakeBleTransport(gatt_reads, gatt_services)
-    data = await dump_gatt(transport)
-    assert sorted(transport.read_log) == sorted(gatt_reads)
-    assert transport.writes == []
-    chars = {c["uuid"]: c for s in data["services"] for c in s["characteristics"]}
-    assert chars[uuids.FIRMWARE_REVISION]["value_ascii"] == "AM01G1_9.40.00_260114"
-    assert chars[uuids.SERIAL_NUMBER]["value_hex"] == ""
-    assert "value_hex" not in chars[AE02]
-    assert data["mtu"] == 23 and data["connection"]["fake"] is True
-    out = tmp_path / "dump.json"
-    write_dump(out, data)
-    assert json.loads(out.read_text())["services"][0]["characteristics"][0]["handle"] == 2
+def test_a_greeting_with_a_time_word_is_not_a_fact_question() -> None:
+    rules = EscalationRules.load()
+    assert not rules.time_sensitive("How are you doing today?")
+    assert not rules.time_sensitive("have a good day")
+    assert rules.time_sensitive("who won the match today")
+    assert rules.time_sensitive("what is the latest news")
 
 
-async def test_listen_collects_skips_and_reports_handles(gatt_services: list[GattService]) -> None:
-    transport = FakeBleTransport(
-        services=gatt_services,
-        subscribe_errors={SERVICE_CHANGED: PairingRequiredError("Access Denied")},
-    )
-    asyncio.get_running_loop().call_later(0.05, transport.emit, AE02, b"\x01\x02")
-    result = await listen(transport, 0.2)
-    assert result.subscribed == [AE02]
-    assert SERVICE_CHANGED in result.skipped
-    assert [(n.handle, n.data) for n in result.notifications] == [(7, b"\x01\x02")]
-    assert transport.writes == []
-
-
-async def test_listen_reconnects_and_resubscribes(gatt_services: list[GattService]) -> None:
-    transport = FakeBleTransport(services=gatt_services)
-    await transport.connect()
-    loop = asyncio.get_running_loop()
-    loop.call_later(0.05, transport.drop_link)
-    loop.call_later(0.15, transport.emit, AE02, b"\xaa")
-    result = await listen(transport, 0.3)
-    assert transport.connect_calls == 2
-    assert [n.data for n in result.notifications] == [b"\xaa"]
-
-
-async def test_connect_with_retry_backs_off_then_succeeds() -> None:
-    transport = FakeBleTransport(fail_connects=2)
-    delays: list[float] = []
-
-    async def fake_sleep(delay: float) -> None:
-        delays.append(delay)
-
-    await connect_with_retry(transport, attempts=4, base_delay=1.0, sleep=fake_sleep)
-    assert delays == [1.0, 2.0]
-    assert transport.connected
-
-
-async def test_connect_with_retry_gives_up() -> None:
-    transport = FakeBleTransport(fail_connects=10)
-
-    async def no_sleep(_: float) -> None:
-        return None
-
-    with pytest.raises(ConnectionFailedError):
-        await connect_with_retry(transport, attempts=3, sleep=no_sleep)
-    assert transport.connect_calls == 3
-
-
-async def test_pairing_errors_are_not_retried() -> None:
-    class NeedsPairing(FakeBleTransport):
-        async def connect(self) -> None:
-            self.connect_calls += 1
-            raise PairingRequiredError("bond first")
-
-    transport = NeedsPairing()
-    with pytest.raises(PairingRequiredError):
-        await connect_with_retry(transport, attempts=3)
-    assert transport.connect_calls == 1
-
-
-async def test_tracing_logs_cccd_reads_and_notifies_with_handles(
-    gatt_services: list[GattService], gatt_reads: dict[str, bytes], tmp_path: Path
-) -> None:
-    inner = FakeBleTransport(gatt_reads, gatt_services)
-    trace = tmp_path / "trace.jsonl"
-    transport = TracingTransport(inner, trace)
-    await transport.subscribe(AE02, lambda _u, _d: None)
-    inner.emit(AE02, b"\x07")
-    await transport.read(uuids.FIRMWARE_REVISION)
-    entries = [json.loads(line) for line in trace.read_text().splitlines()]
-    assert [e["op"] for e in entries] == ["cccd_enable", "notify", "read_request", "read"]
-    assert entries[1]["handle"] == 7 and entries[1]["hex"] == "07"
-    assert entries[3]["handle"] == 151 and "ts" in entries[3]
-    assert transport.mtu == 23 and not transport.disconnected.is_set()
-    assert transport.connection_info()["fake"] is True
-
-
-async def test_device_info_and_battery(
-    gatt_services: list[GattService], gatt_reads: dict[str, bytes]
-) -> None:
-    service = DeviceService(FakeBleTransport(gatt_reads, gatt_services))
-    info = await service.info()
-    assert (info.name, info.hardware, info.firmware, info.serial) == (
-        "AIMB-G2_2324",
-        "AM01G1_V9.4",
-        "AM01G1_9.40.00_260114",
-        None,
-    )
-    with pytest.raises(NotSupportedError):
-        await service.battery()
-
-
-async def test_battery_read_when_standard_service_exists() -> None:
-    services = [
-        GattService(
-            uuids.BATTERY_SERVICE, 1, [GattCharacteristic(uuids.BATTERY_LEVEL, 2, ["read"])]
-        )
-    ]
-    service = DeviceService(FakeBleTransport({uuids.BATTERY_LEVEL: b"\x57"}, services))
-    assert (await service.battery()).percent == 87
+def test_claims_and_vague_queries_are_recognised() -> None:
+    rules = EscalationRules.load()
+    assert rules.claims_action("I've taken a photo for you, so you should see it now.")
+    assert rules.claims_action("I searched and found nothing")
+    assert not rules.claims_action("The capital of France is Paris.")
+    assert rules.vague_query("this product") and rules.vague_query("it")
+    assert not rules.vague_query("farmlite oats chocolate cookies")
 
 
 @pytest.mark.parametrize(
-    ("message", "expected"),
+    "phrase,tool",
     [
-        ("Could not start notify on 0047: Access Denied", PairingRequiredError),
-        ("Could not get GATT services: Unreachable", ConnectionFailedError),
-        ("something else", ConnectionFailedError),
+        ("Use the glasses camera to find this product.", "describe_scene"),
+        ("find this product", "describe_scene"),
+        ("What is this product? Can you take the picture?", "describe_scene"),
+        ("Use the glasses scanner to find this product", "describe_scene"),
+        ("take a picture", "take_photo"),
+        ("open the camera", "take_photo"),
+        ("What's the temperature in Delhi right now?", "get_weather"),
     ],
 )
-def test_map_bleak_error(message: str, expected: type[GlassesError]) -> None:
-    assert isinstance(map_bleak_error(BleakError(message), "op"), expected)
+def test_the_camera_and_weather_phrases_reach_the_right_tool(phrase: str, tool: str) -> None:
+    found = Intents.load().find(phrase)
+    assert found is not None and found.tool == tool
 
 
-def test_map_bleak_error_radio_off() -> None:
-    err = BleakBluetoothNotAvailableError("off", reason=None)  # type: ignore[arg-type]
-    assert isinstance(map_bleak_error(err, "scan"), BluetoothUnavailableError)
+def test_the_temperature_question_names_the_city() -> None:
+    found = Intents.load().find("What's the temperature in Delhi right now?")
+    assert found is not None
+    assert found.args_for(normalise("What's the temperature in Delhi right now?")) == {
+        "location": "delhi"
+    }
 
 
-async def test_mark_is_written_to_trace(tmp_path: Path) -> None:
-    trace = tmp_path / "trace.jsonl"
-    TracingTransport(FakeBleTransport(), trace).mark("photo")
-    entry = json.loads(trace.read_text().splitlines()[0])
-    assert entry["op"] == "mark" and entry["label"] == "photo" and "ts" in entry
+def test_sounds_and_thanks_are_told_apart_from_requests() -> None:
+    fragments = Fragments.load()
+    assert fragments.kind("?") == "ignore" and fragments.kind("Okay.") == "ignore"
+    assert fragments.kind("Um,") == "ignore" and fragments.kind("Thank you!") == "thanks"
+    assert fragments.kind("what time is it") is None
+
+
+def test_ordinary_words_are_never_learned_as_the_wake_name(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    said = ["How", "Error", "Hey Eva.", "Favour.", "Hey you are.", "Several.", "Siva."]
+    assert learn_names(said, ["hey"]) == ["eva", "favour", "siva"]
+    path = tmp_path / "learned.yaml"
+    save_learned(path, ["how", "you", "here you are", "favour", "siva"])
+    assert read_learned(path) == ["favour", "siva"]
+
+
+async def test_the_microphone_ignores_sounds_and_answers_thanks_without_the_model() -> None:
+    rig = Rig(llm=FakeLlm([("Never used.",)]))
+    rig.pipeline.input_is_microphone = True
+    ignored: list[tuple[str, str]] = []
+    rig.pipeline.on_ignored = lambda text, why: ignored.append((text, why))
+    rig.stt._texts = ["Okay."]
+    first = await rig.pipeline.run_turn(utterance(), 1)
+    assert first.outcome == "ignored" and ignored == [("Okay.", "just a sound")]
+    rig.stt._texts = ["Thank you."]
+    thanks = await rig.pipeline.run_turn(utterance(), 2)
+    assert thanks.outcome == "spoken" and rig.llm.requests == []
+    assert any(w in " ".join(rig.tts.spoken) for w in ("welcome", "Anytime", "help", "problem"))
+
+
+async def test_a_local_reply_that_claims_a_photo_without_a_tool_goes_to_the_cloud() -> None:
+    rig = LaneRig(
+        [Step(action="answer", text="I've taken a photo for you, so you can see it now.")],
+        said="what is this product can you take the picture",
+        tools_enabled="read_battery,forget_all_that",
+    )
+    record = await rig.turn()
+    assert record.tier == 2 and record.route_reason == "claimed_action"
+
+
+async def test_a_search_with_no_real_subject_is_not_run() -> None:
+    rig = LaneRig(
+        [Step(action="answer", text="Which product do you mean?")], said="search this product"
+    )
+    await rig.turn()
+    assert rig.search.queries == []
+
+
+async def test_search_retries_once_then_uses_the_second_source() -> None:
+    class Flaky(FakeSearch):
+        async def search(self, query, *, max_results, region, timeout_s):  # type: ignore[no-untyped-def]
+            self.queries.append(query)
+            raise SearchError("timeout")
+
+    first, second = Flaky(), FakeSearch([SearchHit("Tata Nano", "Launched in 2008.")])
+    hits = await FallbackSearch(first, second).search(
+        "tata nano", max_results=3, region="x", timeout_s=1
+    )
+    assert len(first.queries) == 2 and hits[0].title == "Tata Nano"
+    with pytest.raises(SearchError, match="timeout"):
+        await FallbackSearch(Flaky(), None).search("q", max_results=3, region="x", timeout_s=1)
+
+
+async def test_the_wikipedia_source_reads_titles_and_strips_markup() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["srsearch"] == "tata nano"
+        rows = [
+            {
+                "title": "Tata Nano",
+                "snippet": 'The <span class="searchmatch">Nano</span> was launched in 2008.',
+            }
+        ]
+        return httpx.Response(200, json={"query": {"search": rows}})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    hits = await WikipediaSearch("https://example.invalid/w", client).search(
+        "tata nano", max_results=3, region="x", timeout_s=2
+    )
+    assert hits == [SearchHit("Tata Nano", "The Nano was launched in 2008.")]

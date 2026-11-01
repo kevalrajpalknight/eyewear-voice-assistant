@@ -190,11 +190,13 @@ class AssistantSettings(BaseSettings):
 
     # Search
     search_provider: str = "ddgs"
+    search_fallback: Literal["off", "wikipedia"] = "wikipedia"  # used when the first source fails
+    search_fallback_url: str = "https://en.wikipedia.org/w/api.php"
     search_context_chars: int = Field(700, gt=0)  # search text the local model reads, at most
     search_max_results: int = Field(5, ge=1, le=10)
     search_region: str = "wt-wt"
     search_cache_ttl_s: float = Field(300.0, ge=0)
-    search_timeout_s: float = Field(5.0, gt=0)
+    search_timeout_s: float = Field(8.0, gt=0)
 
     # Weather (free public forecast service, no key)
     weather_location: str = ""  # default city when none is spoken; empty = ask

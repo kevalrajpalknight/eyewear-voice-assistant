@@ -21,6 +21,16 @@ class WakeResult:
     only_wake: bool
 
 
+def never_names() -> frozenset[str]:
+    text = resources.files("aiglasses.assistant").joinpath("wake_phrases.yaml").read_text("utf-8")
+    return frozenset(str(n).lower() for n in yaml.safe_load(text).get("never_names") or [])
+
+
+def usable_name(word: str) -> bool:
+    """One short plain word that is not an ordinary English word."""
+    return re.fullmatch(r"[a-z]{2,8}", word) is not None and word not in never_names()
+
+
 def read_learned(path: Path | None) -> list[str]:
     """Names your own voice produced during `assistant wake-train` (a small local file)."""
     if path is None or not path.exists():
@@ -29,7 +39,7 @@ def read_learned(path: Path | None) -> list[str]:
         names = (yaml.safe_load(path.read_text(encoding="utf-8")) or {}).get("names") or []
     except (OSError, yaml.YAMLError) as exc:
         raise ConfigError(f"learned wake names file is invalid: {type(exc).__name__}") from exc
-    return [str(n).lower() for n in names]
+    return [n for n in (str(x).lower() for x in names) if usable_name(n)]
 
 
 def save_learned(path: Path, names: list[str]) -> None:
@@ -44,7 +54,7 @@ def learn_names(transcripts: list[str], greetings: list[str]) -> list[str]:
         words = re.findall(r"[a-z']+", text.lower())
         if words and words[0] in greetings and len(words) > 1:
             words = words[1:]
-        if words:
+        if words and usable_name(words[0]):
             found.append(words[0])
     return found
 

@@ -20,6 +20,8 @@ from aiglasses.assistant.clauses import ClauseStream
 from aiglasses.assistant.cleaner import clean_reply
 from aiglasses.assistant.echo import Debug, TurnLog
 from aiglasses.assistant.echo_guard import EchoGuard
+from aiglasses.assistant.fillers import Fillers
+from aiglasses.assistant.fragments import Fragments
 from aiglasses.assistant.glossary import Correction, Glossary
 from aiglasses.assistant.interfaces import (
     TIME_MARKER,
@@ -192,6 +194,8 @@ class ConversationPipeline:
         self.on_heard, self.on_said = on_heard, on_said
         self.on_wake, self.on_ignored = on_wake, on_ignored
         self.echo = EchoGuard()
+        self.fragments = Fragments.load()
+        self.fillers = Fillers.load()
         self.require_wake = settings.wake_required  # the listener flips this: asleep / awake
         self.input_is_microphone = False  # only a microphone can hear the assistant's own voice
         self.quiet_empty = False  # microphone mode: noise that yields no words is not answered
@@ -264,6 +268,8 @@ class ConversationPipeline:
 
     async def _say(self, text: str, record: AssistantTurnRecord) -> None:
         """Speak one fixed local line. If speech itself is broken there is nothing more to do."""
+        if self.on_said is not None:
+            self.on_said(text, None)
         try:
             await self.sink.play(self._one(text))
         except asyncio.CancelledError:
@@ -415,6 +421,20 @@ class ConversationPipeline:
                 if wake.only_wake:
                     record.outcome = "wake_ack"
                     await self._say(self.settings.wake_ack, record)
+                    return record
+            if self.input_is_microphone:
+                sound = self.fragments.kind(text)
+                if sound == "ignore":
+                    record.outcome = "ignored"
+                    if self.on_ignored is not None:
+                        self.on_ignored(text or "(no words)", "just a sound")
+                    return record
+                if sound == "thanks":
+                    record.outcome = "spoken"
+                    reply = self.fillers.pick("thanks") or "You're welcome."
+                    if self.on_heard is not None:
+                        self.on_heard(text)
+                    await self._say(reply, record)
                     return record
             if self.on_text is not None:
                 self.on_text(text)

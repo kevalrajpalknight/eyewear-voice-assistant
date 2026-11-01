@@ -11,7 +11,7 @@ import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import ClassVar, Protocol
+from typing import Any, ClassVar, Protocol
 
 from pydantic import BaseModel
 
@@ -91,6 +91,77 @@ class DdgsSearch:
         return hits
 
 
+TAG = re.compile(r"<[^>]+>")
+
+
+class WikipediaSearch:
+    """A second source for factual questions: article titles and snippets, no key needed."""
+
+    def __init__(self, url: str, client: Any = None) -> None:
+        self._url, self._client = url, client
+
+    async def search(
+        self, query: str, *, max_results: int, region: str, timeout_s: float
+    ) -> list[SearchHit]:
+        import httpx
+
+        params: dict[str, Any] = {
+            "action": "query", "list": "search", "srsearch": query, "format": "json",
+            "srlimit": max_results, "utf8": 1,
+        }  # fmt: skip
+        headers = {"User-Agent": "aiglasses-voice-assistant"}
+        try:
+            if self._client is not None:
+                reply = await self._client.get(self._url, params=params, headers=headers)
+            else:
+                async with httpx.AsyncClient(timeout=timeout_s) as client:
+                    reply = await client.get(self._url, params=params, headers=headers)
+            reply.raise_for_status()
+            rows = reply.json()["query"]["search"]
+        except httpx.TimeoutException as exc:
+            raise SearchError("timeout") from exc
+        except (httpx.HTTPError, KeyError, ValueError) as exc:
+            raise SearchError("blocked") from exc
+        hits = [
+            SearchHit(clean_text(r["title"], TITLE_CHARS), clean_text(TAG.sub("", r["snippet"])))
+            for r in rows
+        ]
+        if not hits:
+            raise SearchError("empty")
+        return hits
+
+
+class FallbackSearch:
+    """Try the main source (once more on a timeout or block), then the second one."""
+
+    def __init__(
+        self, primary: SearchProvider, secondary: SearchProvider | None, retries: int = 1
+    ) -> None:
+        self._primary, self._secondary, self._retries = primary, secondary, retries
+
+    async def search(
+        self, query: str, *, max_results: int, region: str, timeout_s: float
+    ) -> list[SearchHit]:
+        failure = SearchError("blocked")
+        for _ in range(1 + self._retries):
+            try:
+                return await self._primary.search(
+                    query, max_results=max_results, region=region, timeout_s=timeout_s
+                )
+            except SearchError as exc:
+                failure = exc
+                if exc.category in ("empty", "rate_limit"):
+                    break
+        if self._secondary is not None:
+            try:
+                return await self._secondary.search(
+                    query, max_results=max_results, region=region, timeout_s=timeout_s
+                )
+            except SearchError:
+                pass
+        raise failure
+
+
 class CachedSearch:
     """Repeat queries within the TTL reuse the earlier answer; failures are not cached."""
 
@@ -123,7 +194,12 @@ def build_search(settings: AssistantSettings) -> SearchProvider:
     if factory is None:
         valid = ", ".join(sorted(SEARCH_PROVIDERS))
         raise ConfigError(f"unknown SEARCH_PROVIDER {settings.search_provider!r}; valid: {valid}")
-    return CachedSearch(factory(), settings.search_cache_ttl_s)
+    second = (
+        WikipediaSearch(settings.search_fallback_url)
+        if settings.search_fallback == "wikipedia"
+        else None
+    )
+    return CachedSearch(FallbackSearch(factory(), second), settings.search_cache_ttl_s)
 
 
 SPOKEN_FAILURE = {

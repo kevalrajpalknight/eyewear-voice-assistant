@@ -432,6 +432,8 @@ def assistant_wake_train(
     Nothing is sent anywhere and no model is changed: the spellings it produced for your accent
     are saved to a small local file and accepted as the wake name from then on.
     """
+    from difflib import SequenceMatcher
+
     from aiglasses.assistant.listener import EnergyVad, MicStream
     from aiglasses.assistant.registry import build_stt
     from aiglasses.assistant.wake import WakePhrases, learn_names, read_learned, save_learned
@@ -472,7 +474,15 @@ def assistant_wake_train(
         finally:
             await mic.close()
         learned = learn_names(heard, greetings)
-        new = [n for n in learned if not phrases.strip(n).woke]
+        new = []
+        for candidate in sorted({n for n in learned if not phrases.strip(n).woke}):
+            close = (
+                SequenceMatcher(None, candidate, assistant.assistant_name.lower()).ratio() >= 0.5
+            )
+            if typer.confirm(
+                f"  Accept '{candidate}' as how you say {assistant.assistant_name}?", default=close
+            ):
+                new.append(candidate)
         save_learned(assistant.wake_learned_path, read_learned(assistant.wake_learned_path) + new)
         console.print(
             f"Learned {len(set(new))} new spelling(s): {sorted(set(new)) or 'none'}. "

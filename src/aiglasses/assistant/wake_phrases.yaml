@@ -5,3 +5,8 @@ names: [eva, ava, eve, evo, ever, eba, iva, eeva, ewa, iwa, yeva, ieva, evah, ee
 greetings: [hey, hello, hi, okay, ok, hay, he]
 # Extra command words that may follow the name and mean "I am talking to you".
 listen_words: [listen, are you there, wake up]
+# Ordinary words that are never accepted as a way of saying the name, even when `wake-train` heard
+# them: otherwise "how are you" or "you" would wake the assistant.
+never_names: [how, you, are, what, well, hello, hey, hi, the, a, i, it, is, yes, no, okay, ok, so,
+  and, to, of, in, that, this, for, with, can, do, did, why, who, when, where, here, there, now,
+  then, error, several, please, thanks, thank, good, great, sorry, one, two, you're, oh, um, uh]

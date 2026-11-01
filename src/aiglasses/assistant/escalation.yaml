@@ -3,6 +3,20 @@ time_sensitive:
   - '\b(?:today|tonight|tomorrow|right now|currently|latest|news|score|scores|weather|forecast|price|prices|stock|exchange rate|trending|live|results?)\b'
   - '\bwho (?:won|is winning|is playing)\b'
   - '\bwhat(?:''s| is) happening\b'
+# Chit-chat that merely contains a time word ("how are you doing today") is not a fact question.
+time_sensitive_reject:
+  - '\bhow (?:are|is|do|have|was) (?:you|your)\b'
+  - '\bhow(?:''s| is) it going\b'
+  - '\b(?:good|nice|happy) (?:day|morning|evening|night)\b'
+# The local model saying it DID something it has no tool call for (it made that up).
+claims_action:
+  - '\bi(?:''ve| have)? (?:just )?(?:taken|took|snapped|captured) (?:a |the |that |one )?(?:photo|picture|pic|image)\b'
+  - '\bi(?:''ve| have)? (?:just )?(?:searched|looked (?:it )?up|googled|checked online)\b'
+  - '\b(?:taking|capturing) (?:a |the )?(?:photo|picture)\b'
+  - '\bi(?:''ve| have)? (?:opened|started|turned on) (?:the )?camera\b'
+# A search query that says nothing by itself ("this product"): look first, search later.
+vague_query:
+  - '^(?:(?:the|this|that|these|those|it|its|a|an|my|your|product|products|object|thing|item|one|stuff|here|there)(?: |$))+$'
 research:
   - '\b(?:research|deep dive|in depth|in-depth|detailed analysis|analy[sz]e|think hard|think carefully|big model|strong model|smartest model|step by step plan)\b'
 dissatisfied:

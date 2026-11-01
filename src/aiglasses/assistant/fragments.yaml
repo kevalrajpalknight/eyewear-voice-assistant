@@ -1,0 +1,42 @@
+# Short things people say that are not requests (data). Matched on the whole utterance, lower-cased,
+# punctuation removed. Only used with the microphone, while the assistant is awake.
+ignore:
+  - okay
+  - ok
+  - yeah
+  - yep
+  - yes
+  - no
+  - nope
+  - uh
+  - um
+  - uh huh
+  - hmm
+  - mm
+  - oh
+  - ah
+  - right
+  - cool
+  - nice
+  - great
+  - alright
+  - all right
+  - i see
+  - got it
+  - sure
+  - fine
+  - so
+  - well
+  - and
+  - hello
+  - hey
+thanks:
+  - thanks
+  - thank you
+  - thanks a lot
+  - thank you very much
+  - thank you so much
+  - okay thanks
+  - ok thanks
+  - okay thank you
+  - cheers

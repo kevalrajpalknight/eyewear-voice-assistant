@@ -2,6 +2,28 @@
 # A request matches when ANY `match` pattern fits the lower-cased words AND no `reject` pattern does.
 # `reject` exists for near misses such as "I took a photo yesterday".
 intents:
+  describe_scene:
+    tool: describe_scene
+    match:
+      - '^(?:please |can you |could you |hey )*(?:use|using) (?:the |my )?(?:glasses |glasses'' )?(?:camera|scanner|lens) to (?:find|identify|recogni[sz]e|see|read|check|look at|scan|describe|tell|detect|search)\b'
+      - '\b(?:find|identify|recogni[sz]e|scan|read|check|inspect|tell me about) (?:this|that|these|those|the|my) (?:product|object|item|thing|phone|device|book|bottle|label|packet|package|box|snack|food|plant|flower|animal|medicine)\b'
+      - '^(?:what|which) (?:is|are|s) (?:this|that|these|those)(?: product| object| item| thing| phone| device)?$'
+      - '^(?:what|which) (?:is|are|s) (?:this|that|these|those) (?:product|object|item|thing|phone|device)\b'
+      - '\bwhat (?:am i|are we) (?:looking|looking at)\b'
+      - '\bwhat do you see\b'
+      - '^(?:please |can you |could you )*(?:identify|recognise|recognize|name)(?: this| that| the)?(?: object| thing| item| animal| plant| flower| fruit| product)?$'
+      - '^(?:what is|what''s|what are) (?:this|that|these|those|in front of me)(?: object| thing| item)?$'
+      - '^(?:please |can you |could you )*(?:look at|check out) (?:this|that)$'
+      - '^(?:please )?(?:look at|describe) (?:this|what i(?:''m| am) looking at)\b'
+    allow:
+      - '\b(?:identify|identifying|recogni[sz]e|recogni[sz]ing|scan|describe|inspect)\b'
+      - '\bwhat (?:is|are|was|were|s) (?:this|that|these|those|it|in front of me)\b'
+      - '\b(?:look|looking) (?:at|through|around)\b'
+      - '\b(?:use|using|with|through|open|start) (?:the |my )?(?:glasses |glasses'' )?camera\b'
+      - '\bwhat (?:am i|do i have|i am) (?:holding|wearing|seeing)\b'
+      - '\bcan you see\b'
+    reject:
+      - '\b(?:yesterday|last)\b'
   take_photo:
     tool: take_photo
     match:
@@ -49,28 +71,11 @@ intents:
       - '\b(?:clear|wipe|reset) (?:your |my )?memory\b'
       - '^(?:please )?let''?s start over\b'
       - '^(?:please )?(?:forget everything|start over|start again)\b'
-  describe_scene:
-    tool: describe_scene
-    match:
-      - '\bwhat (?:am i|are we) (?:looking|looking at)\b'
-      - '\bwhat do you see\b'
-      - '^(?:please |can you |could you )*(?:identify|recognise|recognize|name)(?: this| that| the)?(?: object| thing| item| animal| plant| flower| fruit| product)?$'
-      - '^(?:what is|what''s|what are) (?:this|that|these|those|in front of me)(?: object| thing| item)?$'
-      - '^(?:please |can you |could you )*(?:look at|check out) (?:this|that)$'
-      - '^(?:please )?(?:look at|describe) (?:this|what i(?:''m| am) looking at)\b'
-    allow:
-      - '\b(?:identify|identifying|recogni[sz]e|recogni[sz]ing|scan|describe|inspect)\b'
-      - '\bwhat (?:is|are|was|were|s) (?:this|that|these|those|it|in front of me)\b'
-      - '\b(?:look|looking) (?:at|through|around)\b'
-      - '\b(?:use|using|with|through|open|start) (?:the |my )?(?:glasses |glasses'' )?camera\b'
-      - '\bwhat (?:am i|do i have|i am) (?:holding|wearing|seeing)\b'
-      - '\bcan you see\b'
-    reject:
-      - '\b(?:yesterday|last)\b'
   get_weather:
     tool: get_weather
     match:
       - '\bweather\b'
+      - '\b(?:temperature|how (?:hot|cold|warm)|humidity)\b'
       - '\bforecast\b'
       - '\bis it (?:raining|sunny|hot|cold)\b'
     reject:

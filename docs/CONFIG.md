@@ -118,7 +118,8 @@ local model), `LOCAL_LLM_THREADS` (empty = physical cores), `LOCAL_LLM_CTX` (`40
 (`true`), `LOCAL_LLM_PROMPT_CACHE` (`true`), `LOCAL_FIRST_TOKEN_TIMEOUT_S` (`6`), `MODELS_DIR`
 (`models`), `MODEL_REGISTRY_PATH` (the shipped `models.yaml`), `MODEL_DOWNLOAD_BUDGET_GB` (`8`),
 `ESCALATION_FILLER` (empty: a random phrase from `fillers.yaml`, also used when a tool starts;
-set text to always say that instead), `SEARCH_CONTEXT_CHARS` (`700`: how much search text the local model reads). `ROUTER_MODE=local_first` enables the lanes.
+set text to always say that instead), `SEARCH_CONTEXT_CHARS` (`700`: how much search text the local model reads),
+`SEARCH_FALLBACK` (`wikipedia` or `off`: a second source after one retry of the first) and `SEARCH_FALLBACK_URL`. `ROUTER_MODE=local_first` enables the lanes.
 
 ## Agent loop and tools
 `AGENT_MAX_STEPS` (`3`, at most 10), `AGENT_TIME_BUDGET_S` (`8`), `TOOLS_ENABLED` (comma list;

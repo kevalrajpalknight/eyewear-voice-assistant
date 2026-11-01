@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import sys
 import time
 from collections.abc import Awaitable
 from contextlib import AsyncExitStack, asynccontextmanager
@@ -349,6 +350,7 @@ async def _open_microphone(  # type: ignore[no-untyped-def]
             duplex=assistant.duplex_barge_in, barge_in_ratio=assistant.barge_in_ratio,
             echo_settling=pipeline.echo.settling,
         )  # fmt: skip
+        app.max_turns = sys.maxsize  # the session ends when you press Q, not after N sounds
         pipeline.on_wake = listener.wake
         pipeline.quiet_empty = True
         pipeline.input_is_microphone = True
