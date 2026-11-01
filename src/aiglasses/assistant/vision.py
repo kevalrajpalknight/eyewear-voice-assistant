@@ -11,6 +11,7 @@ from typing import ClassVar, Protocol
 import httpx
 from pydantic import BaseModel
 
+from aiglasses.assistant.local_llm import NO_THINKING
 from aiglasses.assistant.tools.base import NoArgs, Risk, ToolContext, ToolRefused, ToolResult
 from aiglasses.domain.errors import GlassesError, NotSupportedError
 from aiglasses.settings import AssistantSettings
@@ -108,6 +109,7 @@ class LocalVision:
             "messages": [{"role": "user", "content": content}],
             "max_tokens": 120,
             "temperature": 0.2,
+            **NO_THINKING,
         }
         try:
             reply = await self._client.post(self._url, json=body, timeout=LOCAL_TIMEOUT_S)

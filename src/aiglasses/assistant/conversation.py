@@ -165,7 +165,7 @@ class ConversationPipeline:
         on_correction: Callable[[Correction], None] | None = None,
         on_text: Callable[[str], None] | None = None,
         on_heard: Callable[[str], None] | None = None,
-        on_said: Callable[[str], None] | None = None,
+        on_said: Callable[[str, int | None], None] | None = None,
         on_wake: Callable[[], None] | None = None,
         on_ignored: Callable[[str, str], None] | None = None,
         wake: WakePhrases | None = None,
@@ -318,7 +318,7 @@ class ConversationPipeline:
             spoken.append(cleaned)
             self.echo.said(cleaned)
             if self.on_said is not None:
-                self.on_said(cleaned)
+                self.on_said(cleaned, getattr(getattr(self.llm, "report", None), "lane", None))
             async for audio in self.tts.synthesize_stream(cleaned, self.options):
                 if record.t_first_chunk is None:
                     record.t_first_chunk = time.time()

@@ -7,6 +7,7 @@ It talks to 127.0.0.1 only and is the only place that knows the local server's r
 
 import asyncio
 import json
+import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -21,6 +22,10 @@ ROUTE = "/v1/chat/completions"
 SCHEMA_NAME = "step"
 REASON_MAX_CHARS = 80
 
+log = logging.getLogger("aiglasses.local")
+# Gemma 4 sometimes 'thinks' for the whole token limit (about 10 s) and then answers nothing; the
+# server flag --reasoning off does not stop that, this request field does.
+NO_THINKING = {"thinking_budget_tokens": 0}
 HEALTH_TIMEOUT_S = 3.0  # a busy CPU can answer /health slowly; 1 s made a loaded server look dead
 
 
@@ -46,11 +51,15 @@ class StepTiming:
     total_s: float
 
 
-def step_schema(tools: list[str]) -> dict[str, Any]:
-    """JSON schema forcing the five step fields; `tool` may only be one of `tools`."""
+def step_schema(tools: list[str], text_max_chars: int | None = None) -> dict[str, Any]:
+    """JSON schema forcing the step fields; `tool` may only be one of `tools`.
+
+    `text_max_chars` makes the grammar close the reply by itself: a model that rambles can no
+    longer run into the token limit and produce broken JSON (which cost a second slow attempt).
+    """
     properties: dict[str, Any] = {
         "action": {"type": "string", "enum": ["answer", "tool", "escalate"]},
-        "text": {"type": "string"},
+        "text": {"type": "string", **({"maxLength": text_max_chars} if text_max_chars else {})},
         "reason": {"type": "string", "maxLength": REASON_MAX_CHARS},
     }
     if tools:
@@ -77,7 +86,8 @@ class LocalLlm:
         self._health = base_url.rstrip("/") + "/health"
         self._first_token_timeout = first_token_timeout_s
         self._cache = prompt_cache
-        self._client = client or httpx.AsyncClient()
+        # httpx's default 5 s read timeout killed any step whose prompt was not cached yet
+        self._client = client or httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=2.0))
         self.last_error = ""
 
     async def available(self) -> bool:
@@ -89,21 +99,34 @@ class LocalLlm:
         self.last_error = "" if reply.status_code == 200 else f"HTTP {reply.status_code}"
         return reply.status_code == 200
 
-    def _body(self, messages: list[Message], tools: list[str], max_tokens: int) -> dict[str, Any]:
+    def _body(
+        self, messages: list[Message], tools: list[str], max_tokens: int, text_max_chars: int | None
+    ) -> dict[str, Any]:
         return {
             "messages": [{"role": m.role, "content": m.content} for m in messages],
             "response_format": {
                 "type": "json_schema",
-                "json_schema": {"name": SCHEMA_NAME, "strict": True, "schema": step_schema(tools)},
+                "json_schema": {
+                    "name": SCHEMA_NAME,
+                    "strict": True,
+                    "schema": step_schema(tools, text_max_chars),
+                },
             },
             "temperature": 0.0,
             "max_tokens": max_tokens,
             "stream": True,
             "cache_prompt": self._cache,
+            **NO_THINKING,
         }
 
     async def step(
-        self, messages: list[Message], tools: list[str], *, max_tokens: int, time_left_s: float
+        self,
+        messages: list[Message],
+        tools: list[str],
+        *,
+        max_tokens: int,
+        time_left_s: float,
+        text_max_chars: int | None = None,
     ) -> tuple[Step, StepTiming]:
         """One constrained call. Raises LocalUnavailable or InvalidStep."""
         started = time.perf_counter()
@@ -111,7 +134,8 @@ class LocalLlm:
         first: list[float] = []
         try:
             await asyncio.wait_for(
-                self._read(messages, tools, max_tokens, pieces, first, started), time_left_s
+                self._read(messages, tools, max_tokens, text_max_chars, pieces, first, started),
+                time_left_s,
             )
         except (httpx.HTTPError, asyncio.TimeoutError) as exc:
             raise LocalUnavailable(type(exc).__name__) from exc
@@ -122,16 +146,26 @@ class LocalLlm:
             raise InvalidStep("output was not a valid step") from exc
         return step, StepTiming(first[0] if first else total, total)
 
+    @staticmethod
+    def _log_timings(t: dict[str, Any]) -> None:
+        """What the server did for this step: how much of the prompt was new, and how fast."""
+        log.info(
+            "local step: %s new + %s cached prompt tokens read in %.1fs, %s tokens at %.1f/s",
+            t.get("prompt_n"), t.get("cache_n"), float(t.get("prompt_ms", 0)) / 1000,
+            t.get("predicted_n"), float(t.get("predicted_per_second", 0)),
+        )  # fmt: skip
+
     async def _read(
         self,
         messages: list[Message],
         tools: list[str],
         max_tokens: int,
+        text_max_chars: int | None,
         pieces: list[str],
         first: list[float],
         started: float,
     ) -> None:
-        body = self._body(messages, tools, max_tokens)
+        body = self._body(messages, tools, max_tokens, text_max_chars)
         async with self._client.stream("POST", self._url, json=body) as reply:
             if reply.status_code != 200:
                 raise LocalUnavailable(f"HTTP {reply.status_code}")
@@ -146,7 +180,11 @@ class LocalLlm:
                     raise LocalUnavailable("no first token in time") from exc
                 if not line.startswith("data:") or line.strip() == "data: [DONE]":
                     continue
-                delta = json.loads(line[5:])["choices"][0].get("delta", {}).get("content")
+                chunk = json.loads(line[5:])
+                if "timings" in chunk:
+                    self._log_timings(chunk["timings"])
+                choices = chunk.get("choices") or [{}]
+                delta = choices[0].get("delta", {}).get("content")
                 if delta:
                     if not first:
                         first.append(time.perf_counter() - started)

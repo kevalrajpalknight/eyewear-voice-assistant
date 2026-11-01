@@ -17,6 +17,7 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel, ValidationError
 
+from aiglasses.assistant.fillers import Fillers
 from aiglasses.assistant.intents import Intents
 
 
@@ -90,6 +91,7 @@ class ToolOutcome:
 class ToolRegistry:
     def __init__(self, tools: list[Tool] | None = None, *, intents: Intents | None = None) -> None:
         self.intents = intents or Intents([])
+        self.fillers = Fillers.load()
         self._tools: dict[str, Tool] = {}
         for tool in tools or []:
             self.register(tool)
@@ -169,7 +171,7 @@ class ToolRegistry:
             return ToolOutcome(False, f"bad arguments for {name}", "args")
         ctx.calls += 1
         if tool.announcement:
-            await ctx.announce(tool.announcement)
+            await ctx.announce(self.fillers.pick(tool.name) or tool.announcement)
         try:
             result = await asyncio.wait_for(tool.run(args, ctx), timeout_s)
         except asyncio.TimeoutError:

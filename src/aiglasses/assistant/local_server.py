@@ -118,9 +118,12 @@ class LocalServer:
         if not Path(args[2]).exists():
             raise ServerStartError(f"{args[2]} is missing; run `aiglasses models pull <name>`")
         flags = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
-        self._process = subprocess.Popen(
-            args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags
-        )
+        log_path = self.state_file.parent / "llama-server.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("ab") as sink:  # the child keeps its own handle after this closes
+            self._process = subprocess.Popen(
+                args, stdout=sink, stderr=subprocess.STDOUT, creationflags=flags
+            )
         self._job.add(self._process)
         state = ServerState(
             self._process.pid, self.port, str(self.settings.local_llm_model), time.time()

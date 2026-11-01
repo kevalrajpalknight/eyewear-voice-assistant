@@ -102,6 +102,45 @@ def build_llm(
     return RoutedLlmClient(effective, main, fast=fast, classifier=classifier)
 
 
+def brain_colour(record: AssistantTurnRecord) -> str:
+    brain = record.brain or ""
+    for prefix, colour in (("cloud", "magenta"), ("local", "green"), ("rules", "yellow")):
+        if brain.startswith(prefix):
+            return colour
+    return "dim"
+
+
+def describe_rich(record: AssistantTurnRecord) -> str:
+    """The turn summary as console markup: the brain line is coloured by who answered."""
+    row = record.to_json()
+    parts = {
+        key: seconds_text(row[key])  # type: ignore[arg-type]
+        for key in (
+            "end_to_sound_s", "decode_s", "stt_s", "router_s", "llm_first_token_s",
+            "first_audio_s", "playback_start_s",
+        )
+    }  # fmt: skip
+    why = f" · {record.route_reason}" if record.route_reason else ""
+    lane = f"lane {record.tier}" if record.tier is not None else "no lane"
+    colour = brain_colour(record)
+    head = OUTCOME_COLOUR.get(record.outcome, "red")
+    brain = escape(record.brain or "-")
+    tools = escape(record.tools or "none called")
+    return (
+        f"[bold {head}]━━ turn {record.turn} · {record.outcome} ━━[/]\n"
+        f"  [dim]heard[/]  {record.words_in} words · speech to text {escape(record.stt or '-')} "
+        f"{parts['stt_s']}\n"
+        f"  [dim]brain[/]  [bold {colour}]{brain}[/] [{colour}]({lane}{escape(why)})[/] · "
+        f"{record.chars_out} characters back\n"
+        f"  [dim]tools[/]  {tools}\n"
+        f"  [dim]voice[/]  {escape(record.tts or '-')} · {record.clauses} clauses\n"
+        f"  [dim]time[/]   to sound {parts['end_to_sound_s']} = decode {parts['decode_s']} + "
+        f"stt {parts['stt_s']} + router {parts['router_s']} + llm first token "
+        f"{parts['llm_first_token_s']} + first audio {parts['first_audio_s']} + "
+        f"start {parts['playback_start_s']}"
+    )
+
+
 def describe(record: AssistantTurnRecord) -> str:
     row = record.to_json()
     parts = {
@@ -128,11 +167,16 @@ def describe(record: AssistantTurnRecord) -> str:
 
 
 def _show_heard(text: str) -> None:
-    console.print(f"[cyan]you:[/] {escape(text)}")
+    console.print(f"[bold cyan]you:[/] [cyan]{escape(text)}[/]")
 
 
-def _show_said(text: str) -> None:
-    console.print(f"[green]EVA:[/] {escape(text)}")
+LANE_COLOUR = {0: "yellow", 1: "green", 2: "magenta"}  # rules, local model, cloud model
+OUTCOME_COLOUR = {"spoken": "green", "wake_ack": "cyan", "cancelled": "yellow"}
+
+
+def _show_said(text: str, lane: int | None) -> None:
+    colour = LANE_COLOUR.get(lane if lane is not None else -1, "white")
+    console.print(f"[bold {colour}]EVA:[/] [{colour}]{escape(text)}[/]")
 
 
 def _show_ignored(text: str, reason: str) -> None:
@@ -159,9 +203,14 @@ def make_pipeline(
             handle.write(json.dumps(asdict(correction)) + "\n")
 
     def show(record: AssistantTurnRecord) -> None:
-        console.print(escape(describe(record)))
+        if record.outcome == "ignored":
+            console.print(f"[dim]  · turn {record.turn} ignored[/]")
+            return
+        console.print(describe_rich(record))
         if record.error:
-            console.print(f"  [yellow]{escape(record.error)}[/]")
+            console.print(f"  [bold red]error[/] [red]{escape(record.error)}[/]")
+        console.print()
+        console.print()
 
     return ConversationPipeline(
         stt=stt, tts=tts, sink=sink, llm=llm, options=tts_options(assistant),

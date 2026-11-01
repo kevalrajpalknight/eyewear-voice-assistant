@@ -53,6 +53,7 @@ REASON_CATEGORIES = (
 
 
 log = logging.getLogger("aiglasses.lanes")
+TEXT_CHARS_PER_SENTENCE = 150  # the local model's JSON reply is cut off by its grammar at this size
 
 
 class Escalate(Exception):
@@ -162,7 +163,8 @@ class LocalFirstClient:
         finally:
             report.tools = list(ctx.log)
         report.lane, report.action = 2, "cloud"
-        yield self.settings.escalation_filler + " "
+        filler = self.settings.escalation_filler or self.registry.fillers.pick("thinking")
+        yield (filler or "One moment.") + " "
         try:
             async for text in self._cloud_lane(
                 messages, ctx, reason, max_tokens, enabled, drain, report, extra
@@ -362,7 +364,11 @@ class LocalFirstClient:
         assert self.local is not None
         try:
             step, timing = await self.local.step(
-                convo, tools, max_tokens=self.settings.local_llm_max_tokens, time_left_s=left
+                convo,
+                tools,
+                max_tokens=self.settings.local_llm_max_tokens,
+                time_left_s=left,
+                text_max_chars=self.settings.reply_target_sentences * TEXT_CHARS_PER_SENTENCE,
             )
         except InvalidStep:
             return None

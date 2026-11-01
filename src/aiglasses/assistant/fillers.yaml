@@ -1,0 +1,84 @@
+# Short spoken fillers (data). One is picked at random, never the same one twice in a row.
+# thinking: said when the question is handed to the stronger cloud model.
+# search_web / describe_scene: said when that tool starts.
+thinking:
+  - Hmm, let me think.
+  - Give me a second.
+  - One sec.
+  - Let me check on that.
+  - Okay, thinking.
+  - Just a moment.
+  - Let me see.
+  - Good question, one moment.
+  - Bear with me a second.
+  - Hold on, working on it.
+  - Let me work that out.
+  - Right, let me think about that.
+  - Hang on a moment.
+  - Let me have a think.
+  - Okay, give me a moment.
+  - Just thinking that through.
+  - Let me figure that out.
+  - One moment please.
+  - Let me put that together.
+  - Checking on that now.
+  - Hmm, let me see.
+  - Stay with me a second.
+  - Working on that.
+  - Let me mull that over.
+  - Okay, one moment.
+  - Let me get my thoughts together.
+  - Let me dig into that.
+  - Sure, one moment.
+  - Let me look into it.
+  - Thinking about that now.
+  - Just a tick.
+  - Let me sort that out.
+  - Alright, let me think.
+  - Give me a moment to think.
+  - Let me consider that.
+  - Let me find the right words.
+  - Okay, let me see what I can do.
+  - Let me run through that.
+  - Let me reason that out.
+  - Hold that thought, one moment.
+  - I'm on it, one moment.
+  - Let me work through this.
+  - Okay, let me check.
+  - Let me take a look at that.
+  - Right, one moment while I think.
+  - Let me piece that together.
+  - Mm, let me think that over.
+  - Just a sec, thinking.
+  - Alright, give me a second.
+  - Let me chew on that for a second.
+  - Okay, let me get that for you.
+search_web:
+  - Let me look that up.
+  - Searching now.
+  - Let me check online.
+  - One sec, searching.
+  - Let me find that for you.
+  - Looking that up now.
+  - Let me search for that.
+  - Checking the web.
+  - Okay, searching.
+  - Let me see what's out there.
+  - Pulling that up.
+  - Let me dig around online.
+  - Searching the web for that.
+  - Give me a sec, I'll search.
+  - Let me find out.
+describe_scene:
+  - Let me look.
+  - Okay, looking now.
+  - Let me take a look.
+  - One sec, looking.
+  - Let me see what that is.
+  - Taking a look.
+  - Let me check what I'm seeing.
+  - Looking at it now.
+  - Hold still, looking.
+  - Let me have a look.
+  - Okay, let me see.
+  - Checking the camera.

@@ -17,6 +17,7 @@ from aiglasses.assistant.fakes import (
     FakeStt,
     FakeTts,
 )
+from aiglasses.assistant.fillers import Fillers
 from aiglasses.assistant.intents import Intents
 from aiglasses.assistant.interfaces import ToolCall, TtsOptions
 from aiglasses.assistant.lanes import LocalFirstClient
@@ -200,7 +201,8 @@ async def test_the_user_repeating_the_question_escalates_to_the_cloud() -> None:
     await rig.turn(1)
     record = await rig.turn(2)
     assert record.tier == 2 and record.route_reason == "dissatisfied"
-    assert rig.settings.escalation_filler.split()[0] in rig.spoken and "Cloud answer" in rig.spoken
+    assert any(p in rig.spoken for p in Fillers.load().phrases("thinking"))
+    assert "Cloud answer" in rig.spoken
     note = rig.cloud.requests[0][0].content
     assert "local assistant passed this" in note and "the same question again" in note
 

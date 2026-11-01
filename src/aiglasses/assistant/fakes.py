@@ -126,7 +126,13 @@ class FakeLocalLlm(LocalLlm):
         return self._up
 
     async def step(
-        self, messages: list[Message], tools: list[str], *, max_tokens: int, time_left_s: float
+        self,
+        messages: list[Message],
+        tools: list[str],
+        *,
+        max_tokens: int,
+        time_left_s: float,
+        text_max_chars: int | None = None,
     ) -> tuple[Step, StepTiming]:
         self.calls.append((list(messages), list(tools)))
         item = self._script.pop(0)

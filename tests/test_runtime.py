@@ -13,6 +13,7 @@ import typer
 
 from aiglasses.assistant import engines, registry, runtime, session
 from aiglasses.assistant.fakes import FakeLlm, FakeStt, FakeTts
+from aiglasses.assistant.fillers import Fillers
 from aiglasses.assistant.recorder import Sentence
 from aiglasses.assistant.router import RoutedLlmClient
 from aiglasses.assistant.speaker import NullSink, SubprocessSpeakerSink
@@ -221,7 +222,8 @@ async def test_local_first_with_no_local_server_falls_back_to_the_cloud_cleanly(
         ble(tmp_path), settings, output="null", force_role=None, no_router=False, wav=wav
     )
     spoken = " ".join(tts.spoken)
-    assert settings.escalation_filler.split()[0] in spoken and "The cloud answered" in spoken
+    assert any(p in spoken for p in Fillers.load().phrases("thinking"))
+    assert "The cloud answered" in spoken
     row = json.loads((tmp_path / "logs" / "assistant_turns.jsonl").read_text().splitlines()[-1])
     assert row["tier"] == 2 and row["route_reason"] == "local_down" and row["route_role"] == "cloud"
 

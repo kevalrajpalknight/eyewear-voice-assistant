@@ -170,7 +170,7 @@ class AssistantSettings(BaseSettings):
     models_dir: Path = Path("models")
     model_registry_path: Path = Path("src/aiglasses/assistant/models.yaml")
     model_download_budget_gb: float = Field(8.0, gt=0)
-    escalation_filler: str = "One moment, let me think about that."
+    escalation_filler: str | None = None  # None: a random phrase from fillers.yaml
 
     # Agent loop and tools
     agent_max_steps: int = Field(3, ge=1, le=10)
@@ -190,6 +190,7 @@ class AssistantSettings(BaseSettings):
 
     # Search
     search_provider: str = "ddgs"
+    search_context_chars: int = Field(700, gt=0)  # search text the local model reads, at most
     search_max_results: int = Field(5, ge=1, le=10)
     search_region: str = "wt-wt"
     search_cache_ttl_s: float = Field(300.0, ge=0)

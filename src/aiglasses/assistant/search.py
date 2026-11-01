@@ -162,4 +162,5 @@ class SearchWeb:
             spoken = SPOKEN_FAILURE.get(exc.category, SPOKEN_FALLBACK)
             raise ToolRefused(f"search {exc.category}", spoken) from exc
         lines = [f"{i}. {h.title}: {h.snippet}" for i, h in enumerate(hits, start=1)]
-        return ToolResult("search results: " + " | ".join(lines), tainted=True)
+        text = " | ".join(lines)[: self._settings.search_context_chars]
+        return ToolResult("search results: " + text, tainted=True)

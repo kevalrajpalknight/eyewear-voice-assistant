@@ -170,3 +170,18 @@ def test_port_helpers() -> None:
         assert not local_server.port_is_free(port)
         assert local_server.free_port(port) != port
     assert local_server.port_is_free(port)
+
+
+def test_the_reply_text_is_capped_by_the_grammar_so_it_cannot_run_into_the_token_limit() -> None:
+    assert step_schema(["a"], 300)["properties"]["text"]["maxLength"] == 300
+    assert "maxLength" not in step_schema(["a"])["properties"]["text"]
+
+
+def test_every_local_request_switches_the_models_thinking_off() -> None:
+    from aiglasses.assistant.interfaces import Message
+    from aiglasses.assistant.local_llm import LocalLlm
+
+    body = LocalLlm("http://127.0.0.1:1", first_token_timeout_s=1)._body(
+        [Message("user", "hi")], ["a"], 120, 300
+    )
+    assert body["thinking_budget_tokens"] == 0
