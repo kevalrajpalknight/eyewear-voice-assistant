@@ -10,6 +10,7 @@ hints:
       - '\b(?:is|are) (?:this|that|these|those) (?:snack|product|packet|package|bottle|item|food)s? (?:any |really |very )?(?:good|healthy|safe|worth|fresh)\b'
       - '\b(?:check|find|search) (?:this|that|these|those)\b.*\b(?:online|reviews?|price|ingredients)\b'
       - '\b(?:reviews?|ingredients|price) (?:of|for|on) (?:this|that|these|those)\b'
+      - '\b(?:this|that|these|those) (?:snack|product|packet|package|bottle|item|food)\b.*\b(?:good|healthy|safe|worth|reviews?|ingredients|price|cheaper)\b'
   - tool: describe_scene
     patterns:
       - '\b(?:look at|read|scan|identify|recogni[sz]e|what colou?r|how many|what brand|which brand)\b.*\b(?:this|these|that|those|label|packet|package|bottle|box|snack|product|item|thing|in my hand|in front of me|holding|pointing)\b'
@@ -21,5 +22,6 @@ hints:
       - '\b(?:weather|forecast|temperature|umbrella|raining|rain|snowing|how (?:hot|cold|warm)|is it (?:hot|cold|warm|sunny))\b'
   - tool: search_web
     patterns:
+      - '\b(?:research|history of|background on|everything about|learn about)\b'
       - '\b(?:search|look up|google|latest|news|price|prices|who won|score|scores|reviews?|online|trending)\b'
       - '\bwhat is the (?:price|rate)\b'

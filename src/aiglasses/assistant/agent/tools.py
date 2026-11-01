@@ -1,6 +1,7 @@
 """Our tools as LangChain tools. The registry still enforces every rule (risk class, taint,
 "you must have asked", caps, timeouts); this layer only adapts the call shape."""
 
+import logging
 from typing import Any
 
 from langchain_core.tools import BaseTool, StructuredTool
@@ -11,6 +12,7 @@ from aiglasses.assistant.tools.base import Risk, ToolRegistry
 from aiglasses.settings import AssistantSettings
 
 ESCALATE_TOOL = "think_harder"
+log = logging.getLogger("aiglasses.agent")
 
 
 class _Why(BaseModel):
@@ -39,6 +41,8 @@ def _adapt(registry: ToolRegistry, settings: AssistantSettings, name: str) -> Ba
         )  # fmt: skip
         turn.report.tools = list(turn.ctx.log)
         turn.report.notes.append(f"{name}: {outcome.summary}")
+        if not outcome.ok:
+            log.warning("tool %s failed (%s): %s", name, outcome.category, outcome.summary)
         if name == "forget_all_that" and outcome.ok:
             turn.report.skip_memory = True
         return outcome.summary if outcome.ok else f"Failed: {outcome.summary}"

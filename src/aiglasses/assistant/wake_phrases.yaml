@@ -2,7 +2,7 @@
 # `names` are what the assistant is called plus how speech recognition tends to mishear it.
 names: [eva, ava, eve, evo, ever, eba, iva, eeva, ewa, iwa, yeva, ieva, evah, eevah, ivah, evar, emma, shiva]
 # Words that may come before the name.
-greetings: [hey, hello, hi, okay, ok, hay, he]
+greetings: [hey, hello, hi, hii, hei, okay, ok, hay, he]
 # Extra command words that may follow the name and mean "I am talking to you".
 listen_words: [listen, are you there, wake up]
 # Ordinary words that are never accepted as a way of saying the name, even when `wake-train` heard

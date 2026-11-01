@@ -13,6 +13,8 @@ import yaml
 
 from aiglasses.domain.errors import ConfigError
 
+MAX_TAIL_WORDS = 5  # a short call that ends with the name wakes it
+
 
 @dataclass(frozen=True)
 class WakeResult:
@@ -64,6 +66,9 @@ class WakePhrases:
         name = "|".join(re.escape(n) for n in names)
         greet = "|".join(re.escape(g) for g in greetings)
         listen = "|".join(re.escape(w) for w in listen_words)
+        self._tail = re.compile(
+            rf"(?:^|[\s,.!?])(?:(?:{greet})[\s,.!]+)?(?:{name})\W*$", re.IGNORECASE
+        )
         self._pattern = re.compile(
             rf"^\s*(?:(?:{greet})[\s,.!]+)?(?:{name})\b[\s,.!:;-]*(?:(?:{listen})\b[\s,.!:;-]*)?",
             re.IGNORECASE,
@@ -88,6 +93,8 @@ class WakePhrases:
     def strip(self, text: str) -> WakeResult:
         found = self._pattern.match(text)
         if found is None:
+            if len(text.split()) <= MAX_TAIL_WORDS and self._tail.search(text):
+                return WakeResult("", True, True)  # "hi there, Eva": called by name
             return WakeResult(text.strip(), False, False)
         rest = text[found.end() :].strip()
         return WakeResult(rest, True, not rest)

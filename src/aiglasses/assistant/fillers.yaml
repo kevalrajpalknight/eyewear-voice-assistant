@@ -82,6 +82,12 @@ describe_scene:
   - Let me have a look.
   - Okay, let me see.
   - Checking the camera.
+waiting:
+  - Still working on it.
+  - Just a bit longer.
+  - Still looking.
+  - Hang on, still on it.
+  - Bear with me.
 thanks:
   - You're welcome.
   - Anytime.

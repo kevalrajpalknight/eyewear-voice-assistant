@@ -3,6 +3,8 @@
 from aiglasses.assistant.chunker import ends_sentence
 from aiglasses.assistant.speech_chunks import MERGE_BELOW_WORDS, split_speech
 
+FLUSH = "\u2063"  # narration ends with this: speak what is complete now, do not wait
+
 
 class ClauseStream:
     """Feed text deltas; get chunks as soon as they are certain. The newest chunk is held back
@@ -14,7 +16,8 @@ class ClauseStream:
         self._emitted = 0
 
     def feed(self, delta: str) -> list[str]:
-        self._buffer += delta
+        forced = FLUSH in delta
+        self._buffer += delta.replace(FLUSH, "")
         text = self._buffer
         if text and not text[-1].isspace():
             head, _, _partial = text.rpartition(" ")
@@ -26,7 +29,7 @@ class ClauseStream:
             and len(last) >= MERGE_BELOW_WORDS
             and ends_sentence(last[-1])
         )
-        ready = chunks[self._emitted :] if finished else chunks[self._emitted : -1]
+        ready = chunks[self._emitted :] if finished or forced else chunks[self._emitted : -1]
         self._emitted += len(ready)
         return ready
 

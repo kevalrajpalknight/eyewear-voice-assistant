@@ -184,7 +184,7 @@ class AssistantSettings(BaseSettings):
         "forget_all_that,describe_scene"
     )
     tool_max_calls_per_turn: int = Field(3, ge=1)
-    tool_timeout_s: float = Field(10.0, gt=0)
+    tool_timeout_s: float = Field(30.0, gt=0)
     allow_recording_tools: bool = False
     camera_open_asks_first: bool = False  # "open the camera": ask before taking the photo
     photo_min_interval_s: float = Field(10.0, ge=0)
@@ -200,7 +200,7 @@ class AssistantSettings(BaseSettings):
     search_max_results: int = Field(5, ge=1, le=10)
     search_region: str = "wt-wt"
     search_cache_ttl_s: float = Field(300.0, ge=0)
-    search_timeout_s: float = Field(8.0, gt=0)
+    search_timeout_s: float = Field(6.0, gt=0)
 
     # Weather (free public forecast service, no key)
     weather_location: str = ""  # default city when none is spoken; empty = ask

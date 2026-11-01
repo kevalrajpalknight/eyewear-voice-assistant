@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 
 from aiglasses.assistant.agent.turn import TurnReport
-from aiglasses.assistant.clauses import ClauseStream
+from aiglasses.assistant.clauses import FLUSH, ClauseStream
 from aiglasses.assistant.cleaner import clean_reply
 from aiglasses.assistant.echo import Debug, TurnLog
 from aiglasses.assistant.echo_guard import EchoGuard
@@ -354,7 +354,7 @@ class ConversationPipeline:
                     break
                 if record.t_llm_first is None:
                     record.t_llm_first = time.time()
-                reply.append(delta)
+                reply.append(delta.replace(FLUSH, ""))
                 stage = "tts"
                 for chunk_text in stream.feed(delta):
                     keep_going = keep_going and await speak(chunk_text)

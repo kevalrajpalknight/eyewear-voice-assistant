@@ -124,13 +124,13 @@ set text to always say that instead), `SEARCH_CONTEXT_CHARS` (`700`: how much se
 
 ## Agent loop and tools
 `AGENT_MAX_STEPS` (`6`, at most 10), `AGENT_TIME_BUDGET_S` (`60`), `TOOLS_ENABLED` (comma list;
-default only read-only tools), `TOOL_MAX_CALLS_PER_TURN` (`3`), `TOOL_TIMEOUT_S` (`10`),
+default only read-only tools), `TOOL_MAX_CALLS_PER_TURN` (`3`), `TOOL_TIMEOUT_S` (`30`),
 `ALLOW_RECORDING_TOOLS` (`false`), `CAMERA_OPEN_ASKS_FIRST` (`false`: "open the camera" takes a photo at once; `true` asks first), `PHOTO_MIN_INTERVAL_S` (`10`), `PHOTO_MAX_PER_SESSION` (`10`),
 `INTENTS_PATH` (empty = the shipped intents file), `TURN_END_SILENCE_MS` (`300`).
 
 ## Search
 `SEARCH_PROVIDER` (`ddgs`, no key), `SEARCH_MAX_RESULTS` (`5`), `SEARCH_REGION` (`wt-wt`),
-`SEARCH_CACHE_TTL_S` (`300`), `SEARCH_TIMEOUT_S` (`5`).
+`SEARCH_CACHE_TTL_S` (`300`), `SEARCH_TIMEOUT_S` (`6`).
 
 ## Weather
 `WEATHER_LOCATION` (empty: the assistant asks which city), `WEATHER_GEOCODING_URL` and

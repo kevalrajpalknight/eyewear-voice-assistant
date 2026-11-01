@@ -17,6 +17,7 @@ from aiglasses.assistant.agent.hints import Hints
 from aiglasses.assistant.agent.routing import ModelRouter
 from aiglasses.assistant.agent.tools import to_langchain_tools
 from aiglasses.assistant.agent.turn import Turn, TurnReport, current_turn
+from aiglasses.assistant.clauses import FLUSH
 from aiglasses.assistant.escalation import EscalationRules
 from aiglasses.assistant.intents import Intents
 from aiglasses.assistant.interfaces import TIME_MARKER, Message
@@ -28,8 +29,10 @@ from aiglasses.settings import AssistantSettings
 
 log = logging.getLogger("aiglasses.agent")
 END = object()
+STILL_WORKING_S = 6.0  # silence this long during a tool or model step: say it is still going
+MAX_REASSURANCES = 2
 LEAK_CHECK_CHARS = 28  # how much of a model message is read before it may be spoken
-MARKERS = r"<\||\|>|tool_call|<tool"
+MARKERS = r"<\||\|>|tool_call|<tool|^\s*\[\w+\s*:"
 AGENT_RULES = (
     "You can use tools. Before a tool call say ONE short sentence about what you are about to do. "
     "Look with the camera when the user asks about something in front of them, search the web "
@@ -112,7 +115,7 @@ class AgentClient:
         async def announce(text: str) -> None:
             if text not in said:  # each narration line once per turn
                 said.add(text)
-                queue.put_nowait(text + " ")
+                queue.put_nowait(text + " " + FLUSH)
 
         enabled = self.settings.enabled_tools
         turn = Turn(ToolContext(utterance=utterance, announce=announce), report, enabled)
@@ -160,13 +163,21 @@ class AgentClient:
     ) -> AsyncIterator[str]:
         """One run of the agent: its narration and text, in order, until it ends or time is up."""
         runner = asyncio.create_task(self._run(messages, queue, turn))
+        reassured = 0
         try:
             while True:
                 left = deadline - self._clock()
                 if left <= 0:
                     turn.escalate("time_budget")
                     return
-                item = await asyncio.wait_for(queue.get(), left)
+                try:
+                    item = await asyncio.wait_for(queue.get(), min(left, STILL_WORKING_S))
+                except asyncio.TimeoutError:
+                    if left <= STILL_WORKING_S or reassured >= MAX_REASSURANCES:
+                        raise
+                    reassured += 1  # a long silence: say that the work goes on
+                    yield (self.registry.fillers.pick("waiting") or "Still working.") + " " + FLUSH
+                    continue
                 if item is END:
                     return
                 if isinstance(item, Exception):

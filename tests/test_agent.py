@@ -210,3 +210,30 @@ async def test_the_planned_tool_is_announced_before_the_model_is_asked() -> None
     line = next(p for p in rig.registry.fillers.phrases("describe_scene") if p in spoken)
     assert spoken.index(line) < spoken.index("pack of oats") and spoken.count(line) == 1
     assert rig.client.report.tools == [("describe_scene", "ok")]
+
+
+async def test_narration_is_spoken_at_once_even_when_it_is_a_short_line() -> None:
+    from aiglasses.assistant.clauses import FLUSH, ClauseStream
+
+    stream = ClauseStream(6)
+    assert stream.feed("Searching now. " + FLUSH) == ["Searching now."]
+    assert ClauseStream(6).feed("Searching now. ") == []  # without the marker it waits
+
+
+async def test_a_bracketed_tool_call_is_not_spoken_and_the_cloud_repeats_the_turn() -> None:
+    rig = Rig(
+        [AIMessage("[getweather: location=Waliyad] I'm checking the weather for Waliyad now.")],
+        [AIMessage("It is warm today.")],
+    )
+    spoken = await rig.say("what should I wear in Waliyad")
+    assert "getweather" not in spoken and "warm today" in spoken
+    assert rig.client.report.category == "bad_tool_call" and rig.client.report.lane == 2
+
+
+def test_a_short_call_that_ends_with_the_name_wakes_it() -> None:
+    from aiglasses.assistant.wake import WakePhrases
+
+    wake = WakePhrases.load()
+    assert wake.strip("Hi there, Eva.").only_wake  # noqa: B005
+    assert wake.strip("hei iwa").only_wake  # noqa: B005
+    assert not wake.strip("I told the team to wait for the report today").woke  # noqa: B005

@@ -135,7 +135,7 @@ class FallbackSearch:
     """Try the main source (once more on a timeout or block), then the second one."""
 
     def __init__(
-        self, primary: SearchProvider, secondary: SearchProvider | None, retries: int = 1
+        self, primary: SearchProvider, secondary: SearchProvider | None, retries: int = 0
     ) -> None:
         self._primary, self._secondary, self._retries = primary, secondary, retries
 

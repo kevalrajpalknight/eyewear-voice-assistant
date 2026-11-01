@@ -115,7 +115,7 @@ async def test_search_retries_once_then_uses_the_second_source() -> None:
             raise SearchError("timeout")
 
     first, second = Flaky(), FakeSearch([SearchHit("Tata Nano", "Launched in 2008.")])
-    hits = await FallbackSearch(first, second).search(
+    hits = await FallbackSearch(first, second, retries=1).search(
         "tata nano", max_results=3, region="x", timeout_s=1
     )
     assert len(first.queries) == 2 and hits[0].title == "Tata Nano"

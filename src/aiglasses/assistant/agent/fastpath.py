@@ -1,12 +1,16 @@
 """Answers that need no model: built-in handlers (time, date, stop...) and the intent rules."""
 
+import asyncio
 from collections.abc import AsyncIterator, Callable
 
 from aiglasses.assistant.agent.turn import Turn
+from aiglasses.assistant.clauses import FLUSH
 from aiglasses.assistant.intents import Intents, normalise
 from aiglasses.assistant.router import Handler, LocalState
 from aiglasses.assistant.tools.base import ToolRegistry
 from aiglasses.settings import AssistantSettings
+
+NARRATION_POLL_S = 0.1
 
 
 async def fast_path(
@@ -33,12 +37,19 @@ async def fast_path(
     if intent is None or intent.tool not in turn.enabled or intent.tool == "search_web":
         return
     report.lane, report.action, report.category = 0, "tool", intent.tool
-    outcome = await registry.call(
-        intent.tool, intent.args_for(text), turn.ctx, enabled=turn.enabled,
-        max_calls=settings.tool_max_calls_per_turn, timeout_s=settings.tool_timeout_s,
+    call = asyncio.create_task(
+        registry.call(
+            intent.tool, intent.args_for(text), turn.ctx, enabled=turn.enabled,
+            max_calls=settings.tool_max_calls_per_turn, timeout_s=settings.tool_timeout_s,
+        )
     )  # fmt: skip
+    while not call.done():  # speak the narration while the tool works, not after it
+        await asyncio.wait({call}, timeout=NARRATION_POLL_S)
+        for said in drain():
+            yield said + " " + FLUSH
+    outcome = call.result()
     for said in drain():
-        yield said + " "
+        yield said + " " + FLUSH
     report.steps = 1
     report.tools = list(turn.ctx.log)
     report.notes.append(f"{intent.tool}: {outcome.summary}")
