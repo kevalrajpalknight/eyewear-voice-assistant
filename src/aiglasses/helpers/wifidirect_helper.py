@@ -18,6 +18,7 @@ import sys
 from typing import Any
 
 ADVERTISE_START_S = 5.0
+RESCAN_S = 6.0
 PROBE = ("one.one.one.one", 443)
 PROBE_TIMEOUT_S = 3.0
 RESTORE_ATTEMPTS = 3
@@ -174,18 +175,22 @@ class WinrtBackend:
 
             loop.call_soon_threadsafe(record)
 
-        watcher = DeviceInformation.create_watcher_aqs_filter(selector)
-        token = watcher.add_added(added)
-        watcher.start()
-        try:
-            self._info = await asyncio.wait_for(match, timeout)
-            return str(self._info.id)
-        except asyncio.TimeoutError:
-            self.seen = sorted(str(i.name)[:12] for i in seen.values())
-            return None
-        finally:
-            watcher.remove_added(token)
-            watcher.stop()
+        deadline = loop.time() + timeout
+        while loop.time() < deadline:  # restart the watcher so every pass is a fresh active scan
+            watcher = DeviceInformation.create_watcher_aqs_filter(selector)
+            token = watcher.add_added(added)
+            watcher.start()
+            try:
+                slice_s = min(RESCAN_S, max(deadline - loop.time(), 0.1))
+                self._info = await asyncio.wait_for(asyncio.shield(match), slice_s)
+                return str(self._info.id)
+            except asyncio.TimeoutError:
+                continue
+            finally:
+                watcher.remove_added(token)
+                watcher.stop()
+        self.seen = sorted(str(i.name)[:12] for i in seen.values())
+        return None
 
     async def connect(self, peer: str, intent: int, timeout: float) -> dict[str, Any]:
         from winrt.windows.devices.enumeration import (

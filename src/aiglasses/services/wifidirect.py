@@ -11,7 +11,7 @@ from typing import Protocol
 
 from aiglasses.domain.errors import GlassesError, GlassesTimeoutError
 
-PEER_TIMEOUT_SECONDS = 16.0
+PEER_TIMEOUT_SECONDS = 30.0
 CONNECT_TIMEOUT_SECONDS = 15.0
 MAX_RETRIES = 1
 GROUP_OWNER_INTENT = 15  # PC is group owner, the glasses join as client (the phone's roles)
