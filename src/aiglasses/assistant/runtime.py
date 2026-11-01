@@ -39,6 +39,7 @@ from aiglasses.assistant.tools.base import ToolRegistry
 from aiglasses.assistant.tools.device import DeviceHolder
 from aiglasses.assistant.tools.factory import build_registry
 from aiglasses.assistant.vision import GlassesWifiImageSource, build_vision
+from aiglasses.assistant.wake import WakePhrases
 from aiglasses.config import Settings
 from aiglasses.domain.errors import ConfigError, GlassesError
 from aiglasses.glasses import Glasses
@@ -147,6 +148,7 @@ def make_pipeline(
         debug=Debug(ble.captures_dir / "debug") if assistant.debug_save_audio else None,
         on_record=show, on_correction=log_correction if glossary is not None else None,
         memory=memory,
+        wake=WakePhrases.load(assistant.wake_phrases_path),
     )  # fmt: skip
 
 
@@ -208,9 +210,11 @@ async def run_assistant(
                 finally:
                     holder.unbind()
 
+        if assistant.startup_line:
+            await pipeline.say_line(assistant.startup_line)
         console.print(
-            f"STT {stt.name}, TTS {tts.name}, LLM {llm.name}. Single-click the rear button "
-            "(don't hold), wait about 1 s, speak. Click again while it talks to interrupt. "
+            f"{assistant.assistant_name}: STT {stt.name}, TTS {tts.name}, LLM {llm.name}. "
+            "Click the rear button (don't hold), wait about 1 s, speak. Click again to interrupt. "
             "Ctrl+C to stop."
         )
         end = await run_forever(app, open_glasses, report=lambda m: console.print(f"[dim]{m}[/]"))

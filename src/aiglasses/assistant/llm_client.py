@@ -215,6 +215,7 @@ class LangChainLlmClient:
         self.name = f"{role.role}:{role.provider}"
         self._injected = model
         self._secrets = [role.api_key.get_secret_value()] if role.api_key else []
+        self.last_finish_reason: str | None = None
 
     def _model(self, max_tokens: int) -> Any:
         if self._injected is not None:
@@ -241,6 +242,7 @@ class LangChainLlmClient:
         prepared = _to_langchain(messages)
         loop = asyncio.get_running_loop()
         attempt = 0
+        self.last_finish_reason = None
         while True:
             started = False
             collector = _ToolCallCollector()
@@ -257,6 +259,12 @@ class LangChainLlmClient:
                         break
                     if with_tools:
                         collector.feed(chunk)
+                    meta = getattr(chunk, "response_metadata", None) or {}
+                    self.last_finish_reason = (
+                        meta.get("finish_reason")
+                        or meta.get("stop_reason")
+                        or self.last_finish_reason
+                    )
                     text = str(chunk.text)
                     if text:
                         started = True

@@ -1,7 +1,6 @@
 import httpx
 import pytest
 
-from aiglasses.assistant.clauses import ClauseStream
 from aiglasses.assistant.intents import Intents, normalise
 from aiglasses.assistant.tools.base import ToolContext, ToolRefused
 from aiglasses.assistant.tools.info import GetTime, GetWeather, TimeArgs, WeatherArgs
@@ -79,13 +78,3 @@ def test_the_weather_intent_catches_the_city_and_ignores_history_questions() -> 
     plain = intents.find("how is the weather")
     assert plain is not None and plain.args_for("how is the weather") == {}
     assert intents.find("what was the weather yesterday") is None
-
-
-def test_a_finished_sentence_is_spoken_without_waiting_for_the_next_word() -> None:
-    stream = ClauseStream(6)
-    assert stream.feed("One moment, let me think about that. ") == [
-        "One moment, let me think about",
-        "that.",
-    ]
-    held = ClauseStream(6)
-    assert held.feed("One moment, let me think about that.") == []  # no space yet: still growing

@@ -22,7 +22,7 @@ one run.
 | `LLM_API_KEY` | none | Provider key. Environment or `.env` only. |
 | `LLM_BASE_URL` | provider's own | Needed for `openai_compatible`; overrides the built-in URL (OpenRouter's is built in). |
 | `LLM_TEMPERATURE` | `0.6` | 0 to 2 |
-| `LLM_MAX_TOKENS` | `300` | Upper bound on generated tokens per reply |
+| `LLM_MAX_TOKENS` | `1200` | Upper bound on generated tokens per reply |
 | `LLM_TIMEOUT_S` | `30` | Whole-request time limit, seconds |
 | `LLM_MAX_RETRIES` | `2` | Retries, only before the first token arrives |
 
@@ -74,10 +74,19 @@ glasses speaker. Keep `AUDIO_VOLUME_LIMIT` low in your own `.env`; `assistant ch
 default device. The glossary file format is one term per line with spoken forms after a single
 `|` (`RapDuo SM | rap duo s m, rap do`); `assistant check` explains it and warns about extra pipes.
 
+## Identity and wake phrases
+`ASSISTANT_NAME` (`EVA`), `ASSISTANT_NAME_LONG` (`Eyewear Voice Assistant`), `STARTUP_LINE`
+(spoken once when ready; empty = silent), `WAKE_MODE` (`button`, `glasses_phrase`,
+`hfp_experimental`; only `button` is implemented), `WAKE_REQUIRED` (`false`: a request that arrives
+from the rear click needs no wake phrase; `true` ignores speech without one), `WAKE_PHRASES_PATH`
+(empty = shipped `wake_phrases.yaml`: names with common mis-hearings, greetings), `WAKE_ACK`
+(`Yes?`, said when only the wake phrase was heard) and `FOLLOWUP_WINDOW_S` (`0`, reserved).
+A wake phrase at the start of a request is always removed before routing.
+
 ## Assistant behaviour
 `PERSONA_PATH` (empty: the persona in the package), `ASSISTANT_TIMEZONE` (`Asia/Kolkata`),
 `MAX_TURNS_PER_SESSION` (`50`),
-`MAX_REPLY_SECONDS` (`25` seconds of speech at most), and the three fixed lines spoken on
+`MAX_REPLY_SECONDS` (`60` seconds of speech, soft), and the three fixed lines spoken on
 failures: `FALLBACK_LLM_ERROR`, `FALLBACK_NO_SPEECH`, `FALLBACK_TTS_ERROR`.
 
 ## Logging and privacy
@@ -91,8 +100,9 @@ keys and anything shaped like an API key from every log line.
 first applies; expiry is silent and memory lives in RAM only.
 
 ## Reply length
-`REPLY_TARGET_SENTENCES` (`2`) goes into the persona; `REPLY_MAX_SENTENCES` (`5`) is a hard cut at
-a sentence boundary for every lane.
+`REPLY_TARGET_SENTENCES` (`3`) goes into the persona. `REPLY_SOFT_MAX_SENTENCES` (`8`; old name
+`REPLY_MAX_SENTENCES`) is a soft limit: speech never stops mid-sentence, past the limit the reply is
+wrapped up with `WRAP_UP_LINE`. `FIRST_CHUNK_MIN_WORDS` (`8`) sets how early speech starts.
 
 ## Local model (llama.cpp)
 `LOCAL_LLM_BIN_DIR` (`tools/llama.cpp`), `LOCAL_LLM_MODEL` (a name from the registry; empty means no
@@ -105,7 +115,7 @@ local model), `LOCAL_LLM_THREADS` (empty = physical cores), `LOCAL_LLM_CTX` (`40
 ## Agent loop and tools
 `AGENT_MAX_STEPS` (`3`, at most 10), `AGENT_TIME_BUDGET_S` (`8`), `TOOLS_ENABLED` (comma list;
 default only read-only tools), `TOOL_MAX_CALLS_PER_TURN` (`3`), `TOOL_TIMEOUT_S` (`10`),
-`ALLOW_RECORDING_TOOLS` (`false`), `PHOTO_MIN_INTERVAL_S` (`10`), `PHOTO_MAX_PER_SESSION` (`10`),
+`ALLOW_RECORDING_TOOLS` (`false`), `CAMERA_OPEN_ASKS_FIRST` (`false`: "open the camera" takes a photo at once; `true` asks first), `PHOTO_MIN_INTERVAL_S` (`10`), `PHOTO_MAX_PER_SESSION` (`10`),
 `INTENTS_PATH` (empty = the shipped intents file), `TURN_END_SILENCE_MS` (`300`).
 
 ## Search

@@ -134,7 +134,7 @@ def local_report(assistant: AssistantSettings, console: Console) -> list[str]:
     console.print(
         f"Memory: {assistant.memory_max_turns} turns or {assistant.memory_ttl_s:g} s, "
         f"{assistant.memory_max_tokens} tokens; replies: about {assistant.reply_target_sentences}, "
-        f"at most {assistant.reply_max_sentences} sentences; agent: {assistant.agent_max_steps} "
+        f"{assistant.memory_max_tokens} tokens; replies: about {assistant.reply_target_sentences}, "
         f"steps in {assistant.agent_time_budget_s:g} s"
     )
     if assistant.router_mode != "local_first":

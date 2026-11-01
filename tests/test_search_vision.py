@@ -182,7 +182,7 @@ async def test_describe_scene_looks_describes_and_taints_the_turn() -> None:
 async def test_describe_scene_failure_modes_are_spoken_not_raised() -> None:
     cases = [
         (DescribeSceneTool(FakeImageSource(b""), None), "switched off"),
-        (DescribeSceneTool(GlassesWifiImageSource(), FakeVision()), "through the glasses"),
+        (DescribeSceneTool(GlassesWifiImageSource(), FakeVision()), "from the glasses"),
     ]
     for tool, words in cases:
         with pytest.raises(ToolRefused) as caught:

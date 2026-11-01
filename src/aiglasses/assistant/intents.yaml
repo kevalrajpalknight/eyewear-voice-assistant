@@ -7,9 +7,18 @@ intents:
     match:
       - '^(?:please |can you |could you |go ahead and )*(?:take|snap|capture|shoot) (?:a |one |another |me a )?(?:photo|picture|pic|photograph)\b'
       - '^(?:please )?(?:photo|picture) (?:now|please)\b'
+      - '^(?:please |can you |could you )*(?:snap|capture|click|shoot)(?: it| this| that| one| now| a photo| a picture)?$'
+      - '^(?:please |can you |could you )*(?:snap|click|shoot) (?:a |one |another )?(?:photo|picture|pic)\b'
     reject:
       - '\b(?:took|taken|taking|have|had|did|yesterday|last|earlier|ago|how|when|why|what|where)\b'
       - '\b(?:don''t|do not|never|stop|not)\b'
+  open_camera:
+    tool: take_photo
+    args: {intro: true}
+    match:
+      - '^(?:please |can you |could you |go ahead and )*(?:open|start|turn on|switch on|activate|launch)(?: up)? (?:the |my )?camera\b'
+    reject:
+      - '\b(?:don''t|do not|never|how|why|when|what|where|did|does|is|was)\b'
   read_battery:
     tool: read_battery
     match:
@@ -43,6 +52,9 @@ intents:
     match:
       - '\bwhat (?:am i|are we) (?:looking|looking at)\b'
       - '\bwhat do you see\b'
+      - '^(?:please |can you |could you )*(?:identify|recognise|recognize|name)(?: this| that| the)?(?: object| thing| item| animal| plant| flower| fruit| product)?$'
+      - '^(?:what is|what''s|what are) (?:this|that|these|those|in front of me)(?: object| thing| item)?$'
+      - '^(?:please |can you |could you )*(?:look at|check out) (?:this|that)$'
       - '^(?:please )?(?:look at|describe) (?:this|what i(?:''m| am) looking at)\b'
     reject:
       - '\b(?:yesterday|last)\b'
@@ -56,3 +68,12 @@ intents:
       - '\b(?:yesterday|last (?:week|year)|history|climate)\b'
     capture:
       - '\b(?:in|at|for) (?P<location>[a-z]+(?: [a-z]+)??)(?: right now| today| tonight| tomorrow| now)?$'
+  search_web:
+    tool: search_web
+    match:
+      - '^(?:please |can you |could you )*(?:search|google|look up|find out)(?: the web| the internet| online)?(?: for| about| on)? (?P<query>.{3,})$'
+      - '^(?:please |can you |could you )*search (?:the web |the internet |online )?(?:for |about )?(?P<query>.{3,})$'
+    reject:
+      - '\b(?:your memory|my memory|history|battery|photos?|pictures?|glasses)\b'
+    capture:
+      - '^(?:please |can you |could you )*(?:search|google|look up|find out)(?: the web| the internet| online)?(?: for| about| on)? (?P<query>.{3,})$'

@@ -101,6 +101,10 @@ class ReadMediaCounts:
         )
 
 
+class PhotoArgs(BaseModel):
+    intro: bool = False  # set by the open-the-camera intent: explain first
+
+
 class TakePhoto:
     """State-changing: runs only when the user's own words asked for it (see intents.yaml).
 
@@ -110,8 +114,8 @@ class TakePhoto:
     name: ClassVar[str] = "take_photo"
     description: ClassVar[str] = "Take one photo with the glasses camera."
     risk: ClassVar[Risk] = Risk.DEVICE_STATE
-    args_model: ClassVar[type[BaseModel]] = NoArgs
-    announcement: ClassVar[str | None] = "Taking a photo."
+    args_model: ClassVar[type[BaseModel]] = PhotoArgs
+    announcement: ClassVar[str | None] = None
 
     def __init__(
         self,
@@ -120,6 +124,7 @@ class TakePhoto:
         min_interval_s: float,
         max_per_session: int,
         clock: Callable[[], float] = time.monotonic,
+        ask_first_on_open: bool = False,
     ) -> None:
         self._device = device
         self._min_interval = min_interval_s
@@ -127,8 +132,18 @@ class TakePhoto:
         self._clock = clock
         self._taken = 0
         self._last: float | None = None
+        self._ask_first = ask_first_on_open
 
     async def run(self, args: BaseModel, ctx: ToolContext) -> ToolResult:
+        if getattr(args, "intro", False):
+            if self._ask_first:
+                return ToolResult(
+                    "asked before taking a photo",
+                    "The camera is always ready. Want me to take a photo?",
+                )
+            await ctx.announce("The camera is always ready. Taking a photo.")
+        else:
+            await ctx.announce("Taking a photo.")
         now = self._clock()
         if self._taken >= self._max:
             raise ToolRefused(

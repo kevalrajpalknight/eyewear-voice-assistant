@@ -108,6 +108,7 @@ class RoutedLlmClient:
         self.handlers = handlers
         self.on_decision = on_decision
         self.last_decision: RouteDecision | None = None
+        self.last_finish_reason: str | None = None
 
     def hard_keyword(self, text: str) -> str | None:
         for keyword in self.settings.hard_keywords:
@@ -190,5 +191,9 @@ class RoutedLlmClient:
             yield self.local_answer(normalise(text)) or ""
             return
         client = self.fast if decision.role == "fast" and self.fast is not None else self.main
-        async for delta in client.stream(messages, max_tokens=max_tokens):
-            yield delta
+        self.last_finish_reason = None
+        try:
+            async for delta in client.stream(messages, max_tokens=max_tokens):
+                yield delta
+        finally:
+            self.last_finish_reason = getattr(client, "last_finish_reason", None)

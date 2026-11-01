@@ -54,7 +54,7 @@ class AssistantSettings(BaseSettings):
     llm_api_key: SecretStr | None = None
     llm_base_url: str | None = None
     llm_temperature: float = Field(0.6, ge=0.0, le=2.0)
-    llm_max_tokens: int = Field(300, gt=0)
+    llm_max_tokens: int = Field(1200, gt=0)
     llm_timeout_s: float = Field(30.0, gt=0)
     llm_max_retries: int = Field(2, ge=0)
     llm_reasoning_effort: str | None = None  # passed to the provider only when set
@@ -110,10 +110,18 @@ class AssistantSettings(BaseSettings):
     turn_join_window_s: float = Field(4.0, ge=0.0)
 
     # Assistant behaviour
+    assistant_name: str = "EVA"
+    assistant_name_long: str = "Eyewear Voice Assistant"
+    startup_line: str = ""  # spoken once when the assistant is ready; empty = silent
+    wake_mode: Literal["button", "glasses_phrase", "hfp_experimental"] = "button"
+    wake_required: bool = False  # true: ignore speech that does not start with a wake phrase
+    wake_phrases_path: Path | None = None  # None = the list shipped in the package
+    wake_ack: str = "Yes?"  # said when only the wake phrase was heard
+    followup_window_s: float = Field(0.0, ge=0.0)  # reserved: needs a safe way to restart sessions
     persona_path: Path | None = None  # None = the persona shipped in the package
     assistant_timezone: str = "Asia/Kolkata"
     max_turns_per_session: int = Field(50, gt=0)
-    max_reply_seconds: float = Field(25.0, gt=0)
+    max_reply_seconds: float = Field(60.0, gt=0)
     fallback_llm_error: str = "Sorry, I could not reach my brain just now. Please try again."
     fallback_no_speech: str = "Sorry, I did not catch that. Could you say it again?"
     fallback_tts_error: str = "Sorry, I lost my voice for a moment."
@@ -126,8 +134,14 @@ class AssistantSettings(BaseSettings):
     memory_max_tokens: int = Field(1500, gt=0)  # cap for the local model's context
 
     # Reply length
-    reply_target_sentences: int = Field(2, ge=1)
-    reply_max_sentences: int = Field(5, ge=1)
+    reply_target_sentences: int = Field(3, ge=1)
+    reply_soft_max_sentences: int = Field(
+        8, ge=1, validation_alias=AliasChoices("REPLY_SOFT_MAX_SENTENCES", "REPLY_MAX_SENTENCES")
+    )
+    first_chunk_min_words: int = Field(
+        8, ge=2
+    )  # first spoken chunk: sentence end or a comma after this
+    wrap_up_line: str = "Do you want me to go on?"
 
     # Local model and server (llama.cpp)
     local_llm_bin_dir: Path = Path("tools/llama.cpp")
@@ -149,11 +163,13 @@ class AssistantSettings(BaseSettings):
     agent_max_steps: int = Field(3, ge=1, le=10)
     agent_time_budget_s: float = Field(8.0, gt=0)
     tools_enabled: str = (
-        "read_battery,read_media_counts,forget_all_that,get_time,get_weather,search_web"
+        "search_web,get_time,get_weather,take_photo,read_battery,read_media_counts,"
+        "forget_all_that,describe_scene"
     )
     tool_max_calls_per_turn: int = Field(3, ge=1)
     tool_timeout_s: float = Field(10.0, gt=0)
     allow_recording_tools: bool = False
+    camera_open_asks_first: bool = False  # "open the camera": ask before taking the photo
     photo_min_interval_s: float = Field(10.0, ge=0)
     photo_max_per_session: int = Field(10, ge=0)
     intents_path: Path | None = None  # None = the intents file shipped in the package

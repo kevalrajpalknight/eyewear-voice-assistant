@@ -33,12 +33,14 @@ from aiglasses.assistant.llm_client import LlmError
 from aiglasses.assistant.memory import Exchange, Memory
 from aiglasses.assistant.router import RouteDecision, RoutedLlmClient
 from aiglasses.assistant.spoken import number_words
+from aiglasses.assistant.wake import WakePhrases
 from aiglasses.services.voice import VoiceUtterance
 from aiglasses.settings import AssistantSettings
 from aiglasses.timefmt import stamps
 
 log = logging.getLogger("aiglasses.assistant")
 QUEUE_DEPTH = 3
+LENGTH_REASONS = ("length", "max_tokens", "MAX_TOKENS")  # the provider ran out of tokens
 
 
 class StageError(Exception):
@@ -50,10 +52,16 @@ class StageError(Exception):
 
 
 def system_prompt(
-    persona: str, glossary: Glossary | None, now: datetime, target_sentences: int = 2
+    persona: str,
+    glossary: Glossary | None,
+    now: datetime,
+    target_sentences: int = 2,
+    names: tuple[str, str] = ("", ""),
 ) -> str:
     """Persona + recognition-error note (from the glossary) + the current date and time."""
-    parts = [persona.strip().replace("{target_sentences}", number_words(target_sentences))]
+    text = persona.strip().replace("{target_sentences}", number_words(target_sentences))
+    text = text.replace("{assistant_name_long}", names[1]).replace("{assistant_name}", names[0])
+    parts = [text]
     if glossary:
         parts.append(glossary.prompt_note())
     parts.append(f"{TIME_MARKER} {now:%A %d %B %Y, %H:%M} ({now.tzinfo}).")
@@ -89,7 +97,9 @@ class AssistantTurnRecord:
     local_first_token_s: float | None = None
     cloud_first_token_s: float | None = None
     corrections: int = 0
-    outcome: str = "spoken"  # spoken | empty | cancelled | llm_error | tts_error | error
+    outcome: str = "spoken"  # spoken | empty | ignored | wake_ack | cancelled | llm_error ...
+    woke: bool = False  # the request started with a wake phrase
+    truncation: str = ""  # why a reply ended early (provider_length, sentence_soft_cap, ...)
     error: str = ""
     heard: str | None = None  # only with LOG_TRANSCRIPTS
     reply: str | None = None  # only with LOG_TRANSCRIPTS
@@ -107,7 +117,8 @@ class AssistantTurnRecord:
             "tier": self.tier, "route_role": self.route_role, "route_reason": self.route_reason,
             "router_s": round(self.router_s, 3), "action": self.action, "steps": self.steps,
             "stt": self.stt, "tts": self.tts,
-            "brain": self.brain, "tools": self.tools,
+            "brain": self.brain, "tools": self.tools, "woke": self.woke,
+            "truncation": self.truncation,
             "local_first_token_s": self.local_first_token_s,
             "cloud_first_token_s": self.cloud_first_token_s,
             "decode_s": self._gap(self.t_received, self.t_end),
@@ -146,6 +157,7 @@ class ConversationPipeline:
         on_record: Callable[[AssistantTurnRecord], None] | None = None,
         on_correction: Callable[[Correction], None] | None = None,
         on_text: Callable[[str], None] | None = None,
+        wake: WakePhrases | None = None,
         clock: Callable[[ZoneInfo], datetime] | None = None,
         memory_clock: Callable[[], float] = time.monotonic,
         memory: Memory | None = None,
@@ -166,6 +178,7 @@ class ConversationPipeline:
         self._turn_log, self._debug = turn_log, debug
         self._on_record, self._on_correction = on_record, on_correction
         self.on_text = on_text
+        self.wake = wake
         self._clock = clock or (lambda tz: datetime.now(tz))
         self._current: AssistantTurnRecord | None = None
         if isinstance(llm, RoutedLlmClient):
@@ -212,8 +225,9 @@ class ConversationPipeline:
 
     def _messages(self, user_text: str) -> list[Message]:
         system = system_prompt(
-            self.persona, self.glossary, self._now(), self.settings.reply_target_sentences
-        )
+            self.persona, self.glossary, self._now(), self.settings.reply_target_sentences,
+            (self.settings.assistant_name, self.settings.assistant_name_long),
+        )  # fmt: skip
         return [Message("system", system), *self.history.messages(), Message("user", user_text)]
 
     async def _transcribe(self, utterance: VoiceUtterance, record: AssistantTurnRecord) -> str:
@@ -241,6 +255,11 @@ class ConversationPipeline:
             record.error = record.error or f"fallback speech failed: {type(exc).__name__}"
             log.warning("turn %d: could not speak the fallback line", record.turn)
 
+    async def say_line(self, text: str) -> None:
+        """Speak one fixed line outside any turn (the startup line). Failures are ignored."""
+        with contextlib.suppress(Exception):
+            await self.sink.play(self._one(text))
+
     async def _one(self, text: str) -> AsyncIterator[AudioChunk]:
         async for chunk in self.tts.synthesize_stream(text, self.options):
             yield chunk
@@ -252,29 +271,42 @@ class ConversationPipeline:
         queue: "asyncio.Queue[AudioChunk | Exception | None]",
         spoken: list[str],
     ) -> None:
-        """LLM text -> clauses -> cleaned -> TTS chunks on the queue. Ends with None or an error."""
-        stream = ClauseStream(self.settings.tts_first_clause_max_words)
+        """LLM text -> chunks -> cleaned -> TTS audio on the queue. Ends with None or an error.
+
+        Soft limits (sentences, seconds) are checked only at a sentence end, so speech never stops
+        mid-sentence; past a limit the reply is wrapped up with an offer to go on. If the provider
+        cut the reply (finish reason length), the unfinished tail is dropped and the same offer
+        is made. The cause of every early stop is recorded in `record.truncation`.
+        """
+        stream = ClauseStream(self.settings.first_chunk_min_words)
         audio_seconds = 0.0
         sentences = 0
         reply: list[str] = []
         deltas = self.llm.stream(messages, max_tokens=self.settings.llm_max_tokens)
 
-        async def speak(clause: str) -> bool:
+        async def speak(chunk_text: str) -> bool:
+            """Speak one chunk; False once a soft limit is reached at a sentence end."""
             nonlocal audio_seconds, sentences
-            cleaned = clean_reply(clause)
+            cleaned = clean_reply(chunk_text)
             if not cleaned:
                 return True
             record.clauses += 1
             spoken.append(cleaned)
-            if cleaned.endswith((".", "?", "!")):
-                sentences += 1
-            async for chunk in self.tts.synthesize_stream(cleaned, self.options):
+            async for audio in self.tts.synthesize_stream(cleaned, self.options):
                 if record.t_first_chunk is None:
                     record.t_first_chunk = time.time()
-                audio_seconds += chunk.seconds
-                await queue.put(chunk)
-            within_time = audio_seconds < self.settings.max_reply_seconds
-            return within_time and sentences < self.settings.reply_max_sentences
+                audio_seconds += audio.seconds
+                await queue.put(audio)
+            if not cleaned.endswith((".", "?", "!")):
+                return True
+            sentences += 1
+            if sentences >= self.settings.reply_soft_max_sentences:
+                record.truncation = record.truncation or "sentence_soft_cap"
+                return False
+            if audio_seconds >= self.settings.max_reply_seconds:
+                record.truncation = record.truncation or "time_soft_cap"
+                return False
+            return True
 
         stage = "llm"
         try:
@@ -290,13 +322,20 @@ class ConversationPipeline:
                     record.t_llm_first = time.time()
                 reply.append(delta)
                 stage = "tts"
-                for clause in stream.feed(delta):
-                    keep_going = keep_going and await speak(clause)
+                for chunk_text in stream.feed(delta):
+                    keep_going = keep_going and await speak(chunk_text)
                 if not keep_going:
                     break
+            reason = getattr(self.llm, "last_finish_reason", None)
+            cut_by_provider = reason in LENGTH_REASONS
+            if cut_by_provider:
+                record.truncation = "provider_length"
             if keep_going:
-                for clause in stream.finish():
-                    keep_going = keep_going and await speak(clause)
+                for chunk_text in stream.finish(drop_unfinished=cut_by_provider):
+                    keep_going = keep_going and await speak(chunk_text)
+            if record.truncation:
+                stage = "tts"
+                await speak(self.settings.wrap_up_line)
             record.chars_out = sum(len(p) for p in reply)
             if self.settings.log_transcripts:
                 record.reply = "".join(reply)
@@ -305,6 +344,7 @@ class ConversationPipeline:
             raise
         except Exception as exc:
             record.chars_out = sum(len(p) for p in reply)
+            record.truncation = record.truncation or f"{stage}_error"
             await queue.put(StageError(stage, exc))
         finally:
             close = getattr(deltas, "aclose", None)
@@ -326,6 +366,16 @@ class ConversationPipeline:
             if self._debug is not None and self.settings.debug_save_audio:
                 self._debug.save_audio(turn, utterance)
             text = await self._transcribe(utterance, record)
+            if self.wake is not None and text:
+                wake = self.wake.strip(text)
+                record.woke, text = wake.woke, wake.text
+                if self.settings.wake_required and not wake.woke:
+                    record.outcome = "ignored"
+                    return record
+                if wake.only_wake:
+                    record.outcome = "wake_ack"
+                    await self._say(self.settings.wake_ack, record)
+                    return record
             if self.on_text is not None:
                 self.on_text(text)
             if self.settings.log_transcripts:
@@ -367,6 +417,7 @@ class ConversationPipeline:
                 self.history.add(Exchange(text, " ".join(spoken), turn=turn, notes=notes))
         except asyncio.CancelledError:
             record.outcome = "cancelled"
+            record.truncation = record.truncation or "barge_in"
             if text:
                 report = self._absorb_report(record)
                 notes = report.notes if report else []

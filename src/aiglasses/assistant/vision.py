@@ -136,7 +136,8 @@ class DescribeSceneTool:
             image = await self._source.capture()
         except NotSupportedError as exc:
             raise ToolRefused(
-                "image source not supported", "I can't see through the glasses yet."
+                "image source not supported",
+                "I can't fetch the photo from the glasses yet, so I can't look at it.",
             ) from exc
         try:
             text = await self._vision.describe(image, VISION_PROMPT)

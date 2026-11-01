@@ -383,9 +383,11 @@ def test_persona_loading_uses_the_packaged_default_or_a_given_file(tmp_path: Pat
 
 async def test_a_long_reply_is_cut_to_the_sentence_limit() -> None:
     long_reply = tuple(f"Sentence number {i} is here now. " for i in range(12))
-    rig = Rig(reply_max_sentences=5, llm=FakeLlm([long_reply]))
-    await rig.pipeline.run_turn(utterance(), 1)
-    assert len(rig.tts.spoken) == 5 and rig.tts.spoken[-1].endswith("four is here now.")
+    rig = Rig(reply_soft_max_sentences=5, llm=FakeLlm([long_reply]))
+    record = await rig.pipeline.run_turn(utterance(), 1)
+    assert rig.tts.spoken[4].endswith("four is here now.")  # whole sentences only
+    assert rig.tts.spoken[-1] == rig.settings.wrap_up_line and len(rig.tts.spoken) == 6
+    assert record.truncation == "sentence_soft_cap"
 
 
 def test_the_persona_names_the_target_length_from_settings() -> None:

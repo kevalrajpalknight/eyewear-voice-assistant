@@ -1,4 +1,6 @@
 import asyncio
+import contextlib
+import subprocess
 import sys
 import threading
 from collections import Counter
@@ -398,6 +400,78 @@ def assistant_check(
         AssistantSettings(), live=live, log_dir=log_dir, console=console, live_tools=live_tools
     )
     raise typer.Exit(code)
+
+
+@assistant_app.command("diagnose")
+def assistant_diagnose(
+    phrase: list[str] = typer.Argument(None, help="Phrases to trace; default: a sample set"),
+) -> None:
+    """Offline: trace each phrase (lane, intent, tool, enabled) and where it stops."""
+    from aiglasses.assistant.diagnose import SAMPLES, diagnose
+
+    rows = _run(diagnose(AssistantSettings(), tuple(phrase) if phrase else SAMPLES))
+    table = Table(title="Phrase trace (fakes only, nothing is sent)", show_lines=True)
+    for column in ("Phrase", "Lane", "Intent -> tool", "Enabled", "Stopped at", "Would say"):
+        table.add_column(column, overflow="fold")
+    for r in rows:
+        route = f"{r.intent} -> {r.tool} {r.args or ''}" if r.intent else (r.handler or "-")
+        enabled = "-" if r.enabled is None else ("yes" if r.enabled else "NO")
+        notes = "; ".join(r.checks)
+        table.add_row(
+            r.phrase,
+            r.lane,
+            route,
+            enabled,
+            r.stopped_at + (f" ({notes})" if notes else ""),
+            r.spoken,
+        )
+    console.print(table)
+
+
+@app.command("wake-test")
+def wake_test(
+    seconds: float = typer.Option(60.0, help="How long to listen"),
+    hfp: bool = typer.Option(False, help="Afterwards probe the headset microphone (you speak)"),
+) -> None:
+    """Read-only: list every voice-session start for a while, with no button and no phone.
+
+    Say the glasses' own wake phrase ("Hey Glasses") without touching them and watch whether a
+    session appears. Sends nothing (the write guard stays in dry-run mode).
+    """
+    settings = Settings()
+
+    async def listen() -> int:
+        count = 0
+        async with Glasses.connect(settings) as glasses:
+            console.print(
+                f"Connected. Listening for {seconds:g} s. Do NOT touch the glasses; say the wake "
+                "phrase. Nothing is sent."
+            )
+
+            async def consume() -> None:
+                nonlocal count
+                async for utterance in glasses.voice_requests():
+                    count += 1
+                    started = datetime.fromtimestamp(utterance.started_at, timezone.utc)
+                    marker = "seen" if utterance.start_marker_at else "not seen"
+                    console.print(
+                        f"session {count}: started {both(started)}, {utterance.seconds:.1f} s of "
+                        f"audio, ended by {utterance.end_reason.value}, start marker {marker}"
+                    )
+
+            with contextlib.suppress(asyncio.TimeoutError):
+                await asyncio.wait_for(consume(), seconds)
+        return count
+
+    found = _run(listen())
+    console.print(
+        f"{found} voice session(s) started. If you did not touch the glasses, the wake phrase "
+        "starts a BLE voice session on its own (INFERRED to be possible; this is the test)."
+        if found
+        else "No voice session started. The wake phrase did not start one (or was not heard)."
+    )
+    if hfp:
+        subprocess.run([sys.executable, "-m", "aiglasses.research.hfp_probe"], check=False)
 
 
 @app.command("bench-record")
