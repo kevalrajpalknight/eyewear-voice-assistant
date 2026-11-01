@@ -52,6 +52,10 @@ search = [
     "ddgs==9.16.0",
 ]
 
+piper = [
+    "piper-tts==1.8.0; python_version >= '3.11'",
+]
+
 [dependency-groups]
 dev = [
     "av>=17.1.0",

@@ -57,7 +57,8 @@ model exists only when `LLM_FAST_MODEL` is set.
 | `GLOSSARY_THRESHOLD` | `88` | Fuzzy match 0 to 100; higher is more careful |
 
 ## Text to speech
-`TTS_ENGINE` (`kokoro`), `TTS_VARIANT` (`int8` or `fp32`), `TTS_VOICE` (`bf_isabella`),
+`TTS_ENGINE` (`kokoro` or `piper`; for `piper`, `TTS_VOICE` is a registry model name such as
+`piper-en-gb-alba-medium`, pulled with `aiglasses models pull`), `TTS_VARIANT` (`int8` or `fp32`), `TTS_VOICE` (`bf_isabella`),
 `TTS_SPEED` (`1.05`; `1.0` is the voice's natural pace), `TTS_SENTENCE_PAUSE_S` (`0.3`) and
 `TTS_CLAUSE_PAUSE_S` (`0.12`) (silence between sentences and at commas), `TTS_VOICE` may be a blend
 such as `bf_isabella:0.6+bf_emma:0.4`, `TTS_FIRST_CLAUSE_MAX_WORDS` (`6`: fewer words, earlier first sound),

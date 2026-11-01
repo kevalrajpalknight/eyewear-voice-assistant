@@ -42,6 +42,13 @@ def _kokoro(settings: AssistantSettings) -> TextToSpeech:
     return KokoroTts(settings.tts_model_dir, settings.tts_variant)
 
 
+def _piper(settings: AssistantSettings) -> TextToSpeech:
+    from aiglasses.assistant.engines import PiperTts
+
+    path = settings.model_registry_path
+    return PiperTts(settings.models_dir, settings.tts_voice, path if path.exists() else None)
+
+
 # engine name -> (factory, the model used when STT_MODEL is empty, models the engine knows)
 STT_ENGINES: dict[str, tuple[SttFactory, str, tuple[str, ...]]] = {
     "moonshine": (_moonshine, "base", ("tiny", "base", "small-v2", "medium-v2")),
@@ -54,8 +61,9 @@ ENGINE_MODULES = {
     "parakeet": "sherpa_onnx",
     "faster-whisper": "faster_whisper",
     "kokoro": "kokoro_onnx",
+    "piper": "piper",
 }
-TTS_ENGINES: dict[str, TtsFactory] = {"kokoro": _kokoro}
+TTS_ENGINES: dict[str, TtsFactory] = {"kokoro": _kokoro, "piper": _piper}
 
 
 def _unknown(kind: str, name: str, valid: list[str]) -> ConfigError:

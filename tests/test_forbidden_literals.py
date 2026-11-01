@@ -11,7 +11,7 @@ REGISTRIES = {"settings.py", "registry.py", "engines.py"}
 
 MODEL_NAMES = re.compile(r"\b(gpt-?\d|claude-|gemini-?\d|llama-?\d|mistral-|o\d-mini|sonar)", re.I)
 VOICE_IDS = re.compile(r"\b[ab][fm]_[a-z]+\b")
-ENGINE_NAMES = re.compile(r"moonshine|parakeet|kokoro|faster.whisper", re.I)
+ENGINE_NAMES = re.compile(r"moonshine|parakeet|kokoro|piper|faster.whisper", re.I)
 PROVIDER_NAMES = re.compile(r"ddgs|tavily|brave", re.I)
 LOCAL_MODEL_NAMES = re.compile(r"qwen|gemma|llama-?3|phi-?\d|unsloth|bartowski", re.I)
 SEARCH_REGISTRY = {"settings.py", "search.py"}

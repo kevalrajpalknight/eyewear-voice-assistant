@@ -46,6 +46,16 @@ def verify_checksum(models_dir: Path, relative: str, manifest_key: str) -> None:
         raise ModelMissingError(f"{path.name} does not match its recorded checksum")
 
 
+def verify_checksum_file(path: Path, expected: str) -> None:
+    """Compare one file with a sha256 taken from the model registry."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    if digest.hexdigest() != expected:
+        raise ModelMissingError(f"{path.name} does not match its registry checksum")
+
+
 def _require_english(language: str) -> None:
     if language != "en":
         raise NotSupportedError(f"only English is implemented, not {language!r}")
@@ -223,3 +233,37 @@ class KokoroTts:
         ):
             pcm = np.clip(samples * 32767.0, -32768, 32767).astype(np.int16)
             yield AudioChunk(pcm, int(rate), time.perf_counter() - started)
+
+
+class PiperTts:
+    """Piper voices (ONNX, CPU). TTS_VOICE is a model name from the registry."""
+
+    name = "piper"
+
+    def __init__(self, models_dir: Path, voice: str, registry_path: Path | None = None) -> None:
+        from piper import PiperVoice
+
+        from aiglasses.assistant.models import Registry, model_path
+
+        spec = Registry.load(registry_path).get(voice)
+        path = model_path(models_dir, spec)
+        if not path.exists():
+            raise ModelMissingError(f"{path} is missing; run `aiglasses models pull {voice}`")
+        verify_checksum_file(path, spec.main.sha256)
+        self.name = voice
+        self._voice: Any = PiperVoice.load(path)
+
+    def _speak(self, text: str, speed: float) -> list[AudioChunk]:
+        from piper import SynthesisConfig
+
+        config = SynthesisConfig(length_scale=1.0 / speed)
+        started = time.perf_counter()
+        chunks = []
+        for piece in self._voice.synthesize(text, syn_config=config):
+            pcm = piece.audio_int16_array.astype(np.int16)
+            chunks.append(AudioChunk(pcm, int(piece.sample_rate), time.perf_counter() - started))
+        return chunks
+
+    async def synthesize_stream(self, text: str, options: TtsOptions) -> AsyncIterator[AudioChunk]:
+        for chunk in await asyncio.to_thread(self._speak, text, options.speed):
+            yield chunk

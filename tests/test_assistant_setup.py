@@ -12,6 +12,7 @@ from aiglasses.assistant.runtime import build_llm
 from aiglasses.domain.errors import ConfigError
 from aiglasses.settings import AssistantSettings
 
+INSTALLED_VOICE = Path("models/piper-en-gb-alba-medium")
 SECRET = "secret-value-for-tests-123"
 
 
@@ -174,3 +175,21 @@ def test_the_budget_comes_from_settings_and_can_be_reset(tmp_path: Path) -> None
     assert live_budget_left(counter, 3) == 1 and live_budget_left(counter, 2) == 0
     reset_live_budget(counter)
     assert live_budget_left(counter, 3) == 3
+
+
+def test_piper_is_a_registered_engine_with_registry_voices() -> None:
+    assert "piper" in registry.TTS_ENGINES
+    assert (
+        "piper-en-gb-alba-medium"
+        in __import__("aiglasses.assistant.models", fromlist=["Registry"]).Registry.load().models
+    )
+
+
+async def test_piper_speaks_the_chosen_voice_when_the_model_is_installed() -> None:
+    from aiglasses.assistant.interfaces import TtsOptions
+
+    if not INSTALLED_VOICE.exists():
+        pytest.skip("piper voice not installed")
+    tts = registry.build_tts(settings(tts_engine="piper", tts_voice="piper-en-gb-alba-medium"))
+    chunks = [c async for c in tts.synthesize_stream("Hello there.", TtsOptions("v", 1.0))]
+    assert chunks and chunks[0].sample_rate > 8000 and sum(c.seconds for c in chunks) > 0.5
