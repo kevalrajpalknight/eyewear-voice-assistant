@@ -17,8 +17,10 @@ from aiglasses.domain.errors import GlassesError, NotSupportedError
 from aiglasses.settings import AssistantSettings
 
 VISION_PROMPT = (
-    "Describe what is in this picture in at most two short spoken sentences. "
-    "Plain words, no lists, no markdown."
+    "What is the main object in the picture, usually the one held up or in the foreground? "
+    "If it is a packaged product, give the brand and product name from any readable text, and "
+    "say so if you cannot read it. Do not guess a brand you cannot read. Answer in at most "
+    "two short spoken sentences, plain words, no lists, no markdown."
 )
 JPEG_QUALITY = 85
 LOCAL_ROUTE = "/v1/chat/completions"
@@ -155,4 +157,4 @@ class DescribeSceneTool:
             text = await self._vision.describe(image, VISION_PROMPT)
         except VisionError as exc:
             raise ToolRefused("vision failed", "I couldn't make that out.") from exc
-        return ToolResult(f"scene: {text}", tainted=True)
+        return ToolResult(f"scene: {text}", spoken=text, tainted=True)

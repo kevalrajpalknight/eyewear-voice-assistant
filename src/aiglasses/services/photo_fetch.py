@@ -12,6 +12,7 @@ environment) is not verified on hardware.
 
 import asyncio
 import json
+import logging
 import re
 import time
 from collections.abc import Awaitable, Callable
@@ -35,6 +36,9 @@ LIST_PATH = "/files/media.config"
 FILE_PREFIX = "/files/"
 IMAGE_NAME = re.compile(r"^[\w.\-]+\.(?:jpg|jpeg)$", re.IGNORECASE)
 IP_WAIT_S = 10.0
+
+
+log = logging.getLogger("aiglasses.photo")
 
 
 class PhotoFetchError(ImageUnavailable):
@@ -279,6 +283,7 @@ class BleThumbnailImageSource:
                 await self._device.capture_ai_photo(approved_frame=APPROVED_AI_PHOTO_FRAME)
             result = await self._device.fetch_thumbnail()
         except GlassesError as exc:
+            log.warning("picture from the glasses failed: %s: %s", type(exc).__name__, exc)
             raise ImageUnavailable(
                 f"thumbnail failed: {type(exc).__name__}",
                 "I couldn't get the picture from the glasses.",
