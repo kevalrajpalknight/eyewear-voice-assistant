@@ -376,6 +376,41 @@ def assistant_run(
     )
 
 
+@assistant_app.command("vision-test")
+def assistant_vision_test(
+    image: str = typer.Argument(None, help="A picture; default: the newest in captures/thumbnails"),
+) -> None:
+    """Describe a saved glasses picture with the local vision model (no glasses, no cloud)."""
+    import time
+    from pathlib import Path
+
+    from aiglasses.assistant.local_server import LocalServer
+    from aiglasses.assistant.models import Registry
+    from aiglasses.assistant.vision import VISION_PROMPT, LocalVision
+    from aiglasses.config import Settings
+
+    assistant, ble = AssistantSettings(), Settings()
+    folder = ble.captures_dir / "thumbnails"
+    path = (
+        Path(image) if image else max(folder.glob("Thumb_*.jpg"), key=lambda p: p.stat().st_mtime)
+    )
+    registry_path = assistant.model_registry_path
+    server = LocalServer(assistant, Registry.load(registry_path), ble.log_dir / "llama-server.json")
+    console.print(f"Starting the local model for {path.name} ...")
+    server.start(auto_port=True, vision=True, wait_s=400)
+
+    async def main() -> None:
+        vision = LocalVision(f"http://127.0.0.1:{server.port}", assistant.vision_max_image_side)
+        started = time.perf_counter()
+        text = await vision.describe(path.read_bytes(), VISION_PROMPT)
+        console.print(f"{text}\n({time.perf_counter() - started:.1f} s)", markup=False)
+
+    try:
+        _run(main())
+    finally:
+        server.stop()
+
+
 @assistant_app.command("mic-test")
 def assistant_mic_test(
     seconds: int = typer.Option(12, help="How long to listen"),

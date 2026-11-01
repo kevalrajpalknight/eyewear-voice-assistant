@@ -240,6 +240,38 @@ thumbnail_app = typer.Typer(help="AI-photo thumbnail over Bluetooth (no Wi-Fi)."
 CAPTURE_WAIT_S = 60.0
 
 
+@thumbnail_app.command("set-clarity")
+def thumbnail_set_clarity(
+    level: int = typer.Option(3, help="Picture clarity level; only the approved level 3 (Fine)"),
+) -> None:
+    """Make the glasses send bigger AI pictures (one setting write, kept until changed again)."""
+    import asyncio
+
+    from aiglasses.glasses import Glasses
+    from aiglasses.services.control import APPROVED_CLARITY_FRAMES
+
+    ble = Settings()
+    frame = APPROVED_CLARITY_FRAMES.get(level)
+    if frame is None:
+        console.print(
+            f"[red]Level {level} is not approved; only {sorted(APPROVED_CLARITY_FRAMES)}.[/]"
+        )
+        raise typer.Exit(2)
+
+    async def main() -> None:
+        async with Glasses.connect(ble, dry_run=False) as glasses:
+            reply = await glasses.set_picture_clarity(level=level, approved_frame=frame)
+            console.print(
+                f"Sent picture clarity level {level}. Reply: {reply or 'none seen'}", markup=False
+            )
+
+    try:
+        asyncio.run(main())
+    except GlassesError as exc:
+        console.print(f"[red]{exc!r}[/]")
+        raise typer.Exit(1) from exc
+
+
 @thumbnail_app.command("fetch")
 def thumbnail_fetch(
     wait: bool = typer.Option(True, help="Wait for you to double-click the rear button first"),

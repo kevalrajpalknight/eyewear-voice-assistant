@@ -223,3 +223,49 @@ async def test_wrong_frame_dry_run_and_silent_glasses_are_refused(tmp_path: Path
     with pytest.raises(GlassesTimeoutError):
         await g.control.capture_ai_photo(approved_frame=APPROVED_AI_PHOTO_FRAME, wait_s=0.2)
     assert len(device.writes) == 1
+
+
+class ClarityDevice(Device):
+    def __init__(self, *, reply: bool = True) -> None:
+        super().__init__()
+        self.reply = reply
+
+    async def write(self, char: str, data: bytes, *, response: bool = False) -> None:
+        await super().write(char, data, response=response)
+        if data.hex() == "bc41040030af020b0303" and self.reply:
+            self._later(0.01, build_bc_frame(0x41, bytes([2, 0x0B, 3, 3])))
+
+
+async def test_only_the_approved_clarity_level_is_sent_once(tmp_path: Path) -> None:
+    from aiglasses.services.control import APPROVED_CLARITY_FRAMES
+
+    assert APPROVED_CLARITY_FRAMES == {3: "bc41040030af020b0303"}
+    device = ClarityDevice()
+    g = glasses(device, tmp_path)
+    reply = await g.set_picture_clarity(level=3, approved_frame=APPROVED_CLARITY_FRAMES[3])
+    assert reply == "020b0303" and [w[1].hex() for w in device.writes] == [
+        APPROVED_CLARITY_FRAMES[3]
+    ]
+    with pytest.raises(WriteBlockedError):
+        await g.set_picture_clarity(level=3, approved_frame=APPROVED_CLARITY_FRAMES[3])
+
+
+async def test_other_levels_wrong_frames_and_dry_run_are_refused_before_writing(
+    tmp_path: Path,
+) -> None:
+    device = ClarityDevice()
+    for level, frame in ((5, "bc410400b30d020b0505"), (3, "bc410400735d020b0404"), (2, "x")):
+        with pytest.raises(ConfirmationRequired):
+            await glasses(device, tmp_path).set_picture_clarity(level=level, approved_frame=frame)
+    with pytest.raises(GlassesError, match="dry run"):
+        await glasses(device, tmp_path, dry_run=True).set_picture_clarity(
+            level=3, approved_frame="bc41040030af020b0303"
+        )
+    assert device.writes == []
+    silent = ClarityDevice(reply=False)
+    assert (
+        await glasses(silent, tmp_path).set_picture_clarity(
+            level=3, approved_frame="bc41040030af020b0303"
+        )
+        == ""
+    )

@@ -10,7 +10,7 @@ from aiglasses.domain.errors import (
     NotSupportedError,
 )
 from aiglasses.domain.models import BatteryStatus, Confidence, DeviceInfo, MediaCounts
-from aiglasses.protocol.bcframe import BcFrame
+from aiglasses.protocol.bcframe import BcFrame, parse_bc_frame
 from aiglasses.protocol.events import EVENT_CMD
 from aiglasses.protocol.registry import Command
 from aiglasses.protocol.replies import (
@@ -19,6 +19,7 @@ from aiglasses.protocol.replies import (
     parse_device_info,
     parse_media_counts,
 )
+from aiglasses.protocol.uuids import GLASSES_WRITE
 from aiglasses.safety import WriteGuard
 from aiglasses.services.channel import FrameChannel
 
@@ -29,6 +30,11 @@ PHOTO_OBSERVE_SECONDS = 15.0
 # (take a photo for AI vision, thumbnail size 2). It may repeat, once per look. Nothing else.
 APPROVED_AI_PHOTO_FRAME = "bc4105003c9c0201060202"
 AI_CAPTURE_EVENT = 2
+# Picture clarity (the thumbnail size the glasses send for AI looks): glassesControl 02 0B s s.
+# Approved by the user on 2026-11-01 for a test: ONLY level 3 ("Fine"), bc41040030af020b0303, once
+# per command. The glasses keep the setting until it is changed again (the Cyan app can reset it).
+APPROVED_CLARITY_FRAMES = {3: "bc41040030af020b0303"}
+CLARITY_REPLY_WAIT_S = 3.0
 AI_CAPTURE_WAIT_S = 10.0
 
 
@@ -99,6 +105,44 @@ class ControlService:
             raise ConfirmationRequired("only the frame the user approved may be sent")
         self._guard.approve(command.name, command.characteristic, command.payload)
         await self._guard.write(command.characteristic, command.payload, response=False)
+
+    async def set_picture_clarity(self, *, level: int, approved_frame: str) -> str:
+        """Set the AI picture size level. Only the approved level and frame are ever sent.
+
+        Returns the glasses' reply as hex ("" when none came; the setting may still have applied).
+        """
+        if self._guard.dry_run:
+            raise GlassesError("dry run: connect with dry_run=False to send requests")
+        wanted = APPROVED_CLARITY_FRAMES.get(level)
+        if wanted is None or approved_frame != wanted:
+            raise ConfirmationRequired(f"picture clarity level {level} is not approved")
+        payload = bytes([2, 0x0B, level, level])
+        command = Command(
+            name=f"picture_clarity_{level}",
+            characteristic=GLASSES_WRITE,
+            payload=bytes.fromhex(wanted),
+            direction="write",
+            status=Confidence.INFERRED,
+            source="apk-static (AIHelperActivity image clarity, glassesControl 02 0B s s)",
+            safe_to_send=False,
+        )
+        if payload != parse_bc_frame(command.payload).payload:
+            raise ConfirmationRequired("the approved frame does not match the level")
+
+        def is_reply(frame: BcFrame) -> bool:
+            return frame.cmd == CONTROL_CMD and frame.payload[1:2] == b"\x0b"
+
+        await self._channel.start()
+        reply = self._channel.expect(is_reply)
+        try:
+            self._guard.approve(command.name, command.characteristic, command.payload)
+            await self._guard.write(command.characteristic, command.payload, response=False)
+            try:
+                return (await asyncio.wait_for(reply, CLARITY_REPLY_WAIT_S)).payload.hex()
+            except asyncio.TimeoutError:
+                return ""
+        finally:
+            self._channel.discard(reply)
 
     async def capture_ai_photo(
         self, *, approved_frame: str, wait_s: float = AI_CAPTURE_WAIT_S

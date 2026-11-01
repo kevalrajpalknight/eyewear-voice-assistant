@@ -89,6 +89,10 @@ class Glasses:
         """Read-only request (CONFIRMED): photos, videos and audio recordings on the glasses."""
         return await self.control.read_media_counts()
 
+    async def set_picture_clarity(self, *, level: int, approved_frame: str) -> str:
+        """Set the AI picture size (approved level and frame only); returns the reply hex."""
+        return await self.control.set_picture_clarity(level=level, approved_frame=approved_frame)
+
     async def capture_ai_photo(self, *, approved_frame: str) -> None:
         """Take one AI-vision photo (the user-approved frame only) and wait for it to be ready."""
         await self.control.capture_ai_photo(approved_frame=approved_frame)
