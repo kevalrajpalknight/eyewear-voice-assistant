@@ -87,6 +87,7 @@ class WinrtBackend:
         self._device: Any = None
         self._info: Any = None
         self._prefix = ""
+        self.seen: list[str] = []
 
     async def preflight(self) -> dict[str, Any]:
         for block in interface_blocks():
@@ -102,14 +103,30 @@ class WinrtBackend:
         selector = WiFiDirectDevice.get_device_selector(
             WiFiDirectDeviceSelectorType.ASSOCIATION_ENDPOINT
         )
-        found = await asyncio.wait_for(
-            DeviceInformation.find_all_async_aqs_filter(selector), timeout
-        )
-        for info in found:
-            if str(info.name).startswith(prefix):
-                self._info = info
-                return str(info.id)
-        return None
+        loop = asyncio.get_running_loop()
+        seen: dict[str, Any] = {}
+        match: asyncio.Future[Any] = loop.create_future()
+
+        def added(sender: Any, info: Any) -> None:
+            def record() -> None:
+                seen[str(info.id)] = info
+                if str(info.name).startswith(prefix) and not match.done():
+                    match.set_result(info)
+
+            loop.call_soon_threadsafe(record)
+
+        watcher = DeviceInformation.create_watcher_aqs_filter(selector)
+        token = watcher.add_added(added)
+        watcher.start()
+        try:
+            self._info = await asyncio.wait_for(match, timeout)
+            return str(self._info.id)
+        except asyncio.TimeoutError:
+            self.seen = sorted(str(i.name)[:12] for i in seen.values())
+            return None
+        finally:
+            watcher.remove_added(token)
+            watcher.stop()
 
     async def connect(self, peer: str, intent: int, timeout: float) -> dict[str, Any]:
         from winrt.windows.devices.enumeration import (
@@ -199,7 +216,8 @@ async def handle(backend: Any, request: dict[str, Any]) -> dict[str, Any]:
     if command == "preflight":
         reply = await backend.preflight()
     elif command == "find_peer":
-        reply = {"peer": await backend.find_peer(request["prefix"], float(request["timeout"]))}
+        peer = await backend.find_peer(request["prefix"], float(request["timeout"]))
+        reply = {"peer": peer, "seen": getattr(backend, "seen", [])[:8]}
     elif command == "connect":
         reply = await backend.connect(
             request["peer"], int(request["group_owner_intent"]), float(request["timeout"])

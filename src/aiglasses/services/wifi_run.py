@@ -163,6 +163,9 @@ class WifiDirectRun:
                 report.saved, report.jpeg_ok = True, path.read_bytes().startswith(JPEG_MARKER)
         except BaseException as exc:
             report.errors.append(f"{type(exc).__name__}: {str(exc)[:100]}")
+            if session is None or not session.group:
+                seen = self.adapter.peers_seen
+                report.errors.append(f"Wi-Fi Direct peers seen: {len(seen)} {seen}")
             report.stopped_early = isinstance(exc, IpEventMissing)
             if isinstance(exc, asyncio.CancelledError):
                 await self._finish(session, report)

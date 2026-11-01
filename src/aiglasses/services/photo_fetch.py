@@ -54,6 +54,7 @@ class HelperWifiDirect:
         self._helper = helper
         self._profile: str | None = None
         self._band: str | None = None
+        self.peers_seen: list[str] = []
 
     async def prepare(self) -> None:
         """Ask the helper (read-only) for the PC's Wi-Fi profile and band; cached."""
@@ -79,6 +80,7 @@ class HelperWifiDirect:
     # WifiDirect
     async def find_peer(self, name_prefix: str, timeout: float) -> str | None:
         reply = await self._helper.request("find_peer", prefix=name_prefix, timeout=timeout)
+        self.peers_seen = [str(n) for n in reply.get("seen") or []]
         peer = reply.get("peer")
         return str(peer) if peer else None
 
