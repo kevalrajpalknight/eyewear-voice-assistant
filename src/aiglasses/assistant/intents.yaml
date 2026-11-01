@@ -5,8 +5,9 @@ intents:
   take_photo:
     tool: take_photo
     match:
-      - '^(?:please |can you |could you |go ahead and )*(?:take|snap|capture|shoot) (?:a |one |another |me a )?(?:photo|picture|pic|photograph)\b'
-      - '^(?:please )?(?:photo|picture) (?:now|please)\b'
+      - '^(?:please |can you |could you |go ahead and |hey )*(?:take|snap|capture|shoot|click|grab|get) (?:a |an |one |another |me a |the |my )?(?:new )?(?:photo|picture|pic|photograph|image|snap|shot)s?\b'
+      - '^(?:please )?(?:photo|picture|image) (?:now|please)\b'
+      - '^(?:please |can you |could you )*(?:take|click) (?:a )?(?:photo|picture|pic) of (?:this|that|it|me)$'
       - '^(?:please |can you |could you )*(?:snap|capture|click|shoot)(?: it| this| that| one| now| a photo| a picture)?$'
       - '^(?:please |can you |could you )*(?:snap|click|shoot) (?:a |one |another )?(?:photo|picture|pic)\b'
     reject:
@@ -16,7 +17,8 @@ intents:
     tool: take_photo
     args: {intro: true}
     match:
-      - '^(?:please |can you |could you |go ahead and )*(?:open|start|turn on|switch on|activate|launch)(?: up)? (?:the |my )?camera\b'
+      - '^(?:please |can you |could you |go ahead and )*(?:open|start|turn on|switch on|activate|launch|fire up|use)(?: up)? (?:the |my )?(?:glasses )?camera(?: app)?\b'
+      - '^(?:the )?camera(?: on| please| now)?$'
     reject:
       - '\b(?:don''t|do not|never|how|why|when|what|where|did|does|is|was)\b'
   read_battery:

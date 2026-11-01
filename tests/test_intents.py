@@ -75,3 +75,20 @@ def test_a_broken_file_is_a_config_error(tmp_path: "pytest.TempPathFactory") -> 
         Intents.load(bad)
     with pytest.raises(ConfigError):
         Intents.load(Path(str(tmp_path)) / "missing.yaml")
+
+
+@pytest.mark.parametrize(
+    "phrase,tool",
+    [
+        ("click a picture", "take_photo"),
+        ("Capture an image.", "take_photo"),
+        ("take a pic", "take_photo"),
+        ("Can you take a photo of this?", "take_photo"),
+        ("start the camera", "take_photo"),
+        ("Camera on.", "take_photo"),
+        ("open the glasses camera please", "take_photo"),
+    ],
+)
+def test_more_ways_to_ask_for_a_photo_or_the_camera(phrase: str, tool: str) -> None:
+    match = Intents.load().find(phrase)
+    assert match is not None and match.tool == tool

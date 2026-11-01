@@ -21,6 +21,8 @@ ROUTE = "/v1/chat/completions"
 SCHEMA_NAME = "step"
 REASON_MAX_CHARS = 80
 
+HEALTH_TIMEOUT_S = 3.0  # a busy CPU can answer /health slowly; 1 s made a loaded server look dead
+
 
 class LocalUnavailable(GlassesError):
     """Server down, unreachable, or no first token in time: the caller escalates to the cloud."""
@@ -76,12 +78,15 @@ class LocalLlm:
         self._first_token_timeout = first_token_timeout_s
         self._cache = prompt_cache
         self._client = client or httpx.AsyncClient()
+        self.last_error = ""
 
     async def available(self) -> bool:
         try:
-            reply = await self._client.get(self._health, timeout=1.0)
-        except httpx.HTTPError:
+            reply = await self._client.get(self._health, timeout=HEALTH_TIMEOUT_S)
+        except httpx.HTTPError as exc:
+            self.last_error = type(exc).__name__
             return False
+        self.last_error = "" if reply.status_code == 200 else f"HTTP {reply.status_code}"
         return reply.status_code == 200
 
     def _body(self, messages: list[Message], tools: list[str], max_tokens: int) -> dict[str, Any]:

@@ -208,6 +208,7 @@ class AssistantSettings(BaseSettings):
     # Logging and privacy
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     log_transcripts: bool = False  # off: logs carry only lengths and timings
+    show_transcripts: bool = True  # print what was heard and what is said (console only)
     debug_save_audio: bool = False
 
     @classmethod

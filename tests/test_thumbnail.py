@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -149,7 +150,8 @@ async def test_the_image_source_asks_for_an_ai_photo_then_reads_the_thumbnail(
     source = BleThumbnailImageSource(device, "ai_photo", 30.0, tmp_path)
     assert await source.capture() == JPEG
     assert device.calls == [f"ai_photo {APPROVED_AI_PHOTO_FRAME}", "fetch"]
-    assert len(list(tmp_path.glob("Thumb_*.jpg"))) == 1
+    saved = await asyncio.to_thread(lambda: list(tmp_path.glob("Thumb_*.jpg")))
+    assert len(saved) == 1
     assert await source.capture()  # a different picture is accepted
 
 

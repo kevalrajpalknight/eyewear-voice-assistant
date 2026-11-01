@@ -163,6 +163,8 @@ class ConversationPipeline:
         on_record: Callable[[AssistantTurnRecord], None] | None = None,
         on_correction: Callable[[Correction], None] | None = None,
         on_text: Callable[[str], None] | None = None,
+        on_heard: Callable[[str], None] | None = None,
+        on_said: Callable[[str], None] | None = None,
         wake: WakePhrases | None = None,
         clock: Callable[[ZoneInfo], datetime] | None = None,
         memory_clock: Callable[[], float] = time.monotonic,
@@ -184,6 +186,7 @@ class ConversationPipeline:
         self._turn_log, self._debug = turn_log, debug
         self._on_record, self._on_correction = on_record, on_correction
         self.on_text = on_text
+        self.on_heard, self.on_said = on_heard, on_said
         self.wake = wake
         self._clock = clock or (lambda tz: datetime.now(tz))
         self._current: AssistantTurnRecord | None = None
@@ -305,6 +308,8 @@ class ConversationPipeline:
                 )
                 await queue.put(silence(gap))
             spoken.append(cleaned)
+            if self.on_said is not None:
+                self.on_said(cleaned)
             async for audio in self.tts.synthesize_stream(cleaned, self.options):
                 if record.t_first_chunk is None:
                     record.t_first_chunk = time.time()
@@ -391,6 +396,8 @@ class ConversationPipeline:
                     return record
             if self.on_text is not None:
                 self.on_text(text)
+            if self.on_heard is not None:
+                self.on_heard(text)
             if self.settings.log_transcripts:
                 record.heard = text
             if not text:

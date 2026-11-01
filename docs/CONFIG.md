@@ -93,7 +93,7 @@ A wake phrase at the start of a request is always removed before routing.
 failures: `FALLBACK_LLM_ERROR`, `FALLBACK_NO_SPEECH`, `FALLBACK_TTS_ERROR`.
 
 ## Logging and privacy
-`LOG_LEVEL` (`INFO`), `LOG_TRANSCRIPTS` (`false`: logs hold lengths and timings only),
+`LOG_LEVEL` (`INFO`), `LOG_TRANSCRIPTS` (`false`: logs hold lengths and timings only), `SHOW_TRANSCRIPTS` (`true`: print `you:` and `EVA:` lines on screen only),
 `DEBUG_SAVE_AUDIO` (`false`: input audio is not kept). The log filter also removes the configured
 keys and anything shaped like an API key from every log line.
 

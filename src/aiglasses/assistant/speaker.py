@@ -115,7 +115,7 @@ class SubprocessSpeakerSink:
             try:
                 await self._send(b"Q")
                 await asyncio.wait_for(process.wait(), 3)
-            except (SpeakerError, asyncio.TimeoutError):
+            except (SpeakerError, asyncio.TimeoutError, OSError):
                 process.kill()
         if self._reader is not None:
             self._reader.cancel()

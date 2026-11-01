@@ -10,6 +10,7 @@ the lane, action, reason category and timings, never the content.
 """
 
 import json
+import logging
 import time
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
@@ -49,6 +50,9 @@ REASON_CATEGORIES = (
     ("research", "research"),
     ("detail", "research"),
 )
+
+
+log = logging.getLogger("aiglasses.lanes")
 
 
 class Escalate(Exception):
@@ -277,6 +281,10 @@ class LocalFirstClient:
         found: str,
     ) -> AsyncIterator[str]:
         if self.local is None or not await self.local.available():
+            log.warning(
+                "local model not used: %s",
+                getattr(self.local, "last_error", "") or "no local server is running",
+            )
             raise Escalate("local_down")
         prefix, _, time_line = messages[0].content.partition("\n\n" + TIME_MARKER)
         convo = fit_tokens(
@@ -355,6 +363,7 @@ class LocalFirstClient:
         except InvalidStep:
             return None
         except LocalUnavailable as exc:
+            log.warning("local model call failed: %s", exc)
             raise Escalate("local_slow" if "first token" in str(exc) else "local_down") from exc
         if report.local_first_token_s is None:
             report.local_first_token_s = timing.first_token_s

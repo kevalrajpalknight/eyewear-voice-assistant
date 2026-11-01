@@ -2,9 +2,12 @@
 
 import asyncio
 import json
+import time
+from collections.abc import Awaitable
 from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import TypeVar
 
 from rich.console import Console
 from rich.markup import escape
@@ -55,6 +58,7 @@ from aiglasses.services.photo_fetch import (
 from aiglasses.settings import AssistantSettings
 
 console = Console()
+T = TypeVar("T")
 
 
 @dataclass
@@ -122,6 +126,14 @@ def describe(record: AssistantTurnRecord) -> str:
     )
 
 
+def _show_heard(text: str) -> None:
+    console.print(f"[cyan]you:[/] {escape(text)}")
+
+
+def _show_said(text: str) -> None:
+    console.print(f"[green]EVA:[/] {escape(text)}")
+
+
 def make_pipeline(
     ble: Settings,
     assistant: AssistantSettings,
@@ -145,10 +157,6 @@ def make_pipeline(
         console.print(escape(describe(record)))
         if record.error:
             console.print(f"  [yellow]{escape(record.error)}[/]")
-        if show_text and record.heard is not None:
-            console.print(f"  heard: {escape(record.heard)}")
-        if show_text and record.reply is not None:
-            console.print(f"  said:  {escape(record.reply)}")
 
     return ConversationPipeline(
         stt=stt, tts=tts, sink=sink, llm=llm, options=tts_options(assistant),
@@ -157,6 +165,8 @@ def make_pipeline(
         debug=Debug(ble.captures_dir / "debug") if assistant.debug_save_audio else None,
         on_record=show, on_correction=log_correction if glossary is not None else None,
         memory=memory,
+        on_heard=_show_heard if show_text else None,
+        on_said=_show_said if show_text else None,
         wake=WakePhrases.load(assistant.wake_phrases_path),
     )  # fmt: skip
 
@@ -199,7 +209,7 @@ async def run_assistant(
     if isinstance(sink, SubprocessSpeakerSink):
         await sink.start()
     pipeline = make_pipeline(
-        ble, assistant, stt=stt, tts=tts, sink=sink, llm=llm, show_text=assistant.log_transcripts,
+        ble, assistant, stt=stt, tts=tts, sink=sink, llm=llm, show_text=assistant.show_transcripts,
         memory=memory if local_mode else None,
     )  # fmt: skip
     app = AssistantApp(pipeline, assistant)
@@ -225,16 +235,55 @@ async def run_assistant(
         console.print(
             f"{assistant.assistant_name}: STT {stt.name}, TTS {tts.name}, LLM {llm.name}. "
             "Click the rear button (don't hold), wait about 1 s, speak. Click again to interrupt. "
-            "Ctrl+C to stop."
+            "Press Q to quit."
         )
-        end = await run_forever(app, open_glasses, report=lambda m: console.print(f"[dim]{m}[/]"))
-        console.print(f"Session ended: {end.reason}.")
+        end = await run_until_quit(
+            run_forever(app, open_glasses, report=lambda m: console.print(f"[dim]{m}[/]"))
+        )
+        console.print("Stopped by you." if end is None else f"Session ended: {end.reason}.")
     finally:
         await app.close()
         if isinstance(sink, SubprocessSpeakerSink):
             await sink.close()
         if server is not None:
             await asyncio.to_thread(server.stop)
+
+
+def _q_pressed_after(wait_s: float) -> bool:
+    time.sleep(wait_s)
+    return _q_pressed()
+
+
+def _q_pressed() -> bool:
+    """True when the Q key was pressed (Windows console); other keys are ignored."""
+    try:
+        import msvcrt
+    except ImportError:
+        return False
+    return msvcrt.kbhit() and msvcrt.getwch().lower() == "q"
+
+
+async def run_until_quit(work: Awaitable[T]) -> T | None:
+    """Run `work` until it ends or the user presses Q (then it is cancelled and None returned)."""
+    task = asyncio.ensure_future(work)
+
+    async def watch() -> None:
+        while not await asyncio.to_thread(_q_pressed_after, 0.2):
+            pass
+
+    watcher = asyncio.create_task(watch())
+    try:
+        await asyncio.wait({task, watcher}, return_when=asyncio.FIRST_COMPLETED)
+        if task.done():
+            return task.result()
+        console.print("Stopping ...")
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        return None
+    finally:
+        watcher.cancel()
+        task.cancel()
+        await asyncio.gather(watcher, task, return_exceptions=True)
 
 
 async def _start_local_server(ble: Settings, assistant: AssistantSettings) -> LocalServer | None:
