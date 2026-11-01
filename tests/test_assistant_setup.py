@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -188,7 +189,7 @@ def test_piper_is_a_registered_engine_with_registry_voices() -> None:
 async def test_piper_speaks_the_chosen_voice_when_the_model_is_installed() -> None:
     from aiglasses.assistant.interfaces import TtsOptions
 
-    if not INSTALLED_VOICE.exists():
+    if not await asyncio.to_thread(INSTALLED_VOICE.exists):
         pytest.skip("piper voice not installed")
     tts = registry.build_tts(settings(tts_engine="piper", tts_voice="piper-en-gb-alba-medium"))
     chunks = [c async for c in tts.synthesize_stream("Hello there.", TtsOptions("v", 1.0))]

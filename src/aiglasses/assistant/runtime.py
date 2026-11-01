@@ -43,6 +43,7 @@ from aiglasses.assistant.wake import WakePhrases
 from aiglasses.config import Settings
 from aiglasses.domain.errors import ConfigError, GlassesError, NotSupportedError
 from aiglasses.glasses import Glasses
+from aiglasses.runtime_paths import HELPER_SCRIPT
 from aiglasses.services.photo_fetch import (
     HelperWifiDirect,
     PhotoFetcher,
@@ -53,7 +54,6 @@ from aiglasses.services.photo_fetch import (
 from aiglasses.settings import AssistantSettings
 
 console = Console()
-HELPER_SCRIPT = Path(__file__).resolve().parents[1] / "helpers" / "wifidirect_helper.py"
 
 
 @dataclass

@@ -159,3 +159,71 @@ def llm_server_stop() -> None:
     """Stop a server that another terminal started."""
     stopped = local_server.stop_from_state(Settings().log_dir / "llama-server.json")
     console.print("Stopped." if stopped else "No server recorded.")
+
+
+wifi_direct_app = typer.Typer(
+    help="Supervised Wi-Fi Direct runs (A: connect, B: existing photo, C: full)."
+)
+
+
+def _run_wifi_direct(variant: str) -> None:
+    import asyncio
+
+    from aiglasses.glasses import Glasses
+    from aiglasses.research.glasses_http import GlassesHttpClient
+    from aiglasses.runtime_paths import HELPER_SCRIPT
+    from aiglasses.services.control import APPROVED_WIFI_DIRECT_FRAME
+    from aiglasses.services.photo_fetch import HelperWifiDirect, SubprocessHelper
+    from aiglasses.services.wifi_run import IpWatcher, WifiDirectRun
+
+    ble, assistant = Settings(), AssistantSettings()
+
+    async def main() -> str:
+        helper = SubprocessHelper(
+            [str(assistant.wifi_direct_helper_python), "-I", str(HELPER_SCRIPT)], timeout_s=60.0
+        )
+        adapter = HelperWifiDirect(helper)
+        try:
+            async with Glasses.connect(ble, dry_run=False) as glasses:
+                run = WifiDirectRun(
+                    variant=variant,
+                    adapter=adapter,
+                    enable=lambda: glasses.enable_wifi_direct(
+                        approved_frame=APPROVED_WIFI_DIRECT_FRAME
+                    ),
+                    ip=IpWatcher(glasses.events()),
+                    save_dir=ble.captures_dir / "photos",
+                    peer_prefix=ble.name_prefix.rstrip("_"),
+                    http=GlassesHttpClient,
+                    take_photo=(lambda: glasses.take_photo(confirm=True))
+                    if variant == "full"
+                    else None,
+                )
+                report = await run.run()
+        finally:
+            await helper.close()
+        return report.render(secrets=(adapter.current_profile() or "",))
+
+    try:
+        console.print(asyncio.run(main()), markup=False)
+    except GlassesError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(1) from exc
+
+
+@wifi_direct_app.command("connect")
+def wifi_direct_connect() -> None:
+    """A: enable -> find peer -> join -> read IP -> status -> disconnect -> restore. No HTTP."""
+    _run_wifi_direct("connect")
+
+
+@wifi_direct_app.command("existing")
+def wifi_direct_existing() -> None:
+    """B: A plus the file list and ONE existing photo (verify JPEG, save under captures/photos)."""
+    _run_wifi_direct("existing")
+
+
+@wifi_direct_app.command("full")
+def wifi_direct_full() -> None:
+    """C: photo -> count rise -> enable -> join -> list -> download newest -> restore."""
+    _run_wifi_direct("full")

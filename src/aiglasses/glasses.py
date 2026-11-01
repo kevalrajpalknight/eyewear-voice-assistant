@@ -85,6 +85,10 @@ class Glasses:
         """Read-only request (CONFIRMED): photos, videos and audio recordings on the glasses."""
         return await self.control.read_media_counts()
 
+    async def enable_wifi_direct(self, *, approved_frame: str) -> None:
+        """Send the one user-approved Wi-Fi Direct enable frame (needs dry_run=False)."""
+        await self.control.enable_wifi_direct(approved_frame=approved_frame)
+
     async def take_photo(self, *, confirm: bool) -> PhotoResult:
         """Take ONE photo. Changes the glasses' state, so it needs an explicit confirm=True."""
         return await self.control.take_photo(confirm=confirm)

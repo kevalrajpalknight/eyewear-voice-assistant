@@ -37,4 +37,4 @@ be a blend such as `bf_isabella:0.6+bf_emma:0.4`. Try the blend and the pauses f
 
 ## How to judge
 Listen to `greeting`, `explain` and `numbers` for each candidate. Tell me the winner (and a speed) and I
-add it to the registry; Piper would need a small engine entry (it is not wired into the assistant yet).
+add it to the registry; Piper (Alba) was chosen and is wired: `TTS_ENGINE=piper`, `TTS_VOICE=piper-en-gb-alba-medium`.

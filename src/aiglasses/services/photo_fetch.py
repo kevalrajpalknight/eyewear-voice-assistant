@@ -70,8 +70,11 @@ class HelperWifiDirect:
     async def restore(self, profile: str) -> None:
         await self._helper.request("restore", profile=profile)
 
+    async def status(self) -> dict[str, Any]:
+        return await self._helper.request("status")
+
     async def has_internet(self) -> bool:
-        return bool((await self._helper.request("status")).get("internet"))
+        return bool((await self.status()).get("internet"))
 
     # WifiDirect
     async def find_peer(self, name_prefix: str, timeout: float) -> str | None:
@@ -146,7 +149,7 @@ class FakeHelper:
             "preflight": {"profile": self._profile, "band": self._band},
             "find_peer": {"peer": "AIMB-G2_TEST"},
             "connect": {"band": "2.4 GHz", "channel": 6, "glasses_ip": None},
-            "status": {"internet": self.internet},
+            "status": {"internet": self.internet, "channels": [6]},
         }
         return replies.get(command, {})
 
