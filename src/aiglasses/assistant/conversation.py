@@ -165,6 +165,8 @@ class ConversationPipeline:
         on_text: Callable[[str], None] | None = None,
         on_heard: Callable[[str], None] | None = None,
         on_said: Callable[[str], None] | None = None,
+        on_wake: Callable[[], None] | None = None,
+        on_ignored: Callable[[str], None] | None = None,
         wake: WakePhrases | None = None,
         clock: Callable[[ZoneInfo], datetime] | None = None,
         memory_clock: Callable[[], float] = time.monotonic,
@@ -187,6 +189,9 @@ class ConversationPipeline:
         self._on_record, self._on_correction = on_record, on_correction
         self.on_text = on_text
         self.on_heard, self.on_said = on_heard, on_said
+        self.on_wake, self.on_ignored = on_wake, on_ignored
+        self.require_wake = settings.wake_required  # the listener flips this: asleep / awake
+        self.quiet_empty = False  # microphone mode: noise that yields no words is not answered
         self.wake = wake
         self._clock = clock or (lambda tz: datetime.now(tz))
         self._current: AssistantTurnRecord | None = None
@@ -384,11 +389,18 @@ class ConversationPipeline:
             if self._debug is not None and self.settings.debug_save_audio:
                 self._debug.save_audio(turn, utterance)
             text = await self._transcribe(utterance, record)
+            if not text and (self.require_wake or self.quiet_empty):
+                record.outcome = "ignored"
+                return record
             if self.wake is not None and text:
                 wake = self.wake.strip(text)
                 record.woke, text = wake.woke, wake.text
-                if self.settings.wake_required and not wake.woke:
+                if wake.woke and self.on_wake is not None:
+                    self.on_wake()
+                if self.require_wake and not wake.woke:
                     record.outcome = "ignored"
+                    if self.on_ignored is not None:
+                        self.on_ignored(text)
                     return record
                 if wake.only_wake:
                     record.outcome = "wake_ack"

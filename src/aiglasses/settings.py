@@ -116,6 +116,16 @@ class AssistantSettings(BaseSettings):
     assistant_name_long: str = "Eyewear Voice Assistant"
     startup_line: str = ""  # spoken once when the assistant is ready; empty = silent
     wake_mode: Literal["button", "glasses_phrase", "hfp_experimental"] = "button"
+    # button: the rear click starts a request. mic: a microphone listens all the time, waits
+    # for the wake phrase, then talks both ways until it has heard nothing for a while
+    input_mode: Literal["button", "mic"] = "button"
+    mic_device: str | None = None  # part of an input device name; None = the system default
+    listen_idle_sleep_s: float = Field(3.0, gt=0)  # awake, silent this long: go back to sleep
+    duplex_barge_in: bool = True  # speaking over the assistant stops it (false: half duplex)
+    barge_in_ratio: float = Field(2.5, ge=1.0)  # how much louder than the room, while it talks
+    vad_min_rms: float = Field(120.0, gt=0)  # quietest level (int16 RMS) that counts as speech
+    vad_ratio: float = Field(3.0, gt=1.0)  # speech must be this many times the room noise
+    vad_end_silence_ms: int = Field(800, gt=0)  # this much quiet ends a request
     wake_required: bool = False  # true: ignore speech that does not start with a wake phrase
     wake_phrases_path: Path | None = None  # None = the list shipped in the package
     wake_ack: str = "Yes?"  # said when only the wake phrase was heard

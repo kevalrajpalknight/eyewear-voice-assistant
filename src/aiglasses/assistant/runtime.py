@@ -4,7 +4,7 @@ import asyncio
 import json
 import time
 from collections.abc import Awaitable
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import TypeVar
@@ -21,6 +21,7 @@ from aiglasses.assistant.glossary import Correction
 from aiglasses.assistant.intents import Intents
 from aiglasses.assistant.interfaces import LlmClient, SpeechToText, TextToSpeech
 from aiglasses.assistant.lanes import LocalFirstClient
+from aiglasses.assistant.listener import EnergyVad, MicListener, MicStream
 from aiglasses.assistant.llm_client import CloudVision, LangChainLlmClient
 from aiglasses.assistant.local_llm import LocalLlm
 from aiglasses.assistant.local_server import LocalServer
@@ -134,6 +135,10 @@ def _show_said(text: str) -> None:
     console.print(f"[green]EVA:[/] {escape(text)}")
 
 
+def _show_ignored(text: str) -> None:
+    console.print(f"[dim]asleep, heard: {escape(text)}[/]")
+
+
 def make_pipeline(
     ble: Settings,
     assistant: AssistantSettings,
@@ -167,6 +172,7 @@ def make_pipeline(
         memory=memory,
         on_heard=_show_heard if show_text else None,
         on_said=_show_said if show_text else None,
+        on_ignored=_show_ignored if show_text else None,
         wake=WakePhrases.load(assistant.wake_phrases_path),
     )  # fmt: skip
 
@@ -223,6 +229,12 @@ async def run_assistant(
 
         @asynccontextmanager
         async def open_glasses(on_start):  # type: ignore[no-untyped-def]
+            if assistant.input_mode == "mic":
+                async with _open_microphone(
+                    ble, assistant, app, pipeline, holder, device_tools
+                ) as heard:
+                    yield heard
+                return
             async with Glasses.connect(ble, dry_run=not device_tools) as glasses:
                 holder.bind(glasses)
                 try:
@@ -234,8 +246,7 @@ async def run_assistant(
             await pipeline.say_line(assistant.startup_line)
         console.print(
             f"{assistant.assistant_name}: STT {stt.name}, TTS {tts.name}, LLM {llm.name}. "
-            "Click the rear button (don't hold), wait about 1 s, speak. Click again to interrupt. "
-            "Press Q to quit."
+            f"{_how_to_talk(assistant)} Press Q to quit."
         )
         end = await run_until_quit(
             run_forever(app, open_glasses, report=lambda m: console.print(f"[dim]{m}[/]"))
@@ -247,6 +258,50 @@ async def run_assistant(
             await sink.close()
         if server is not None:
             await asyncio.to_thread(server.stop)
+
+
+def _how_to_talk(assistant: AssistantSettings) -> str:
+    if assistant.input_mode == "mic":
+        return (
+            f'Listening. Say "hey {assistant.assistant_name}" to start; talk over me to '
+            f"interrupt; I sleep after {assistant.listen_idle_sleep_s:.0f} s of quiet."
+        )
+    return "Click the rear button (don't hold), wait about 1 s, speak. Click again to interrupt."
+
+
+@asynccontextmanager
+async def _open_microphone(  # type: ignore[no-untyped-def]
+    ble, assistant, app, pipeline, holder, device_tools
+):
+    """Passive listening. The glasses link is optional here: without it the tools say so."""
+    async with AsyncExitStack() as stack:
+        try:
+            glasses = await stack.enter_async_context(
+                Glasses.connect(ble, dry_run=not device_tools)
+            )
+            holder.bind(glasses)
+            stack.callback(holder.unbind)
+        except GlassesError as exc:
+            console.print(f"[yellow]Glasses not connected ({type(exc).__name__}); voice only.[/]")
+        mic = MicStream(assistant.mic_device)
+        await mic.start()
+        stack.push_async_callback(mic.close)
+        vad = EnergyVad(
+            min_rms=assistant.vad_min_rms,
+            ratio=assistant.vad_ratio,
+            end_silence_s=assistant.vad_end_silence_ms / 1000,
+        )
+        listener = MicListener(
+            mic.frames(), vad,
+            busy=lambda: app.runner.busy, interrupt=app.runner.interrupt,
+            set_require_wake=lambda need: setattr(pipeline, "require_wake", need),
+            report=lambda message: console.print(f"[dim]{message}[/]"),
+            idle_sleep_s=assistant.listen_idle_sleep_s,
+            duplex=assistant.duplex_barge_in, barge_in_ratio=assistant.barge_in_ratio,
+        )  # fmt: skip
+        pipeline.on_wake = listener.wake
+        pipeline.quiet_empty = True
+        yield listener.utterances()
 
 
 def _q_pressed_after(wait_s: float) -> bool:

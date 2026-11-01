@@ -94,6 +94,10 @@ failures: `FALLBACK_LLM_ERROR`, `FALLBACK_NO_SPEECH`, `FALLBACK_TTS_ERROR`.
 
 ## Logging and privacy
 `LOG_LEVEL` (`INFO`), `LOG_TRANSCRIPTS` (`false`: logs hold lengths and timings only), `SHOW_TRANSCRIPTS` (`true`: print `you:` and `EVA:` lines on screen only),
+`INPUT_MODE` (`button` or `mic`: with `mic` a microphone listens all the time, the wake phrase starts a
+conversation and the assistant sleeps again after `LISTEN_IDLE_SLEEP_S` (`3`) of quiet), `MIC_DEVICE` (part of an
+input device name; empty = system default), `DUPLEX_BARGE_IN` (`true`: speaking over the assistant stops it),
+`BARGE_IN_RATIO` (`2.5`), `VAD_MIN_RMS` (`120`; run `assistant mic-test` to see your levels), `VAD_RATIO` (`3`), `VAD_END_SILENCE_MS` (`800`),
 `DEBUG_SAVE_AUDIO` (`false`: input audio is not kept). The log filter also removes the configured
 keys and anything shaped like an API key from every log line.
 

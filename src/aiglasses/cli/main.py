@@ -376,6 +376,53 @@ def assistant_run(
     )
 
 
+@assistant_app.command("mic-test")
+def assistant_mic_test(
+    seconds: int = typer.Option(12, help="How long to listen"),
+) -> None:
+    """Listen to the microphone and show levels and speech detection (nothing is sent anywhere)."""
+    from aiglasses.assistant.listener import EnergyVad, MicStream, rms
+
+    assistant = AssistantSettings()
+
+    async def main() -> None:
+        mic = MicStream(assistant.mic_device)
+        await mic.start()
+        vad = EnergyVad(
+            min_rms=assistant.vad_min_rms,
+            ratio=assistant.vad_ratio,
+            end_silence_s=assistant.vad_end_silence_ms / 1000,
+        )
+        console.print(
+            f"Speak now. Speech starts above level {vad.threshold():.0f} (adapts to the room)."
+        )
+        loop = asyncio.get_running_loop()
+        end, last_print, peak = loop.time() + seconds, 0.0, 0.0
+        try:
+            async for frame in mic.frames():
+                now = loop.time()
+                peak = max(peak, rms(frame))
+                for event in vad.feed(frame, now):
+                    shown = (
+                        "speech started"
+                        if event.kind == "start"
+                        else ("speech ended" if event.pcm is not None else "blip ignored")
+                    )
+                    console.print(f"  {shown}")
+                if now - last_print > 1.0:
+                    console.print(
+                        f"  level now {rms(frame):.0f}, peak {peak:.0f}, room {vad.floor:.0f}, "
+                        f"threshold {vad.threshold():.0f}"
+                    )
+                    last_print, peak = now, 0.0
+                if now > end:
+                    break
+        finally:
+            await mic.close()
+
+    _run(main())
+
+
 @assistant_app.command("check")
 def assistant_check(
     live: bool = typer.Option(
