@@ -25,11 +25,15 @@ from aiglasses.services.voice import EndReason, VoiceUtterance
 HEADER = struct.Struct("<cI")
 SAMPLE_RATE = 16000
 START_FRAMES = 3  # consecutive loud frames that start an utterance
-BARGE_IN_FRAMES = 12  # while the assistant talks the user must keep it up this long (240 ms)
+BARGE_IN_FRAMES = 15  # while the assistant talks the user must keep it up this long (300 ms)
 MIN_SPEECH_S = 0.3  # shorter blips (a click, a cough) are dropped
 MAX_UTTERANCE_S = 15.0
 PREROLL_S = 0.3
-HOLDOFF_S = 0.4  # ignore the room after the assistant stops: its own tail and echo
+HOLDOFF_S = 1.0  # ignore the room after the assistant stops: its own tail and echo
+ECHO_REFERENCE_S = 2.0  # how far back the assistant's own echo level is remembered
+ECHO_LAG_S = 0.32  # the newest frames are left out so a user's burst is not its own reference
+NO_BARGE_IN = 1e6  # a threshold factor nobody can reach
+ECHO_MARGIN = 1.5  # speech over the assistant must beat its echo peak by this much
 FLOOR_ALPHA = 0.05
 Pcm = npt.NDArray[np.int16]
 
@@ -81,7 +85,7 @@ class EnergyVad:
         loud = level > self.threshold(factor)
         events: list[VadEvent] = []
         if not self.in_speech:
-            if not loud:
+            if not loud and factor <= 1.0:  # the assistant's own echo is not the room's noise
                 self.floor = (1 - FLOOR_ALPHA) * self.floor + FLOOR_ALPHA * level
             self._pre.append(frame)
             self._pre_s += seconds
@@ -187,6 +191,7 @@ class MicListener:
         idle_sleep_s: float,
         duplex: bool,
         barge_in_ratio: float,
+        echo_settling: Callable[[], bool] = lambda: False,
         clock: Callable[[], float] = time.time,
     ) -> None:
         self._frames, self._vad = frames, vad
@@ -198,9 +203,11 @@ class MicListener:
             barge_in_ratio,
         )
         self._clock = clock
+        self._echo_settling = echo_settling
         self.awake = False
         self._last_activity = clock()
         self._holdoff_until = 0.0
+        self._echo: deque[tuple[float, float]] = deque()
         set_require_wake(True)
 
     def wake(self) -> None:
@@ -216,6 +223,17 @@ class MicListener:
         self._set_require_wake(True)
         self._report("sleeping: say the wake phrase to start")
 
+    def _barge_in_factor(self, frame: Pcm, now: float) -> float:
+        """How much louder than normal speech must be: also beat the assistant's own echo."""
+        self._echo.append((now, rms(frame)))
+        if self._echo_settling():
+            return NO_BARGE_IN
+        while self._echo and now - self._echo[0][0] > ECHO_REFERENCE_S:
+            self._echo.popleft()
+        older = [level for at, level in self._echo if now - at > ECHO_LAG_S]
+        reference = max(older, default=0.0) * ECHO_MARGIN
+        return max(self._barge_in_ratio, reference / max(self._vad.threshold(), 1.0))
+
     async def utterances(self) -> AsyncIterator[VoiceUtterance]:
         async for frame in self._frames:
             now = self._clock()
@@ -228,7 +246,7 @@ class MicListener:
                     continue
             elif now < self._holdoff_until and not self._vad.in_speech:
                 continue
-            factor = self._barge_in_ratio if busy else 1.0
+            factor = self._barge_in_factor(frame, now) if busy else 1.0
             for event in self._vad.feed(frame, now, factor=factor):
                 if event.kind == "start":
                     self._last_activity = now

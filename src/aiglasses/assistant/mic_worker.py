@@ -7,6 +7,7 @@ Arguments: --device <name part, optional>  --rate <Hz, default 16000>  --block-m
 """
 
 import argparse
+import signal
 import struct
 import sys
 import threading
@@ -43,6 +44,7 @@ def resample(block: np.ndarray, source: int, target: int) -> np.ndarray:
 
 
 def main() -> None:
+    signal.signal(signal.SIGINT, signal.SIG_IGN)  # Ctrl+C is the parent's to handle; we exit at EOF
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", default=None)
     parser.add_argument("--rate", type=int, default=16000)

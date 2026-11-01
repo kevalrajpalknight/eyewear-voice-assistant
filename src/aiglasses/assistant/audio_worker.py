@@ -6,6 +6,7 @@ In:  C = 4-byte sample rate + int16 mono samples, E = end of turn, S = stop now,
 Out: R = ready, P = playback started, D = turn finished, T = stop acknowledged, X = error text
 """
 
+import signal
 import struct
 import sys
 import threading
@@ -98,6 +99,7 @@ def read_exact(count: int) -> bytes:
 
 
 def main() -> None:
+    signal.signal(signal.SIGINT, signal.SIG_IGN)  # Ctrl+C is the parent's to handle; we exit at EOF
     player = Player()
     send(b"R")
     while True:

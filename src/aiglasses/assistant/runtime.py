@@ -135,8 +135,8 @@ def _show_said(text: str) -> None:
     console.print(f"[green]EVA:[/] {escape(text)}")
 
 
-def _show_ignored(text: str) -> None:
-    console.print(f"[dim]asleep, heard: {escape(text)}[/]")
+def _show_ignored(text: str, reason: str) -> None:
+    console.print(f"[dim]ignored ({reason}): {escape(text)}[/]")
 
 
 def make_pipeline(
@@ -298,9 +298,11 @@ async def _open_microphone(  # type: ignore[no-untyped-def]
             report=lambda message: console.print(f"[dim]{message}[/]"),
             idle_sleep_s=assistant.listen_idle_sleep_s,
             duplex=assistant.duplex_barge_in, barge_in_ratio=assistant.barge_in_ratio,
+            echo_settling=pipeline.echo.settling,
         )  # fmt: skip
         pipeline.on_wake = listener.wake
         pipeline.quiet_empty = True
+        pipeline.input_is_microphone = True
         yield listener.utterances()
 
 

@@ -19,6 +19,7 @@ import numpy as np
 from aiglasses.assistant.clauses import ClauseStream
 from aiglasses.assistant.cleaner import clean_reply
 from aiglasses.assistant.echo import Debug, TurnLog
+from aiglasses.assistant.echo_guard import EchoGuard
 from aiglasses.assistant.glossary import Correction, Glossary
 from aiglasses.assistant.interfaces import (
     TIME_MARKER,
@@ -166,7 +167,7 @@ class ConversationPipeline:
         on_heard: Callable[[str], None] | None = None,
         on_said: Callable[[str], None] | None = None,
         on_wake: Callable[[], None] | None = None,
-        on_ignored: Callable[[str], None] | None = None,
+        on_ignored: Callable[[str, str], None] | None = None,
         wake: WakePhrases | None = None,
         clock: Callable[[ZoneInfo], datetime] | None = None,
         memory_clock: Callable[[], float] = time.monotonic,
@@ -190,7 +191,9 @@ class ConversationPipeline:
         self.on_text = on_text
         self.on_heard, self.on_said = on_heard, on_said
         self.on_wake, self.on_ignored = on_wake, on_ignored
+        self.echo = EchoGuard()
         self.require_wake = settings.wake_required  # the listener flips this: asleep / awake
+        self.input_is_microphone = False  # only a microphone can hear the assistant's own voice
         self.quiet_empty = False  # microphone mode: noise that yields no words is not answered
         self.wake = wake
         self._clock = clock or (lambda tz: datetime.now(tz))
@@ -313,12 +316,14 @@ class ConversationPipeline:
                 )
                 await queue.put(silence(gap))
             spoken.append(cleaned)
+            self.echo.said(cleaned)
             if self.on_said is not None:
                 self.on_said(cleaned)
             async for audio in self.tts.synthesize_stream(cleaned, self.options):
                 if record.t_first_chunk is None:
                     record.t_first_chunk = time.time()
                 audio_seconds += audio.seconds
+                self.echo.audio(audio.seconds)
                 await queue.put(audio)
             if not cleaned.endswith((".", "?", "!")):
                 return True
@@ -389,6 +394,11 @@ class ConversationPipeline:
             if self._debug is not None and self.settings.debug_save_audio:
                 self._debug.save_audio(turn, utterance)
             text = await self._transcribe(utterance, record)
+            if self.input_is_microphone and self.echo.is_echo(text, utterance.started_at):
+                record.outcome = "ignored"
+                if self.on_ignored is not None:
+                    self.on_ignored(text, "my own voice")
+                return record
             if not text and (self.require_wake or self.quiet_empty):
                 record.outcome = "ignored"
                 return record
@@ -400,7 +410,7 @@ class ConversationPipeline:
                 if self.require_wake and not wake.woke:
                     record.outcome = "ignored"
                     if self.on_ignored is not None:
-                        self.on_ignored(text)
+                        self.on_ignored(text, "no wake phrase")
                     return record
                 if wake.only_wake:
                     record.outcome = "wake_ack"

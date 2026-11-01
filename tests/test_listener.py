@@ -44,7 +44,12 @@ async def frames_of(frames: list[Pcm]) -> AsyncIterator[Pcm]:
 
 class Rig:
     def __init__(
-        self, frames: list[Pcm], *, busy: list[bool] | None = None, duplex: bool = True
+        self,
+        frames: list[Pcm],
+        *,
+        busy: list[bool] | None = None,
+        duplex: bool = True,
+        settling_frames: int = 0,
     ) -> None:
         self.now = 0.0
         self.require: list[bool] = []
@@ -67,6 +72,7 @@ class Rig:
             interrupt=lambda: setattr(self, "interrupts", self.interrupts + 1),
             set_require_wake=self.require.append, report=self.messages.append,
             idle_sleep_s=1.0, duplex=duplex, barge_in_ratio=2.5, clock=tick,
+            echo_settling=lambda: self.index <= settling_frames,
         )  # fmt: skip
 
 
@@ -103,3 +109,15 @@ async def test_speaking_over_the_assistant_interrupts_and_half_duplex_does_not()
     half = Rig(frames, busy=[True] * 35 + [False] * 30, duplex=False)
     await collect(half)
     assert half.interrupts == 0
+
+
+async def test_the_assistants_own_steady_echo_does_not_interrupt_it() -> None:
+    echo = (LOUD / 2).astype(np.int16)  # loud enough to pass the plain bar
+    frames = [QUIET] * 5 + [echo] * 80 + [QUIET] * 40
+    rig = Rig(frames, busy=[True] * 85 + [False] * 40, settling_frames=60)
+    await collect(rig)
+    assert rig.interrupts == 0
+    louder = [QUIET] * 5 + [echo] * 60 + [LOUD * 2] * 30 + [QUIET] * 40
+    spoken_over = Rig(louder, busy=[True] * 95 + [False] * 40, settling_frames=60)
+    await collect(spoken_over)
+    assert spoken_over.interrupts == 1

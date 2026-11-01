@@ -393,3 +393,22 @@ async def test_a_long_reply_is_cut_to_the_sentence_limit() -> None:
 def test_the_persona_names_the_target_length_from_settings() -> None:
     prompt = system_prompt("Say {target_sentences} sentences.", None, FIXED_NOW, 3)
     assert "Say three sentences." in prompt
+
+
+async def test_the_microphone_ignores_the_assistants_own_voice_but_not_a_real_request() -> None:
+    rig = Rig(llm=FakeLlm([("The capital of France is Paris. ",)]))
+    rig.pipeline.input_is_microphone = True
+    ignored: list[tuple[str, str]] = []
+    rig.pipeline.on_ignored = lambda text, reason: ignored.append((text, reason))
+    first = await rig.pipeline.run_turn(utterance(), 1)
+    assert first.outcome == "spoken"
+    rig.stt._texts = ["capital of France"]  # its own words, heard again while it was still talking
+    echoed = await rig.pipeline.run_turn(utterance(started=time.time()), 2)
+    assert echoed.outcome == "ignored" and ignored == [("capital of France", "my own voice")]
+    rig.stt._texts = ["what time is it"]
+    asked = await rig.pipeline.run_turn(utterance(started=time.time()), 3)
+    assert asked.outcome != "ignored"
+    rig.pipeline.input_is_microphone = False
+    rig.stt._texts = ["capital of France"]
+    button = await rig.pipeline.run_turn(utterance(started=time.time()), 4)
+    assert button.outcome != "ignored"
