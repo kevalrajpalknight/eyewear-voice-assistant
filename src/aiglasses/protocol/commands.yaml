@@ -81,3 +81,10 @@ commands:
     status: INFERRED
     source: apk-static (syncHeartBeat(7) sent about every 3 s while the app's voice recognizer runs; our captures never had it)
     safe_to_send: false
+  - name: ai_photo_capture
+    characteristic: de5bf72a-d711-4e47-af26-65e3012a5dc7
+    bytes: "bc4105003c9c0201060202"
+    direction: write
+    status: INFERRED
+    source: apk-static (AiChatViewModel.visionAiStart, glassesControl 02 01 06 s s with the app's default thumbnail size 2); sent only through capture_ai_photo, user-approved 2026-11-01 (repeatable, for looking only)
+    safe_to_send: false

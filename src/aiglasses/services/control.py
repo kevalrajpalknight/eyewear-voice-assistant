@@ -3,7 +3,12 @@
 import asyncio
 from dataclasses import dataclass
 
-from aiglasses.domain.errors import ConfirmationRequired, GlassesError, NotSupportedError
+from aiglasses.domain.errors import (
+    ConfirmationRequired,
+    GlassesError,
+    GlassesTimeoutError,
+    NotSupportedError,
+)
 from aiglasses.domain.models import BatteryStatus, Confidence, DeviceInfo, MediaCounts
 from aiglasses.protocol.bcframe import BcFrame
 from aiglasses.protocol.events import EVENT_CMD
@@ -19,6 +24,12 @@ from aiglasses.services.channel import FrameChannel
 
 CONTROL_CMD = 0x41
 PHOTO_OBSERVE_SECONDS = 15.0
+
+# Approved by the user on 2026-11-01, for looking only: glassesControl payload 02 01 06 02 02
+# (take a photo for AI vision, thumbnail size 2). It may repeat, once per look. Nothing else.
+APPROVED_AI_PHOTO_FRAME = "bc4105003c9c0201060202"
+AI_CAPTURE_EVENT = 2
+AI_CAPTURE_WAIT_S = 10.0
 
 
 @dataclass(frozen=True)
@@ -88,6 +99,34 @@ class ControlService:
             raise ConfirmationRequired("only the frame the user approved may be sent")
         self._guard.approve(command.name, command.characteristic, command.payload)
         await self._guard.write(command.characteristic, command.payload, response=False)
+
+    async def capture_ai_photo(
+        self, *, approved_frame: str, wait_s: float = AI_CAPTURE_WAIT_S
+    ) -> None:
+        """Take one photo for AI vision and wait until the glasses report it is ready."""
+        command = self._commands.get("ai_photo_capture")
+        if command is None:
+            raise NotSupportedError("ai_photo_capture is not in the command registry")
+        if self._guard.dry_run:
+            raise GlassesError("dry run: connect with dry_run=False to send requests")
+        if approved_frame != APPROVED_AI_PHOTO_FRAME or command.payload.hex() != approved_frame:
+            raise ConfirmationRequired("only the frame the user approved may be sent")
+
+        def is_ready(frame: BcFrame) -> bool:
+            return frame.cmd == EVENT_CMD and frame.payload[:1] == bytes([AI_CAPTURE_EVENT])
+
+        await self._channel.start()
+        ready = self._channel.expect(is_ready)
+        try:
+            self._guard.approve(
+                command.name, command.characteristic, command.payload, repeatable=True
+            )
+            await self._guard.write(command.characteristic, command.payload, response=False)
+            await asyncio.wait_for(ready, wait_s)
+        except asyncio.TimeoutError as exc:
+            raise GlassesTimeoutError(f"no capture-ready event within {wait_s:.0f} s") from exc
+        finally:
+            self._channel.discard(ready)
 
     async def take_photo(
         self, *, confirm: bool, observe_seconds: float = PHOTO_OBSERVE_SECONDS

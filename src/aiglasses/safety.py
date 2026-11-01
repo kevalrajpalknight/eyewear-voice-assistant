@@ -34,9 +34,15 @@ class WriteGuard:
         # Confirmed read-only commands may repeat; in-session approvals are sent at most once.
         self._repeatable = set(self._allowed)
 
-    def approve(self, name: str, char: str, payload: bytes) -> None:
-        """Explicit user approval of one exact payload for this session."""
-        self._allowed[(char.lower(), payload)] = name
+    def approve(self, name: str, char: str, payload: bytes, *, repeatable: bool = False) -> None:
+        """Explicit user approval of one exact payload for this session.
+
+        Sent at most once unless `repeatable`, which the user must have approved for that frame.
+        """
+        key = (char.lower(), payload)
+        self._allowed[key] = name
+        if repeatable:
+            self._repeatable.add(key)
 
     def _audit(self, outcome: str, name: str, char: str, payload: bytes) -> None:
         if self._audit_path is None:

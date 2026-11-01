@@ -64,6 +64,9 @@ class DeviceHolder:
     async def wait_for_ai_capture(self, timeout: float) -> None:
         await self._need().wait_for_ai_capture(timeout)
 
+    async def capture_ai_photo(self, *, approved_frame: str) -> None:
+        await self._need().capture_ai_photo(approved_frame=approved_frame)
+
 
 class ReadBattery:
     name: ClassVar[str] = "read_battery"

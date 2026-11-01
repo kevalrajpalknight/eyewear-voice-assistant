@@ -197,9 +197,9 @@ class AssistantSettings(BaseSettings):
     )
     wifi_direct_helper_python: Path = Path("tools/wifidirect-env/Scripts/python.exe")
     vision_max_image_side: int = Field(768, gt=0)
-    # how a picture is made for describe_scene: "photo" takes a normal photo first, "wait" waits
-    # for you to double-click the rear button
-    vision_capture: Literal["photo", "wait"] = "photo"
+    # how a picture is made for describe_scene: "ai_photo" asks the glasses for it (hands-free),
+    # "wait" waits for you to double-click the rear button
+    vision_capture: Literal["ai_photo", "wait"] = "wait"
     vision_capture_wait_s: float = Field(30.0, gt=0)
 
     # Live calls (cloud or search) made through `assistant check`

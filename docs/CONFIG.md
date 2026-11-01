@@ -136,7 +136,7 @@ them there.
 `VISION_ALLOW_CLOUD` (`false`; cloud vision also needs this), `WIFI_DIRECT_ENABLED` (`false`),
 `WIFI_DIRECT_HELPER_PYTHON` (the isolated helper's Python), `VISION_MAX_IMAGE_SIDE` (`768` pixels).
 Pictures come over Bluetooth (the AI-photo thumbnail) unless `WIFI_DIRECT_ENABLED` is true.
-`VISION_CAPTURE` (`photo` takes a normal photo first, `wait` waits for your rear double click) and
+`VISION_CAPTURE` (`wait` waits for your rear double click, the default; `ai_photo` asks the glasses for the photo, hands-free, using the one frame you approved) and
 `VISION_CAPTURE_WAIT_S` (`30`).
 
 ## Live calls and reasoning effort

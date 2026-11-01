@@ -243,22 +243,23 @@ CAPTURE_WAIT_S = 60.0
 @thumbnail_app.command("fetch")
 def thumbnail_fetch(
     wait: bool = typer.Option(True, help="Wait for you to double-click the rear button first"),
-    photo: bool = typer.Option(False, help="Take one normal photo first instead of waiting"),
+    ai_photo: bool = typer.Option(False, help="Ask the glasses for an AI photo (hands-free)"),
 ) -> None:
     """Wait for an AI capture (rear double click), then read its thumbnail chunk by chunk."""
     import asyncio
     from datetime import datetime
 
     from aiglasses.glasses import Glasses
+    from aiglasses.services.control import APPROVED_AI_PHOTO_FRAME
     from aiglasses.services.thumbnail import jpeg_size
 
     ble = Settings()
 
     async def main() -> None:
         async with Glasses.connect(ble, dry_run=False) as glasses:
-            if photo:
-                console.print("Taking one normal photo first ...")
-                await glasses.take_photo(confirm=True)
+            if ai_photo:
+                console.print("Asking the glasses for an AI photo ...")
+                await glasses.capture_ai_photo(approved_frame=APPROVED_AI_PHOTO_FRAME)
             elif wait:
                 console.print("Double-click the rear button now (waiting up to 60 s)...")
                 await glasses.wait_for_ai_capture(CAPTURE_WAIT_S)

@@ -3,9 +3,15 @@ from pathlib import Path
 import pytest
 
 from aiglasses.assistant.vision import ImageUnavailable
-from aiglasses.domain.errors import GlassesError
+from aiglasses.domain.errors import (
+    ConfirmationRequired,
+    GlassesError,
+    GlassesTimeoutError,
+    WriteBlockedError,
+)
 from aiglasses.protocol.bcframe import parse_bc_frame
 from aiglasses.protocol.uuids import GLASSES_NOTIFY
+from aiglasses.services.control import APPROVED_AI_PHOTO_FRAME
 from aiglasses.services.photo_fetch import BleThumbnailImageSource
 from aiglasses.services.thumbnail import (
     APPROVED_FIRST_REQUEST,
@@ -123,8 +129,8 @@ class FakeDevice:
         self.jpegs, self.fail = list(jpegs), fail
         self.calls: list[str] = []
 
-    async def take_photo(self, *, confirm: bool) -> None:
-        self.calls.append(f"photo confirm={confirm}")
+    async def capture_ai_photo(self, *, approved_frame: str) -> None:
+        self.calls.append(f"ai_photo {approved_frame}")
 
     async def wait_for_ai_capture(self, timeout: float) -> None:
         self.calls.append(f"wait {timeout}")
@@ -136,17 +142,19 @@ class FakeDevice:
         return ThumbnailResult(self.jpegs.pop(0), 1, 0.1)
 
 
-async def test_the_image_source_takes_a_photo_then_reads_the_thumbnail(tmp_path: Path) -> None:
+async def test_the_image_source_asks_for_an_ai_photo_then_reads_the_thumbnail(
+    tmp_path: Path,
+) -> None:
     device = FakeDevice([JPEG, JPEG[:-3] + b"\x01\xff\xd9"])
-    source = BleThumbnailImageSource(device, "photo", 30.0, tmp_path)  # type: ignore[arg-type]
+    source = BleThumbnailImageSource(device, "ai_photo", 30.0, tmp_path)
     assert await source.capture() == JPEG
-    assert device.calls == ["photo confirm=True", "fetch"]
+    assert device.calls == [f"ai_photo {APPROVED_AI_PHOTO_FRAME}", "fetch"]
     assert len(list(tmp_path.glob("Thumb_*.jpg"))) == 1
     assert await source.capture()  # a different picture is accepted
 
 
 async def test_a_repeated_thumbnail_is_refused_as_stale() -> None:
-    source = BleThumbnailImageSource(FakeDevice([JPEG, JPEG]), "photo", 30.0)  # type: ignore[arg-type]
+    source = BleThumbnailImageSource(FakeDevice([JPEG, JPEG]), "ai_photo", 30.0)
     await source.capture()
     with pytest.raises(ImageUnavailable) as caught:
         await source.capture()
@@ -155,12 +163,61 @@ async def test_a_repeated_thumbnail_is_refused_as_stale() -> None:
 
 async def test_wait_mode_waits_for_the_double_click_and_failures_are_spoken() -> None:
     device = FakeDevice([JPEG])
-    assert await BleThumbnailImageSource(device, "wait", 12.0).capture() == JPEG  # type: ignore[arg-type]
+    assert await BleThumbnailImageSource(device, "wait", 12.0).capture() == JPEG
     assert device.calls == ["wait 12.0", "fetch"]
-    broken = BleThumbnailImageSource(FakeDevice([JPEG], fail=True), "wait", 1.0)  # type: ignore[arg-type]
+    broken = BleThumbnailImageSource(FakeDevice([JPEG], fail=True), "wait", 1.0)
     with pytest.raises(ImageUnavailable) as caught:
         await broken.capture()
     assert "couldn't get the picture" in caught.value.spoken
-    damaged = BleThumbnailImageSource(FakeDevice([JPEG[:20]]), "photo", 1.0)  # type: ignore[arg-type]
+    damaged = BleThumbnailImageSource(FakeDevice([JPEG[:20]]), "ai_photo", 1.0)
     with pytest.raises(ImageUnavailable, match="not a complete JPEG"):
         await damaged.capture()
+
+
+class AiPhotoDevice(Device):
+    def __init__(self, *, answer: bool = True) -> None:
+        super().__init__()
+        self.answer = answer
+
+    async def write(self, char: str, data: bytes, *, response: bool = False) -> None:
+        await super().write(char, data, response=response)
+        if data.hex() == APPROVED_AI_PHOTO_FRAME and self.answer:
+            self._later(0.01, build_bc_frame(0x73, bytes([2, 0, 1, 2, 0])))
+
+
+async def test_the_ai_photo_frame_is_exact_repeatable_and_waits_for_the_ready_event(
+    tmp_path: Path,
+) -> None:
+    assert APPROVED_AI_PHOTO_FRAME == "bc4105003c9c0201060202"
+    device = AiPhotoDevice()
+    g = glasses(device, tmp_path)
+    await g.capture_ai_photo(approved_frame=APPROVED_AI_PHOTO_FRAME)
+    await g.capture_ai_photo(approved_frame=APPROVED_AI_PHOTO_FRAME)
+    assert [w[1].hex() for w in device.writes] == [APPROVED_AI_PHOTO_FRAME] * 2
+
+
+async def test_only_the_ai_photo_frame_repeats_and_other_frames_still_do_not(
+    tmp_path: Path,
+) -> None:
+    device = AiPhotoDevice()
+    g = glasses(device, tmp_path)
+    await g.capture_ai_photo(approved_frame=APPROVED_AI_PHOTO_FRAME)
+    await g.enable_wifi_direct(approved_frame="bc410400935c02010401")
+    with pytest.raises(WriteBlockedError):
+        await g.enable_wifi_direct(approved_frame="bc410400935c02010401")
+
+
+async def test_wrong_frame_dry_run_and_silent_glasses_are_refused(tmp_path: Path) -> None:
+    device = AiPhotoDevice(answer=False)
+    with pytest.raises(ConfirmationRequired):
+        await glasses(device, tmp_path).capture_ai_photo(approved_frame="bc4105003c9c0201060203")
+    with pytest.raises(GlassesError, match="dry run"):
+        await glasses(device, tmp_path, dry_run=True).capture_ai_photo(
+            approved_frame=APPROVED_AI_PHOTO_FRAME
+        )
+    assert device.writes == []
+    g = glasses(device, tmp_path)
+    g.control._channel.request_timeout = 0.2
+    with pytest.raises(GlassesTimeoutError):
+        await g.control.capture_ai_photo(approved_frame=APPROVED_AI_PHOTO_FRAME, wait_s=0.2)
+    assert len(device.writes) == 1

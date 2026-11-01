@@ -22,7 +22,7 @@ from typing import Any, Protocol
 from aiglasses.assistant.vision import ImageUnavailable
 from aiglasses.domain.errors import GlassesError, NotSupportedError
 from aiglasses.research.glasses_http import GlassesHttpClient, HttpGuardError
-from aiglasses.services.control import PhotoResult
+from aiglasses.services.control import APPROVED_AI_PHOTO_FRAME, PhotoResult
 from aiglasses.services.thumbnail import ThumbnailResult
 from aiglasses.services.wifidirect import (
     GroupInfo,
@@ -249,7 +249,7 @@ class WifiDirectImageSource:
 
 
 class ThumbnailDevice(Protocol):
-    async def take_photo(self, *, confirm: bool) -> PhotoResult: ...
+    async def capture_ai_photo(self, *, approved_frame: str) -> None: ...
 
     async def fetch_thumbnail(self) -> ThumbnailResult: ...
 
@@ -259,8 +259,8 @@ class ThumbnailDevice(Protocol):
 class BleThumbnailImageSource:
     """`ImageSource` over Bluetooth only: the glasses' AI-photo thumbnail (a few KB, about 1 s).
 
-    mode "photo": take a normal photo, then read the thumbnail. mode "wait": wait for the person
-    to double-click the rear button (the glasses report the capture), then read it. A thumbnail
+    mode "ai_photo": ask the glasses for an AI-vision photo (hands-free), then read the thumbnail.
+    mode "wait": wait for the person to double-click the rear button, then read it. A thumbnail
     identical to the previous one is refused as stale.
     """
 
@@ -276,7 +276,7 @@ class BleThumbnailImageSource:
             if self._mode == "wait":
                 await self._device.wait_for_ai_capture(self._wait_s)
             else:
-                await self._device.take_photo(confirm=True)
+                await self._device.capture_ai_photo(approved_frame=APPROVED_AI_PHOTO_FRAME)
             result = await self._device.fetch_thumbnail()
         except GlassesError as exc:
             raise ImageUnavailable(

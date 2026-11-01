@@ -89,6 +89,10 @@ class Glasses:
         """Read-only request (CONFIRMED): photos, videos and audio recordings on the glasses."""
         return await self.control.read_media_counts()
 
+    async def capture_ai_photo(self, *, approved_frame: str) -> None:
+        """Take one AI-vision photo (the user-approved frame only) and wait for it to be ready."""
+        await self.control.capture_ai_photo(approved_frame=approved_frame)
+
     async def wait_for_ai_capture(self, timeout: float) -> None:
         """Return when the glasses report an AI capture (rear double click, "hey glasses")."""
 
