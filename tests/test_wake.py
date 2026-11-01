@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from aiglasses.assistant.fakes import FakeLlm, FakeStt
-from aiglasses.assistant.wake import WakePhrases, learn_names, read_learned, save_learned
+from aiglasses.assistant.listening.wake import WakePhrases, learn_names, read_learned, save_learned
+from aiglasses.assistant.testing.fakes import FakeLlm, FakeStt
 from tests.test_conversation import Rig, utterance
 
 
@@ -60,8 +60,8 @@ async def test_when_a_wake_phrase_is_required_other_speech_is_ignored_silently()
 
 
 def test_the_persona_names_the_assistant_from_settings() -> None:
-    from aiglasses.assistant.app import load_persona
-    from aiglasses.assistant.conversation import system_prompt
+    from aiglasses.assistant.conversation.app import load_persona
+    from aiglasses.assistant.conversation.pipeline import system_prompt
     from tests.test_conversation import FIXED_NOW, settings
 
     prompt = system_prompt(

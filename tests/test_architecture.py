@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 
 SRC = Path(__file__).parent.parent / "src" / "aiglasses"
-ALLOWED = ("assistant/llm_client.py", "assistant/agent/")
+ALLOWED = ("assistant/llm/llm_client.py", "assistant/agent/")
 FRAMEWORK = re.compile(r"^\s*(?:from|import)\s+(?:langchain|langgraph)", re.MULTILINE)
 
 

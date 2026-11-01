@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from aiglasses.assistant.vision import ImageUnavailable
+from aiglasses.assistant.tools.vision import ImageUnavailable
 from aiglasses.domain.errors import (
     ConfirmationRequired,
     GlassesError,

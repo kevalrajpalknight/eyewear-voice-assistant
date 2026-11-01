@@ -30,3 +30,17 @@ domain (dataclasses, enums, errors) is shared by every layer.
 ## Layout notes
 
 Files are small and focused. Logs (`logs/`) and captures (`captures/`) are gitignored.
+
+## Assistant package layout (`src/aiglasses/assistant/`)
+| Package | What lives there |
+|---|---|
+| `agent/` | The brain: `AgentClient` (LangChain `create_agent`), model routing middleware, tool adapters, tool hints (`hints.yaml`), the rule fast path, turn state. The only place besides `llm/llm_client.py` that may import LangChain or LangGraph (enforced by `tests/test_architecture.py`). |
+| `conversation/` | The turn pipeline, the turn runner and logs, memory, intents (`intents.yaml`), fillers, escalation rules, the persona and the app loop with reconnects. |
+| `speech/` | Speech to text and text to speech engines, the engine factory, text clean-up, chunking for natural speech, the speaker worker process. |
+| `listening/` | Microphone worker, voice detector, wake phrases, echo guard, sounds and thanks filter, turn-end rules, request joining. |
+| `llm/` | The cloud chat models (`llm_client.py`), the managed local `llama-server`, the model registry and its downloads. |
+| `tools/` | The tools the assistant can use (device, memory, search, vision, time and weather) and the registry that enforces risk classes. |
+| `run/` | Starting the assistant, the configuration check, offline diagnosis, benchmark sessions. |
+| `testing/` | Fakes for tests and the offline diagnosis. |
+
+Data files (YAML, the persona) sit next to the code that reads them.

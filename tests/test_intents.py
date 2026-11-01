@@ -1,6 +1,6 @@
 import pytest
 
-from aiglasses.assistant.intents import Intents, normalise
+from aiglasses.assistant.conversation.intents import Intents, normalise
 from aiglasses.domain.errors import ConfigError
 
 

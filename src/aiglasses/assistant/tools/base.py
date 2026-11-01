@@ -17,8 +17,8 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel, ValidationError
 
-from aiglasses.assistant.fillers import Fillers
-from aiglasses.assistant.intents import Intents
+from aiglasses.assistant.conversation.fillers import Fillers
+from aiglasses.assistant.conversation.intents import Intents
 
 
 class Risk(str, Enum):

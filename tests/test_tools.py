@@ -4,7 +4,7 @@ from typing import Any, ClassVar
 import pytest
 from pydantic import BaseModel
 
-from aiglasses.assistant.intents import Intents
+from aiglasses.assistant.conversation.intents import Intents
 from aiglasses.assistant.tools.base import (
     NoArgs,
     Risk,

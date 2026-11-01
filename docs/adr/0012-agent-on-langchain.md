@@ -9,7 +9,7 @@ are added as tools and middleware instead of new state machine code.
 
 - `create_agent` is built on LangGraph, so `langgraph` is a required dependency of `langchain`
   (checked on PyPI). We write no LangGraph code; it is the runtime underneath.
-- LangChain and LangGraph may be imported only in `assistant/llm_client.py` and in the
+- LangChain and LangGraph may be imported only in `assistant/llm/llm_client.py` and in the
   `assistant/agent/` package (enforced by `tests/test_architecture.py`). Tools stay plain classes with
   a risk class; the agent package wraps them.
 - The local model is `llama-server` over its OpenAI-compatible API (`ChatOpenAI` with a `base_url`),

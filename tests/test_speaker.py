@@ -6,8 +6,8 @@ from collections.abc import AsyncIterator
 import numpy as np
 import pytest
 
-from aiglasses.assistant.interfaces import AudioChunk
-from aiglasses.assistant.speaker import NullSink, SubprocessSpeakerSink
+from aiglasses.assistant.conversation.interfaces import AudioChunk
+from aiglasses.assistant.speech.speaker import NullSink, SubprocessSpeakerSink
 
 
 def silent_chunks(count: int, seconds: float = 0.1) -> AsyncIterator[AudioChunk]:

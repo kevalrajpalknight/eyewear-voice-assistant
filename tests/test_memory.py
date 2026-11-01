@@ -1,8 +1,8 @@
 import pytest
 
-from aiglasses.assistant.interfaces import Message
-from aiglasses.assistant.joiner import TurnJoiner
-from aiglasses.assistant.memory import INTERRUPTED_NOTE, Exchange, Memory, fit_tokens
+from aiglasses.assistant.conversation.interfaces import Message
+from aiglasses.assistant.conversation.memory import INTERRUPTED_NOTE, Exchange, Memory, fit_tokens
+from aiglasses.assistant.listening.joiner import TurnJoiner
 from aiglasses.assistant.tools.base import ToolContext
 from aiglasses.assistant.tools.memory_tools import ForgetAllThat, ForgetArgs
 

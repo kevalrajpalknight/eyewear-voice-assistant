@@ -2,7 +2,7 @@ from collections.abc import AsyncIterator
 
 import numpy as np
 
-from aiglasses.assistant.listener import EnergyVad, MicListener, Pcm
+from aiglasses.assistant.listening.listener import EnergyVad, MicListener, Pcm
 
 RATE = 16000
 FRAME = RATE // 50  # 20 ms

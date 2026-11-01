@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 if TYPE_CHECKING:
-    from aiglasses.assistant.glossary import Glossary
+    from aiglasses.assistant.speech.glossary import Glossary
 
 SYNTHETIC = [
     "Zorvex Quill",
@@ -18,14 +18,14 @@ SYNTHETIC = [
 def glossary() -> "Glossary":
     pytest.importorskip("rapidfuzz")
     pytest.importorskip("jellyfish")
-    from aiglasses.assistant.glossary import Glossary, parse_glossary
+    from aiglasses.assistant.speech.glossary import Glossary, parse_glossary
 
     return Glossary(parse_glossary(SYNTHETIC))
 
 
 def test_parse_skips_comments_and_blank_lines_and_reads_spoken_forms() -> None:
     pytest.importorskip("rapidfuzz")
-    from aiglasses.assistant.glossary import parse_glossary
+    from aiglasses.assistant.speech.glossary import parse_glossary
 
     terms = parse_glossary(SYNTHETIC)
     assert [t.canonical for t in terms] == ["Zorvex Quill", "Blenmark", "Tamsin Fernhollow"]
@@ -63,7 +63,7 @@ def test_sentence_punctuation_blocks_a_multi_word_match(glossary: "Glossary") ->
 
 def test_short_and_common_words_are_never_replaced() -> None:
     pytest.importorskip("rapidfuzz")
-    from aiglasses.assistant.glossary import Glossary, parse_glossary
+    from aiglasses.assistant.speech.glossary import Glossary, parse_glossary
 
     glossary = Glossary(parse_glossary(["Anu", "Will Smith"]))
     assert glossary.correct("And will you come?") == ("And will you come?", [])
@@ -71,7 +71,7 @@ def test_short_and_common_words_are_never_replaced() -> None:
 
 def test_empty_glossary_changes_nothing() -> None:
     pytest.importorskip("rapidfuzz")
-    from aiglasses.assistant.glossary import Glossary
+    from aiglasses.assistant.speech.glossary import Glossary
 
     assert Glossary([]).correct("anything at all") == ("anything at all", [])
     assert Glossary([]).prompt_note() == ""
@@ -86,7 +86,7 @@ def test_prompt_note_lists_the_terms_and_warns_about_recognition_errors(
 
 def test_a_line_with_several_pipes_is_flagged_without_repeating_its_text() -> None:
     pytest.importorskip("rapidfuzz")
-    from aiglasses.assistant.glossary import glossary_warnings
+    from aiglasses.assistant.speech.glossary import glossary_warnings
 
     found = glossary_warnings(["Zorvex | zorvecks", "Blenmark | a | b | c", "# x | y | z"])
     assert len(found) == 1 and "line 2" in found[0] and "Blenmark" not in found[0]

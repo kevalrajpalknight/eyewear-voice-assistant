@@ -1,6 +1,6 @@
 import numpy as np
 
-from aiglasses.assistant.turn_end import is_complete, trailing_silence_ms
+from aiglasses.assistant.listening.turn_end import is_complete, trailing_silence_ms
 from aiglasses.services.voice import EndReason, VoiceUtterance
 
 

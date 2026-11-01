@@ -8,9 +8,9 @@ from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 from pydantic import SecretStr
 
-from aiglasses.assistant import llm_client
-from aiglasses.assistant.interfaces import Message
-from aiglasses.assistant.llm_client import (
+from aiglasses.assistant.conversation.interfaces import Message
+from aiglasses.assistant.llm import llm_client
+from aiglasses.assistant.llm.llm_client import (
     LangChainLlmClient,
     LlmAuthError,
     LlmError,

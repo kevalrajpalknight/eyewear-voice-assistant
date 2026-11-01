@@ -1,4 +1,4 @@
-from aiglasses.assistant.interfaces import (
+from aiglasses.assistant.conversation.interfaces import (
     AudioChunk,
     AudioSink,
     LlmClient,

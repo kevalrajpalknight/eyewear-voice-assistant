@@ -1,4 +1,4 @@
-from aiglasses.assistant.chunker import split_clauses
+from aiglasses.assistant.speech.chunker import split_clauses
 
 
 def test_short_sentence_is_one_clause() -> None:

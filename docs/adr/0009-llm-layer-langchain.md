@@ -4,7 +4,7 @@ Status: accepted (2026-10-31).
 
 ## Decision
 `LlmClient` (stream messages -> text deltas) stays our protocol. `LangChainLlmClient` implements it
-and is the only module that imports LangChain (`assistant/llm_client.py`; a test could be added to
+and is the only module that imports LangChain (`assistant/llm/llm_client.py`; a test could be added to
 enforce this, today it is a review rule). LiteLLM is not used and not in the dependency tree. Providers
 are factory functions in a registry; chat models are built with the provider packages' own
 classes and always with provider-side retries off (`max_retries=0`), because our client retries only

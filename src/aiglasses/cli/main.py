@@ -336,7 +336,7 @@ def assistant_echo(
     ),
 ) -> None:
     """Rear click -> speech to text -> speak it back. No LLM, no network, nothing sent."""
-    from aiglasses.assistant.session import run_echo
+    from aiglasses.assistant.run.session import run_echo
 
     if output not in (None, "pc", "null"):
         raise typer.BadParameter("--output must be pc or null")
@@ -361,7 +361,7 @@ def assistant_run(
     ),
 ) -> None:
     """Rear click -> speech to text -> LLM -> speech. Needs .env (see `assistant check`)."""
-    from aiglasses.assistant.runtime import run_assistant
+    from aiglasses.assistant.run.runtime import run_assistant
 
     if output not in (None, "pc", "null"):
         raise typer.BadParameter("--output must be pc or null")
@@ -383,9 +383,9 @@ def assistant_vision_test(
     import time
     from pathlib import Path
 
-    from aiglasses.assistant.local_server import LocalServer
-    from aiglasses.assistant.models import Registry
-    from aiglasses.assistant.vision import VISION_PROMPT, LocalVision
+    from aiglasses.assistant.llm.local_server import LocalServer
+    from aiglasses.assistant.llm.models import Registry
+    from aiglasses.assistant.tools.vision import VISION_PROMPT, LocalVision
     from aiglasses.config import Settings
 
     assistant, ble = AssistantSettings(), Settings()
@@ -421,9 +421,14 @@ def assistant_wake_train(
     """
     from difflib import SequenceMatcher
 
-    from aiglasses.assistant.listener import EnergyVad, MicStream
-    from aiglasses.assistant.registry import build_stt
-    from aiglasses.assistant.wake import WakePhrases, learn_names, read_learned, save_learned
+    from aiglasses.assistant.listening.listener import EnergyVad, MicStream
+    from aiglasses.assistant.listening.wake import (
+        WakePhrases,
+        learn_names,
+        read_learned,
+        save_learned,
+    )
+    from aiglasses.assistant.speech.factory import build_stt
 
     assistant = AssistantSettings()
     phrases = WakePhrases.load(assistant.wake_phrases_path, assistant.wake_learned_path)
@@ -494,7 +499,7 @@ def assistant_check(
     ),
 ) -> None:
     """Validate settings, models, packages and audio. Secrets show only as set / NOT set."""
-    from aiglasses.assistant import check as check_module
+    from aiglasses.assistant.run import check as check_module
 
     log_dir = Settings().log_dir
     if reset_live_budget:
@@ -512,7 +517,7 @@ def assistant_diagnose(
     phrase: list[str] = typer.Argument(None, help="Phrases to trace; default: a sample set"),
 ) -> None:
     """Offline: trace each phrase (lane, intent, tool, enabled) and where it stops."""
-    from aiglasses.assistant.diagnose import SAMPLES, diagnose
+    from aiglasses.assistant.run.diagnose import SAMPLES, diagnose
 
     rows = _run(diagnose(AssistantSettings(), tuple(phrase) if phrase else SAMPLES))
     table = Table(title="Phrase trace (fakes only, nothing is sent)", show_lines=True)
@@ -590,9 +595,9 @@ def bench_record(
 
     Sentences that already have a saved take are skipped, so a re-run continues.
     """
-    from aiglasses.assistant.glossary import Glossary
-    from aiglasses.assistant.recorder import SHORT_SENTENCES, glossary_sentences, pending
-    from aiglasses.assistant.session import SENTENCES, run_bench_record
+    from aiglasses.assistant.run.recorder import SHORT_SENTENCES, glossary_sentences, pending
+    from aiglasses.assistant.run.session import SENTENCES, run_bench_record
+    from aiglasses.assistant.speech.glossary import Glossary
 
     extra = []
     if glossary_file is not None:

@@ -8,8 +8,8 @@ from rich.console import Console
 from rich.progress import BarColumn, DownloadColumn, Progress, TaskID, TextColumn
 from rich.table import Table
 
-from aiglasses.assistant import local_server
-from aiglasses.assistant.models import (
+from aiglasses.assistant.llm import local_server
+from aiglasses.assistant.llm.models import (
     GB,
     RUNTIME_NAME,
     Registry,

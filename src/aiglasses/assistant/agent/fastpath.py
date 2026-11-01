@@ -4,9 +4,9 @@ import asyncio
 from collections.abc import AsyncIterator, Callable
 
 from aiglasses.assistant.agent.turn import Turn
-from aiglasses.assistant.clauses import FLUSH
-from aiglasses.assistant.intents import Intents, normalise
-from aiglasses.assistant.router import Handler, LocalState
+from aiglasses.assistant.conversation.intents import Intents, normalise
+from aiglasses.assistant.conversation.router import Handler, LocalState
+from aiglasses.assistant.speech.clauses import FLUSH
 from aiglasses.assistant.tools.base import ToolRegistry
 from aiglasses.settings import AssistantSettings
 

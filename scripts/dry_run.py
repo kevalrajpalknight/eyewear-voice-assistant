@@ -8,13 +8,13 @@ import asyncio
 import sys
 from pathlib import Path
 
-from aiglasses.assistant.app import AssistantApp
-from aiglasses.assistant.fakes import FakeLlm
-from aiglasses.assistant.registry import build_stt, build_tts
-from aiglasses.assistant.router import RoutedLlmClient
-from aiglasses.assistant.runtime import make_pipeline
-from aiglasses.assistant.session import tts_options, utterance_from_wav, warm_up
-from aiglasses.assistant.speaker import NullSink
+from aiglasses.assistant.conversation.app import AssistantApp
+from aiglasses.assistant.conversation.router import RoutedLlmClient
+from aiglasses.assistant.run.runtime import make_pipeline
+from aiglasses.assistant.run.session import tts_options, utterance_from_wav, warm_up
+from aiglasses.assistant.speech.factory import build_stt, build_tts
+from aiglasses.assistant.speech.speaker import NullSink
+from aiglasses.assistant.testing.fakes import FakeLlm
 from aiglasses.config import Settings
 from aiglasses.settings import AssistantSettings
 

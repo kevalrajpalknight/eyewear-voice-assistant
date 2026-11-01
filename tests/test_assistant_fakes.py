@@ -1,14 +1,14 @@
 import numpy as np
 
 from aiglasses.assistant import TtsOptions
-from aiglasses.assistant.fakes import FakeLlm, FakeSink, FakeStt, FakeTts
-from aiglasses.assistant.interfaces import (
+from aiglasses.assistant.conversation.interfaces import (
     AudioSink,
     LlmClient,
     Message,
     SpeechToText,
     TextToSpeech,
 )
+from aiglasses.assistant.testing.fakes import FakeLlm, FakeSink, FakeStt, FakeTts
 
 
 def test_fakes_satisfy_the_interfaces() -> None:

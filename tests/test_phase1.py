@@ -1,18 +1,18 @@
 import httpx
 import pytest
 
-from aiglasses.assistant.conversation import AssistantTurnRecord  # noqa: F401
-from aiglasses.assistant.fakes import FakeLlm
-from aiglasses.assistant.fragments import Fragments
-from aiglasses.assistant.intents import Intents, normalise
-from aiglasses.assistant.search import (
+from aiglasses.assistant.conversation.intents import Intents, normalise
+from aiglasses.assistant.conversation.pipeline import AssistantTurnRecord  # noqa: F401
+from aiglasses.assistant.listening.fragments import Fragments
+from aiglasses.assistant.listening.wake import learn_names, read_learned, save_learned
+from aiglasses.assistant.testing.fakes import FakeLlm
+from aiglasses.assistant.tools.search import (
     FakeSearch,
     FallbackSearch,
     SearchError,
     SearchHit,
     WikipediaSearch,
 )
-from aiglasses.assistant.wake import learn_names, read_learned, save_learned
 from tests.test_conversation import Rig, utterance
 
 

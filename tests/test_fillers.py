@@ -1,9 +1,9 @@
 import itertools
 import random
 
-from aiglasses.assistant.conversation import AssistantTurnRecord
-from aiglasses.assistant.fillers import Fillers
-from aiglasses.assistant.runtime import brain_colour, describe_rich
+from aiglasses.assistant.conversation.fillers import Fillers
+from aiglasses.assistant.conversation.pipeline import AssistantTurnRecord
+from aiglasses.assistant.run.runtime import brain_colour, describe_rich
 
 
 def test_the_shipped_pools_are_large_short_and_never_repeat_back_to_back() -> None:

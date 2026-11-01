@@ -4,12 +4,12 @@ from pathlib import Path
 import pytest
 from rich.console import Console
 
-from aiglasses.assistant import check as check_module
-from aiglasses.assistant import registry
-from aiglasses.assistant.check import reset_live_budget, run_check
-from aiglasses.assistant.fakes import FakeStt, FakeTts
-from aiglasses.assistant.router import RoutedLlmClient
-from aiglasses.assistant.runtime import build_llm
+from aiglasses.assistant.conversation.router import RoutedLlmClient
+from aiglasses.assistant.run import check as check_module
+from aiglasses.assistant.run.check import reset_live_budget, run_check
+from aiglasses.assistant.run.runtime import build_llm
+from aiglasses.assistant.speech import factory as registry
+from aiglasses.assistant.testing.fakes import FakeStt, FakeTts
 from aiglasses.domain.errors import ConfigError
 from aiglasses.settings import AssistantSettings
 
@@ -149,8 +149,8 @@ async def test_a_failed_live_call_gives_a_hint_and_never_the_key(
 ) -> None:
     from collections.abc import AsyncIterator
 
-    from aiglasses.assistant import llm_client
-    from aiglasses.assistant.interfaces import Message
+    from aiglasses.assistant.conversation.interfaces import Message
+    from aiglasses.assistant.llm import llm_client
     from aiglasses.redact import redact
 
     class Rejecting:
@@ -168,7 +168,7 @@ async def test_a_failed_live_call_gives_a_hint_and_never_the_key(
 
 
 def test_the_budget_comes_from_settings_and_can_be_reset(tmp_path: Path) -> None:
-    from aiglasses.assistant.check import live_budget_left, spend_live_call
+    from aiglasses.assistant.run.check import live_budget_left, spend_live_call
 
     counter = tmp_path / "live_calls.count"
     spend_live_call(counter)
@@ -182,12 +182,14 @@ def test_piper_is_a_registered_engine_with_registry_voices() -> None:
     assert "piper" in registry.TTS_ENGINES
     assert (
         "piper-en-gb-alba-medium"
-        in __import__("aiglasses.assistant.models", fromlist=["Registry"]).Registry.load().models
+        in __import__("aiglasses.assistant.llm.models", fromlist=["Registry"])
+        .Registry.load()
+        .models
     )
 
 
 async def test_piper_speaks_the_chosen_voice_when_the_model_is_installed() -> None:
-    from aiglasses.assistant.interfaces import TtsOptions
+    from aiglasses.assistant.conversation.interfaces import TtsOptions
 
     if not await asyncio.to_thread(INSTALLED_VOICE.exists):
         pytest.skip("piper voice not installed")

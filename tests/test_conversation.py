@@ -11,22 +11,22 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pytest
 
-from aiglasses.assistant.app import AssistantApp, SessionEnd, load_persona, run_forever
-from aiglasses.assistant.clauses import ClauseStream
-from aiglasses.assistant.cleaner import clean_reply
-from aiglasses.assistant.conversation import (
+from aiglasses.assistant.conversation.app import AssistantApp, SessionEnd, load_persona, run_forever
+from aiglasses.assistant.conversation.interfaces import Message, TtsOptions
+from aiglasses.assistant.conversation.memory import Memory
+from aiglasses.assistant.conversation.pipeline import (
     AssistantTurnRecord,
     ConversationPipeline,
     system_prompt,
 )
-from aiglasses.assistant.echo import TurnLog
-from aiglasses.assistant.fakes import FakeLlm, FakeSink, FakeStt, FakeTts
-from aiglasses.assistant.glossary import Glossary, parse_glossary
-from aiglasses.assistant.interfaces import Message, TtsOptions
-from aiglasses.assistant.joiner import TurnJoiner
-from aiglasses.assistant.llm_client import LangChainLlmClient
-from aiglasses.assistant.memory import Memory
-from aiglasses.assistant.router import LocalState, RoutedLlmClient
+from aiglasses.assistant.conversation.router import LocalState, RoutedLlmClient
+from aiglasses.assistant.conversation.turns import TurnLog
+from aiglasses.assistant.listening.joiner import TurnJoiner
+from aiglasses.assistant.llm.llm_client import LangChainLlmClient
+from aiglasses.assistant.speech.clauses import ClauseStream
+from aiglasses.assistant.speech.cleaner import clean_reply
+from aiglasses.assistant.speech.glossary import Glossary, parse_glossary
+from aiglasses.assistant.testing.fakes import FakeLlm, FakeSink, FakeStt, FakeTts
 from aiglasses.domain.errors import ConfigError, GlassesError
 from aiglasses.logging_setup import RedactingFilter
 from aiglasses.services.voice import EndReason, VoiceUtterance

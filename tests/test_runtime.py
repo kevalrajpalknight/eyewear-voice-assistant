@@ -11,11 +11,13 @@ import pytest
 import soundfile as sf
 import typer
 
-from aiglasses.assistant import engines, registry, runtime, session
-from aiglasses.assistant.fakes import FakeLlm, FakeStt, FakeTts
-from aiglasses.assistant.recorder import Sentence
-from aiglasses.assistant.router import RoutedLlmClient
-from aiglasses.assistant.speaker import NullSink, SubprocessSpeakerSink
+from aiglasses.assistant.conversation.router import RoutedLlmClient
+from aiglasses.assistant.run import runtime, session
+from aiglasses.assistant.run.recorder import Sentence
+from aiglasses.assistant.speech import engines
+from aiglasses.assistant.speech import factory as registry
+from aiglasses.assistant.speech.speaker import NullSink, SubprocessSpeakerSink
+from aiglasses.assistant.testing.fakes import FakeLlm, FakeStt, FakeTts
 from aiglasses.config import Settings
 from aiglasses.domain.errors import ConfigError, GlassesError
 from aiglasses.services.voice import EndReason, VoiceUtterance
@@ -207,7 +209,7 @@ async def test_bench_record_glue_saves_takes_and_reports(
 async def test_pressing_q_stops_the_work_and_finished_work_returns_its_result(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     import asyncio
 
-    from aiglasses.assistant import runtime
+    from aiglasses.assistant.run import runtime
 
     async def forever() -> str:
         await asyncio.sleep(60)

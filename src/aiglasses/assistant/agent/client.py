@@ -17,13 +17,13 @@ from aiglasses.assistant.agent.hints import Hints
 from aiglasses.assistant.agent.routing import ModelRouter
 from aiglasses.assistant.agent.tools import to_langchain_tools
 from aiglasses.assistant.agent.turn import Turn, TurnReport, current_turn
-from aiglasses.assistant.clauses import FLUSH
-from aiglasses.assistant.escalation import EscalationRules
-from aiglasses.assistant.intents import Intents
-from aiglasses.assistant.interfaces import TIME_MARKER, Message
-from aiglasses.assistant.llm_client import map_error, to_langchain
-from aiglasses.assistant.memory import Memory
-from aiglasses.assistant.router import DEFAULT_HANDLERS, Handler, LocalState
+from aiglasses.assistant.conversation.escalation import EscalationRules
+from aiglasses.assistant.conversation.intents import Intents
+from aiglasses.assistant.conversation.interfaces import TIME_MARKER, Message
+from aiglasses.assistant.conversation.memory import Memory
+from aiglasses.assistant.conversation.router import DEFAULT_HANDLERS, Handler, LocalState
+from aiglasses.assistant.llm.llm_client import map_error, to_langchain
+from aiglasses.assistant.speech.clauses import FLUSH
 from aiglasses.assistant.tools.base import ToolContext, ToolRegistry
 from aiglasses.settings import AssistantSettings
 

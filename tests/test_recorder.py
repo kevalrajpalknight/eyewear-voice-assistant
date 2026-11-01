@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from aiglasses.assistant.recorder import SENTENCES, Sentence, record_sentences
+from aiglasses.assistant.run.recorder import SENTENCES, Sentence, record_sentences
 from aiglasses.services.voice import EndReason, VoiceUtterance
 
 TWO = [Sentence("a", "short", "Hello there."), Sentence("b", "long", "Good morning to you.")]
@@ -107,7 +107,7 @@ async def test_a_click_made_before_the_sentence_was_shown_is_ignored(tmp_path: P
 
 
 def test_glossary_sentences_use_each_term_in_a_short_sentence() -> None:
-    from aiglasses.assistant.recorder import glossary_sentences
+    from aiglasses.assistant.run.recorder import glossary_sentences
 
     made = glossary_sentences(["Zorvex Quill", "Blenmark"], count=4)
     assert [s.id for s in made] == ["g01_glossary", "g02_glossary", "g03_glossary", "g04_glossary"]
@@ -117,14 +117,14 @@ def test_glossary_sentences_use_each_term_in_a_short_sentence() -> None:
 
 
 def test_pending_skips_sentences_that_already_have_a_take(tmp_path: Path) -> None:
-    from aiglasses.assistant.recorder import pending
+    from aiglasses.assistant.run.recorder import pending
 
     (tmp_path / "a.wav").write_bytes(b"")
     assert pending(TWO, tmp_path) == [TWO[1]]
 
 
 def test_cut_off_is_true_only_when_speech_runs_to_the_end() -> None:
-    from aiglasses.assistant.recorder import cut_off
+    from aiglasses.assistant.run.recorder import cut_off
 
     loud = np.full(16000 * 3, 8000, dtype=np.int16)
     quiet_tail = loud.copy()

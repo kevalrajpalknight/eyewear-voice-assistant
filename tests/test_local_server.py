@@ -6,9 +6,9 @@ from pathlib import Path
 import psutil
 import pytest
 
-from aiglasses.assistant import local_server
-from aiglasses.assistant.local_server import LocalServer, PortInUse, ServerStartError
-from aiglasses.assistant.models import Registry
+from aiglasses.assistant.llm import local_server
+from aiglasses.assistant.llm.local_server import LocalServer, PortInUse, ServerStartError
+from aiglasses.assistant.llm.models import Registry
 from aiglasses.settings import AssistantSettings
 
 FAKE_SERVER = textwrap.dedent(

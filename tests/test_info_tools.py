@@ -1,7 +1,7 @@
 import httpx
 import pytest
 
-from aiglasses.assistant.intents import Intents, normalise
+from aiglasses.assistant.conversation.intents import Intents, normalise
 from aiglasses.assistant.tools.base import ToolContext, ToolRefused
 from aiglasses.assistant.tools.info import GetTime, GetWeather, TimeArgs, WeatherArgs
 from aiglasses.settings import AssistantSettings

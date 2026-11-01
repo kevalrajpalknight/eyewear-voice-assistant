@@ -166,7 +166,7 @@ class AssistantSettings(BaseSettings):
     local_llm_preload: bool = True
     local_llm_prompt_cache: bool = True
     models_dir: Path = Path("models")
-    model_registry_path: Path = Path("src/aiglasses/assistant/models.yaml")
+    model_registry_path: Path = Path("src/aiglasses/assistant/llm/models.yaml")
     model_download_budget_gb: float = Field(8.0, gt=0)
 
     # Agent loop and tools

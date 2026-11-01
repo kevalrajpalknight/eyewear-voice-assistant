@@ -6,7 +6,7 @@ to the glasses, no pairing.
 
 ## Facts found at the start (they differ from the task text)
 - There was no turn-joining code and no earlier backup script. Both were created here
-  (`assistant/joiner.py`, `scripts/backup_bench.py`; backups go to `backups/`, gitignored).
+  (`assistant/listening/joiner.py`, `scripts/backup_bench.py`; backups go to `backups/`, gitignored).
 - `bench/src` disappeared from the working tree once for an unknown reason (not by my command);
   it is tracked in git and was restored with `git checkout -- bench/src`. Nothing was lost. This is
   the "unexplained loss of a file" case; it happened before this task and was reported then.

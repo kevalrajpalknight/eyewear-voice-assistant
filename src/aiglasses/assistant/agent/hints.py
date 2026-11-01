@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 
-from aiglasses.assistant.intents import normalise
+from aiglasses.assistant.conversation.intents import normalise
 from aiglasses.domain.errors import ConfigError
 
 

@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from typing import Protocol
 
-from aiglasses.assistant.vision import ImageUnavailable
+from aiglasses.assistant.tools.vision import ImageUnavailable
 from aiglasses.domain.errors import GlassesError
 from aiglasses.services.control import APPROVED_AI_PHOTO_FRAME
 from aiglasses.services.thumbnail import ThumbnailResult

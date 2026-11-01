@@ -7,9 +7,10 @@ import httpx
 import pytest
 from PIL import Image, ImageDraw
 
-from aiglasses.assistant import search as search_module
-from aiglasses.assistant.llm_client import CloudVision
-from aiglasses.assistant.search import (
+from aiglasses.assistant.llm.llm_client import CloudVision
+from aiglasses.assistant.tools import search as search_module
+from aiglasses.assistant.tools.base import NoArgs, ToolContext, ToolRefused
+from aiglasses.assistant.tools.search import (
     CachedSearch,
     DdgsSearch,
     FakeSearch,
@@ -19,8 +20,7 @@ from aiglasses.assistant.search import (
     build_search,
     clean_text,
 )
-from aiglasses.assistant.tools.base import NoArgs, ToolContext, ToolRefused
-from aiglasses.assistant.vision import (
+from aiglasses.assistant.tools.vision import (
     VISION_PROMPT,
     DescribeSceneTool,
     FakeImageSource,

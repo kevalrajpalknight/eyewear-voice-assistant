@@ -126,7 +126,7 @@ Streaming v2 medium is the fastest to final text, but needs the live stream API.
 - faster-whisper: `initial_prompt` and `hotwords` both exist in 1.2.1; both are in the harness and
   run once the glossary exists.
 
-### Glossary corrector (src/aiglasses/assistant/glossary.py)
+### Glossary corrector (src/aiglasses/assistant/speech/glossary.py)
 Deterministic, post-STT: windows of 1 to N+1 words are compared with each term and its spoken
 forms by letters-only fuzzy ratio (threshold 88) or equal Metaphone key plus ratio 72. Never the
 edge of a span: common function words; never fewer than 4 letters; never across sentence

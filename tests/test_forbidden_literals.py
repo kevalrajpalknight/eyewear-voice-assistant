@@ -7,7 +7,7 @@ from pathlib import Path
 SRC = Path(__file__).resolve().parents[1] / "src" / "aiglasses"
 # Where each kind of name may legitimately appear as a string literal.
 SETTINGS = {"settings.py"}
-REGISTRIES = {"settings.py", "registry.py", "engines.py"}
+REGISTRIES = {"settings.py", "factory.py", "engines.py"}
 
 MODEL_NAMES = re.compile(r"\b(gpt-?\d|claude-|gemini-?\d|llama-?\d|mistral-|o\d-mini|sonar)", re.I)
 VOICE_IDS = re.compile(r"\b[ab][fm]_[a-z]+\b")

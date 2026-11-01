@@ -14,7 +14,7 @@ Status: accepted (2026-11-01).
 - Started only by `aiglasses llm-server start` or `assistant run`, bound to 127.0.0.1, inside a
   Windows job object with kill-on-close, so the server cannot outlive the program.
 
-## Models (registry `src/aiglasses/assistant/models.yaml`; sha256 are Hugging Face LFS hashes)
+## Models (registry `src/aiglasses/assistant/llm/models.yaml`; sha256 are Hugging Face LFS hashes)
 | Name | Source (pinned commit) | Size | Licence | Gated |
 |---|---|---|---|---|
 | qwen3-1.7b-q4_k_m | unsloth/Qwen3-1.7B-GGUF @ d7f544ee... | 1.11 GB | Apache-2.0 | no |

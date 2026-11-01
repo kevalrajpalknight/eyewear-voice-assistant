@@ -5,10 +5,15 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from aiglasses.assistant.fakes import FakeLlm
-from aiglasses.assistant.interfaces import Message
-from aiglasses.assistant.router import LocalState, RouteDecision, RoutedLlmClient, normalise
-from aiglasses.assistant.spoken import number_words, ordinal_words, spoken_date, spoken_time
+from aiglasses.assistant.conversation.interfaces import Message
+from aiglasses.assistant.conversation.router import (
+    LocalState,
+    RouteDecision,
+    RoutedLlmClient,
+    normalise,
+)
+from aiglasses.assistant.speech.spoken import number_words, ordinal_words, spoken_date, spoken_time
+from aiglasses.assistant.testing.fakes import FakeLlm
 from aiglasses.settings import AssistantSettings
 
 

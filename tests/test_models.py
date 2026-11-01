@@ -8,7 +8,7 @@ from typing import ClassVar
 
 import pytest
 
-from aiglasses.assistant.models import (
+from aiglasses.assistant.llm.models import (
     ChecksumMismatch,
     DownloadBudgetExceeded,
     FileSpec,

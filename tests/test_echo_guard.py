@@ -1,4 +1,4 @@
-from aiglasses.assistant.echo_guard import EchoGuard
+from aiglasses.assistant.listening.echo_guard import EchoGuard
 
 
 class Clock:

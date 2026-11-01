@@ -5,10 +5,16 @@ from pathlib import Path
 
 import numpy as np
 
-from aiglasses.assistant.chunker import split_clauses
-from aiglasses.assistant.echo import Debug, EchoPipeline, TurnLog, TurnRecord, TurnRunner
-from aiglasses.assistant.fakes import FakeSink, FakeStt, FakeTts
-from aiglasses.assistant.interfaces import TtsOptions
+from aiglasses.assistant.conversation.interfaces import TtsOptions
+from aiglasses.assistant.conversation.turns import (
+    Debug,
+    EchoPipeline,
+    TurnLog,
+    TurnRecord,
+    TurnRunner,
+)
+from aiglasses.assistant.speech.chunker import split_clauses
+from aiglasses.assistant.testing.fakes import FakeSink, FakeStt, FakeTts
 from aiglasses.services.voice import EndReason, VoiceUtterance
 
 TEXT = "Turn off the kitchen lights, and then please set a timer for ten minutes."
@@ -151,7 +157,7 @@ async def test_no_tasks_are_left_behind(tmp_path: Path) -> None:
 
 
 async def test_a_corrector_changes_what_is_spoken_but_the_log_holds_no_text(tmp_path: Path) -> None:
-    from aiglasses.assistant.glossary import Correction
+    from aiglasses.assistant.speech.glossary import Correction
 
     tts = FakeTts()
     seen: list[Correction] = []

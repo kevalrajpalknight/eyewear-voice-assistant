@@ -2,11 +2,11 @@ from typing import Any
 
 import pytest
 
-from aiglasses.assistant.clauses import ClauseStream
-from aiglasses.assistant.diagnose import diagnose
-from aiglasses.assistant.fakes import FakeLlm, FakeTts
-from aiglasses.assistant.intents import Intents, normalise
-from aiglasses.assistant.speech_chunks import split_speech
+from aiglasses.assistant.conversation.intents import Intents, normalise
+from aiglasses.assistant.run.diagnose import diagnose
+from aiglasses.assistant.speech.clauses import ClauseStream
+from aiglasses.assistant.speech.speech_chunks import split_speech
+from aiglasses.assistant.testing.fakes import FakeLlm, FakeTts
 from aiglasses.settings import AssistantSettings
 from tests.test_conversation import utterance
 
@@ -188,7 +188,7 @@ def test_the_example_tool_list_enables_everything_the_task_names() -> None:
 
 
 def test_speech_normalisation_reads_units_abbreviations_and_symbols() -> None:
-    from aiglasses.assistant.cleaner import clean_reply
+    from aiglasses.assistant.speech.cleaner import clean_reply
 
     assert clean_reply("It is 12 km away at 30 km/h.") == (
         "It is twelve kilometres away at thirty kilometres per hour."

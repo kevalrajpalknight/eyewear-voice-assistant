@@ -1,0 +1,429 @@
+"""Build the live assistant from settings and run it against the glasses (or one WAV file)."""
+
+import asyncio
+import json
+import sys
+import time
+from collections.abc import Awaitable
+from contextlib import AsyncExitStack, asynccontextmanager
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import TypeVar
+
+from rich.console import Console
+from rich.markup import escape
+
+from aiglasses.assistant.agent import AgentClient
+from aiglasses.assistant.agent.models import build_cloud_model, build_local_model
+from aiglasses.assistant.conversation.app import AssistantApp, load_persona, run_forever
+from aiglasses.assistant.conversation.escalation import EscalationRules
+from aiglasses.assistant.conversation.intents import Intents
+from aiglasses.assistant.conversation.interfaces import LlmClient, SpeechToText, TextToSpeech
+from aiglasses.assistant.conversation.memory import Memory
+from aiglasses.assistant.conversation.pipeline import AssistantTurnRecord, ConversationPipeline
+from aiglasses.assistant.conversation.router import RoutedLlmClient
+from aiglasses.assistant.conversation.turns import Debug, TurnLog
+from aiglasses.assistant.listening.listener import EnergyVad, MicListener, MicStream
+from aiglasses.assistant.listening.wake import WakePhrases
+from aiglasses.assistant.llm import local_server
+from aiglasses.assistant.llm.llm_client import CloudVision, LangChainLlmClient
+from aiglasses.assistant.llm.local_server import LocalServer
+from aiglasses.assistant.llm.models import Registry
+from aiglasses.assistant.run.session import (
+    load_glossary,
+    make_sink,
+    seconds_text,
+    tts_options,
+    utterance_from_wav,
+    warm_up,
+)
+from aiglasses.assistant.speech.factory import build_stt, build_tts
+from aiglasses.assistant.speech.glossary import Correction
+from aiglasses.assistant.speech.speaker import NullSink, SubprocessSpeakerSink
+from aiglasses.assistant.tools.base import ToolRegistry
+from aiglasses.assistant.tools.device import DeviceHolder
+from aiglasses.assistant.tools.factory import build_registry
+from aiglasses.assistant.tools.search import build_search
+from aiglasses.assistant.tools.vision import ImageSource, build_vision
+from aiglasses.config import Settings
+from aiglasses.domain.errors import ConfigError, GlassesError
+from aiglasses.glasses import Glasses
+from aiglasses.services.image_source import BleThumbnailImageSource
+from aiglasses.settings import AssistantSettings
+
+console = Console()
+T = TypeVar("T")
+
+
+@dataclass
+class LocalFirstParts:
+    """Everything the local-first client needs besides settings; built by `run_assistant`."""
+
+    memory: Memory
+    registry: ToolRegistry
+    base_url: str
+
+
+def build_llm(
+    assistant: AssistantSettings,
+    *,
+    force_role: str | None,
+    no_router: bool,
+    parts: LocalFirstParts | None = None,
+) -> LlmClient:
+    """The LLM the conversation talks to: the router around the roles, or one role forced."""
+    problems = assistant.problems()
+    if problems:
+        raise ConfigError("; ".join(problems))
+    if force_role is not None:
+        return LangChainLlmClient(assistant.llm_role(force_role))
+    main = LangChainLlmClient(assistant.llm_role("main"))
+    if assistant.router_mode == "local_first" and not no_router:
+        if parts is None:
+            raise ConfigError("ROUTER_MODE=local_first needs the local parts (internal error)")
+        return AgentClient(
+            assistant,
+            local_model=build_local_model(parts.base_url, assistant),
+            cloud_model=build_cloud_model(assistant),
+            registry=parts.registry, intents=parts.registry.intents,
+            rules=EscalationRules.load(), memory=parts.memory,
+        )  # fmt: skip
+    fast = LangChainLlmClient(assistant.llm_role("fast")) if assistant.fast_configured else None
+    classifier = None
+    if assistant.router_mode == "model" and not no_router:
+        classifier = LangChainLlmClient(assistant.llm_role("router"))
+    effective = assistant.model_copy(update={"router_mode": "off"}) if no_router else assistant
+    if effective.router_mode == "local_first":
+        effective = effective.model_copy(update={"router_mode": "off"})
+    return RoutedLlmClient(effective, main, fast=fast, classifier=classifier)
+
+
+def brain_colour(record: AssistantTurnRecord) -> str:
+    brain = record.brain or ""
+    for prefix, colour in (("cloud", "magenta"), ("local", "green"), ("rules", "yellow")):
+        if brain.startswith(prefix):
+            return colour
+    return "dim"
+
+
+def describe_rich(record: AssistantTurnRecord) -> str:
+    """The turn summary as console markup: the brain line is coloured by who answered."""
+    row = record.to_json()
+    parts = {
+        key: seconds_text(row[key])  # type: ignore[arg-type]
+        for key in (
+            "end_to_sound_s", "decode_s", "stt_s", "router_s", "llm_first_token_s",
+            "first_audio_s", "playback_start_s",
+        )
+    }  # fmt: skip
+    why = f" · {record.route_reason}" if record.route_reason else ""
+    lane = f"lane {record.tier}" if record.tier is not None else "no lane"
+    colour = brain_colour(record)
+    head = OUTCOME_COLOUR.get(record.outcome, "red")
+    brain = escape(record.brain or "-")
+    tools = escape(record.tools or "none called")
+    return (
+        f"[bold {head}]━━ turn {record.turn} · {record.outcome} ━━[/]\n"
+        f"  [dim]heard[/]  {record.words_in} words · speech to text {escape(record.stt or '-')} "
+        f"{parts['stt_s']}\n"
+        f"  [dim]brain[/]  [bold {colour}]{brain}[/] [{colour}]({lane}{escape(why)})[/] · "
+        f"{record.chars_out} characters back\n"
+        f"  [dim]tools[/]  {tools}\n"
+        f"  [dim]voice[/]  {escape(record.tts or '-')} · {record.clauses} clauses\n"
+        f"  [dim]time[/]   to sound {parts['end_to_sound_s']} = decode {parts['decode_s']} + "
+        f"stt {parts['stt_s']} + router {parts['router_s']} + llm first token "
+        f"{parts['llm_first_token_s']} + first audio {parts['first_audio_s']} + "
+        f"start {parts['playback_start_s']}"
+    )
+
+
+def describe(record: AssistantTurnRecord) -> str:
+    row = record.to_json()
+    parts = {
+        key: seconds_text(row[key])  # type: ignore[arg-type]
+        for key in (
+            "end_to_sound_s", "decode_s", "stt_s", "router_s", "llm_first_token_s",
+            "first_audio_s", "playback_start_s",
+        )
+    }  # fmt: skip
+    why = f" ({record.route_reason})" if record.route_reason else ""
+    lane = f"lane {record.tier}" if record.tier is not None else "no lane"
+    return (
+        f"turn {record.turn}: {record.outcome}\n"
+        f"  heard:  {record.words_in} words, speech to text {record.stt or '-'} "
+        f"in {parts['stt_s']}\n"
+        f"  brain:  {record.brain or '-'} ({lane}{why}), {record.chars_out} characters back\n"
+        f"  tools:  {record.tools or 'none called'}\n"
+        f"  voice:  {record.tts or '-'}, {record.clauses} clauses\n"
+        f"  timing: end marker to sound {parts['end_to_sound_s']} = decode {parts['decode_s']} + "
+        f"stt {parts['stt_s']} + router {parts['router_s']} + llm first token "
+        f"{parts['llm_first_token_s']} + first audio {parts['first_audio_s']} + start "
+        f"{parts['playback_start_s']}"
+    )
+
+
+def _show_heard(text: str) -> None:
+    console.print(f"[bold cyan]you:[/] [cyan]{escape(text)}[/]")
+
+
+LANE_COLOUR = {0: "yellow", 1: "green", 2: "magenta"}  # rules, local model, cloud model
+OUTCOME_COLOUR = {"spoken": "green", "wake_ack": "cyan", "cancelled": "yellow"}
+
+
+def _show_said(text: str, lane: int | None) -> None:
+    colour = LANE_COLOUR.get(lane if lane is not None else -1, "white")
+    console.print(f"[bold {colour}]EVA:[/] [{colour}]{escape(text)}[/]")
+
+
+def _show_ignored(text: str, reason: str) -> None:
+    console.print(f"[dim]ignored ({reason}): {escape(text)}[/]")
+
+
+def make_pipeline(
+    ble: Settings,
+    assistant: AssistantSettings,
+    *,
+    stt: SpeechToText,
+    tts: TextToSpeech,
+    sink: SubprocessSpeakerSink | NullSink,
+    llm: LlmClient,
+    show_text: bool,
+    memory: Memory | None = None,
+) -> ConversationPipeline:
+    glossary = load_glossary(assistant)
+    corrections_path = ble.log_dir / "glossary_corrections.jsonl"
+
+    def log_correction(correction: Correction) -> None:
+        corrections_path.parent.mkdir(parents=True, exist_ok=True)
+        with corrections_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(asdict(correction)) + "\n")
+
+    def show(record: AssistantTurnRecord) -> None:
+        if record.outcome == "ignored":
+            console.print(f"[dim]  · turn {record.turn} ignored[/]")
+            return
+        console.print(describe_rich(record))
+        if record.error:
+            console.print(f"  [bold red]error[/] [red]{escape(record.error)}[/]")
+        console.print()
+        console.print()
+
+    return ConversationPipeline(
+        stt=stt, tts=tts, sink=sink, llm=llm, options=tts_options(assistant),
+        settings=assistant, persona=load_persona(assistant), glossary=glossary,
+        turn_log=TurnLog(ble.log_dir / "assistant_turns.jsonl"),
+        debug=Debug(ble.captures_dir / "debug") if assistant.debug_save_audio else None,
+        on_record=show, on_correction=log_correction if glossary is not None else None,
+        memory=memory,
+        on_heard=_show_heard if show_text else None,
+        on_said=_show_said if show_text else None,
+        on_ignored=_show_ignored if show_text else None,
+        wake=WakePhrases.load(assistant.wake_phrases_path, assistant.wake_learned_path),
+    )  # fmt: skip
+
+
+async def run_assistant(
+    ble: Settings,
+    assistant: AssistantSettings,
+    *,
+    output: str | None,
+    force_role: str | None,
+    no_router: bool,
+    wav: Path | None,
+) -> None:
+    holder = DeviceHolder()
+    # dry run refuses every write, even the CONFIRMED reads; open the guard only for device tools
+    device_tools = any(
+        t in assistant.enabled_tools
+        for t in ("read_battery", "read_media_counts", "take_photo", "describe_scene")
+    )
+    memory = Memory(assistant.memory_max_turns, assistant.memory_ttl_s, assistant.memory_max_tokens)
+    server: LocalServer | None = None
+    local_mode = assistant.router_mode == "local_first" and not no_router and force_role is None
+    parts: LocalFirstParts | None = None
+    if local_mode:
+        server = await _start_local_server(ble, assistant)
+        base_url = server.base_url if server else f"http://127.0.0.1:{assistant.local_llm_port}"
+        parts = LocalFirstParts(memory, _registry(assistant, holder, memory, base_url), base_url)
+    llm = build_llm(assistant, force_role=force_role, no_router=no_router, parts=parts)
+    for warning in assistant.warnings():
+        console.print(f"[yellow]{warning}[/]")
+    console.print("Loading speech engines ...")
+    stt = await asyncio.to_thread(build_stt, assistant)
+    tts = await asyncio.to_thread(build_tts, assistant)
+    await warm_up(stt, tts, tts_options(assistant))
+    sink = make_sink(assistant, output)
+    if isinstance(sink, SubprocessSpeakerSink):
+        await sink.start()
+    pipeline = make_pipeline(
+        ble, assistant, stt=stt, tts=tts, sink=sink, llm=llm, show_text=assistant.show_transcripts,
+        memory=memory if local_mode else None,
+    )  # fmt: skip
+    app = AssistantApp(pipeline, assistant)
+    if isinstance(llm, AgentClient):
+        await llm.prime(pipeline._messages("hello")[0].content)
+    try:
+        if wav is not None:
+            await app.handle(utterance_from_wav(wav))
+            await app.runner.wait()
+            return
+
+        @asynccontextmanager
+        async def open_glasses(on_start):  # type: ignore[no-untyped-def]
+            if assistant.input_mode == "mic":
+                async with _open_microphone(
+                    ble, assistant, app, pipeline, holder, device_tools
+                ) as heard:
+                    yield heard
+                return
+            async with Glasses.connect(ble, dry_run=not device_tools) as glasses:
+                holder.bind(glasses)
+                try:
+                    yield glasses.voice_requests(on_start=on_start)
+                finally:
+                    holder.unbind()
+
+        if assistant.startup_line:
+            await pipeline.say_line(assistant.startup_line)
+        console.print(
+            f"{assistant.assistant_name}: STT {stt.name}, TTS {tts.name}, LLM {llm.name}. "
+            f"{_how_to_talk(assistant)} Press Q to quit."
+        )
+        end = await run_until_quit(
+            run_forever(app, open_glasses, report=lambda m: console.print(f"[dim]{m}[/]"))
+        )
+        console.print("Stopped by you." if end is None else f"Session ended: {end.reason}.")
+    finally:
+        await app.close()
+        if isinstance(sink, SubprocessSpeakerSink):
+            await sink.close()
+        if server is not None:
+            await asyncio.to_thread(server.stop)
+
+
+def _how_to_talk(assistant: AssistantSettings) -> str:
+    if assistant.input_mode == "mic":
+        return (
+            f'Listening. Say "hey {assistant.assistant_name}" to start; talk over me to '
+            f"interrupt; I sleep after {assistant.listen_idle_sleep_s:.0f} s of quiet."
+        )
+    return "Click the rear button (don't hold), wait about 1 s, speak. Click again to interrupt."
+
+
+@asynccontextmanager
+async def _open_microphone(  # type: ignore[no-untyped-def]
+    ble, assistant, app, pipeline, holder, device_tools
+):
+    """Passive listening. The glasses link is optional here: without it the tools say so."""
+    async with AsyncExitStack() as stack:
+        try:
+            glasses = await stack.enter_async_context(
+                Glasses.connect(ble, dry_run=not device_tools)
+            )
+            holder.bind(glasses)
+            stack.callback(holder.unbind)
+        except GlassesError as exc:
+            console.print(f"[yellow]Glasses not connected ({type(exc).__name__}); voice only.[/]")
+        mic = MicStream(assistant.mic_device)
+        await mic.start()
+        stack.push_async_callback(mic.close)
+        vad = EnergyVad(
+            min_rms=assistant.vad_min_rms,
+            ratio=assistant.vad_ratio,
+            end_silence_s=assistant.vad_end_silence_ms / 1000,
+        )
+        listener = MicListener(
+            mic.frames(), vad,
+            busy=lambda: app.runner.busy, interrupt=app.runner.interrupt,
+            set_require_wake=lambda need: setattr(pipeline, "require_wake", need),
+            report=lambda message: console.print(f"[dim]{message}[/]"),
+            idle_sleep_s=assistant.listen_idle_sleep_s,
+            duplex=assistant.duplex_barge_in, barge_in_ratio=assistant.barge_in_ratio,
+            echo_settling=pipeline.echo.settling,
+        )  # fmt: skip
+        app.max_turns = sys.maxsize  # the session ends when you press Q, not after N sounds
+        pipeline.on_wake = listener.wake
+        pipeline.quiet_empty = True
+        pipeline.input_is_microphone = True
+        yield listener.utterances()
+
+
+def _q_pressed_after(wait_s: float) -> bool:
+    time.sleep(wait_s)
+    return _q_pressed()
+
+
+def _q_pressed() -> bool:
+    """True when the Q key was pressed (Windows console); other keys are ignored."""
+    try:
+        import msvcrt
+    except ImportError:
+        return False
+    return msvcrt.kbhit() and msvcrt.getwch().lower() == "q"
+
+
+async def run_until_quit(work: Awaitable[T]) -> T | None:
+    """Run `work` until it ends or the user presses Q (then it is cancelled and None returned)."""
+    task = asyncio.ensure_future(work)
+
+    async def watch() -> None:
+        while not await asyncio.to_thread(_q_pressed_after, 0.2):
+            pass
+
+    watcher = asyncio.create_task(watch())
+    try:
+        await asyncio.wait({task, watcher}, return_when=asyncio.FIRST_COMPLETED)
+        if task.done():
+            return task.result()
+        console.print("Stopping ...")
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        return None
+    finally:
+        watcher.cancel()
+        task.cancel()
+        await asyncio.gather(watcher, task, return_exceptions=True)
+
+
+async def _start_local_server(ble: Settings, assistant: AssistantSettings) -> LocalServer | None:
+    """Start and warm up llama-server inside a kill-on-close job. None means: use the cloud."""
+    if assistant.local_llm_model is None or not assistant.local_llm_preload:
+        return None
+    server = LocalServer(
+        assistant, Registry.load(_registry_path(assistant)), ble.log_dir / "llama-server.json"
+    )
+    console.print(f"Starting the local model ({assistant.local_llm_model}) ...")
+    try:
+        await asyncio.to_thread(
+            server.start, auto_port=True, vision=assistant.vision_provider == "local"
+        )
+        await asyncio.to_thread(local_server.warm_up, server.port)
+    except GlassesError as exc:
+        console.print(f"[yellow]Local model unavailable ({exc}); using the cloud.[/]")
+        await asyncio.to_thread(server.stop)
+        return None
+    return server
+
+
+def _registry_path(assistant: AssistantSettings) -> Path | None:
+    return assistant.model_registry_path if assistant.model_registry_path.exists() else None
+
+
+def _registry(
+    assistant: AssistantSettings, holder: DeviceHolder, memory: Memory, base_url: str
+) -> ToolRegistry:
+    enabled = assistant.enabled_tools
+    search = build_search(assistant) if "search_web" in enabled else None
+    vision = None
+    source: ImageSource = BleThumbnailImageSource(
+        holder, assistant.vision_capture, assistant.vision_capture_wait_s,
+        Path("captures") / "thumbnails",
+    )  # fmt: skip
+    if assistant.vision_provider == "local":
+        vision = build_vision(assistant, base_url)
+    elif assistant.vision_provider == "cloud" and assistant.vision_allow_cloud:
+        vision = CloudVision(assistant.llm_role("main"), assistant.vision_max_image_side)
+    return build_registry(
+        assistant, device=holder, memory=memory, intents=Intents.load(assistant.intents_path),
+        search=search, image_source=source, vision=vision,
+    )  # fmt: skip
