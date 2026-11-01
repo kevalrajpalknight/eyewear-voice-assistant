@@ -243,6 +243,7 @@ CAPTURE_WAIT_S = 60.0
 @thumbnail_app.command("fetch")
 def thumbnail_fetch(
     wait: bool = typer.Option(True, help="Wait for you to double-click the rear button first"),
+    photo: bool = typer.Option(False, help="Take one normal photo first instead of waiting"),
 ) -> None:
     """Wait for an AI capture (rear double click), then read its thumbnail chunk by chunk."""
     import asyncio
@@ -255,17 +256,12 @@ def thumbnail_fetch(
 
     async def main() -> None:
         async with Glasses.connect(ble, dry_run=False) as glasses:
-            events = glasses.events()
-            if wait:
+            if photo:
+                console.print("Taking one normal photo first ...")
+                await glasses.take_photo(confirm=True)
+            elif wait:
                 console.print("Double-click the rear button now (waiting up to 60 s)...")
-
-                async def until_capture() -> None:
-                    async for event in events:
-                        console.print(f"event: {event.kind}", markup=False)
-                        if event.kind == "image_capture_ready":
-                            return
-
-                await asyncio.wait_for(until_capture(), CAPTURE_WAIT_S)
+                await glasses.wait_for_ai_capture(CAPTURE_WAIT_S)
             result = await glasses.fetch_thumbnail()
             folder = ble.captures_dir / "thumbnails"
             folder.mkdir(parents=True, exist_ok=True)

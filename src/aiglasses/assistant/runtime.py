@@ -38,13 +38,14 @@ from aiglasses.assistant.speaker import NullSink, SubprocessSpeakerSink
 from aiglasses.assistant.tools.base import ToolRegistry
 from aiglasses.assistant.tools.device import DeviceHolder
 from aiglasses.assistant.tools.factory import build_registry
-from aiglasses.assistant.vision import GlassesWifiImageSource, ImageSource, build_vision
+from aiglasses.assistant.vision import ImageSource, build_vision
 from aiglasses.assistant.wake import WakePhrases
 from aiglasses.config import Settings
 from aiglasses.domain.errors import ConfigError, GlassesError, NotSupportedError
 from aiglasses.glasses import Glasses
 from aiglasses.runtime_paths import HELPER_SCRIPT
 from aiglasses.services.photo_fetch import (
+    BleThumbnailImageSource,
     HelperWifiDirect,
     PhotoFetcher,
     SubprocessHelper,
@@ -172,7 +173,8 @@ async def run_assistant(
     holder = DeviceHolder()
     # dry run refuses every write, even the CONFIRMED reads; open the guard only for device tools
     device_tools = any(
-        t in assistant.enabled_tools for t in ("read_battery", "read_media_counts", "take_photo")
+        t in assistant.enabled_tools
+        for t in ("read_battery", "read_media_counts", "take_photo", "describe_scene")
     )
     memory = Memory(assistant.memory_max_turns, assistant.memory_ttl_s, assistant.memory_max_tokens)
     server: LocalServer | None = None
@@ -265,7 +267,10 @@ def _registry(
     enabled = assistant.enabled_tools
     search = build_search(assistant) if "search_web" in enabled else None
     vision = None
-    source: ImageSource = GlassesWifiImageSource()
+    source: ImageSource = BleThumbnailImageSource(
+        holder, assistant.vision_capture, assistant.vision_capture_wait_s,
+        Path("captures") / "thumbnails",
+    )  # fmt: skip
     if assistant.wifi_direct_enabled:
         source = _wifi_direct_source(assistant, holder)
     if assistant.vision_provider == "local":

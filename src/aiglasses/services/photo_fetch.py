@@ -13,6 +13,7 @@ environment) is not verified on hardware.
 import asyncio
 import json
 import re
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,6 +23,7 @@ from aiglasses.assistant.vision import ImageUnavailable
 from aiglasses.domain.errors import GlassesError, NotSupportedError
 from aiglasses.research.glasses_http import GlassesHttpClient, HttpGuardError
 from aiglasses.services.control import PhotoResult
+from aiglasses.services.thumbnail import ThumbnailResult
 from aiglasses.services.wifidirect import (
     GroupInfo,
     WifiDirect,
@@ -244,3 +246,53 @@ class WifiDirectImageSource:
     async def capture(self) -> bytes:
         path = await self._fetcher.fetch_latest()
         return await asyncio.to_thread(path.read_bytes)
+
+
+class ThumbnailDevice(Protocol):
+    async def take_photo(self, *, confirm: bool) -> PhotoResult: ...
+
+    async def fetch_thumbnail(self) -> ThumbnailResult: ...
+
+    async def wait_for_ai_capture(self, timeout: float) -> None: ...
+
+
+class BleThumbnailImageSource:
+    """`ImageSource` over Bluetooth only: the glasses' AI-photo thumbnail (a few KB, about 1 s).
+
+    mode "photo": take a normal photo, then read the thumbnail. mode "wait": wait for the person
+    to double-click the rear button (the glasses report the capture), then read it. A thumbnail
+    identical to the previous one is refused as stale.
+    """
+
+    def __init__(
+        self, device: ThumbnailDevice, mode: str, wait_s: float, save_dir: Path | None = None
+    ) -> None:
+        self._device, self._mode, self._wait_s = device, mode, wait_s
+        self._save_dir = save_dir
+        self._last = b""
+
+    async def capture(self) -> bytes:
+        try:
+            if self._mode == "wait":
+                await self._device.wait_for_ai_capture(self._wait_s)
+            else:
+                await self._device.take_photo(confirm=True)
+            result = await self._device.fetch_thumbnail()
+        except GlassesError as exc:
+            raise ImageUnavailable(
+                f"thumbnail failed: {type(exc).__name__}",
+                "I couldn't get the picture from the glasses.",
+            ) from exc
+        if not result.valid:
+            raise ImageUnavailable("thumbnail is not a complete JPEG", "That picture was damaged.")
+        if result.jpeg == self._last:
+            raise ImageUnavailable("thumbnail unchanged", "I didn't get a new picture.")
+        self._last = result.jpeg
+        if self._save_dir is not None:
+            await asyncio.to_thread(self._save, result.jpeg)
+        return result.jpeg
+
+    def _save(self, jpeg: bytes) -> None:
+        assert self._save_dir is not None
+        self._save_dir.mkdir(parents=True, exist_ok=True)
+        (self._save_dir / f"Thumb_{time.strftime('%Y%m%d_%H%M%S')}.jpg").write_bytes(jpeg)

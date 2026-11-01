@@ -2,13 +2,16 @@ from pathlib import Path
 
 import pytest
 
+from aiglasses.assistant.vision import ImageUnavailable
 from aiglasses.domain.errors import GlassesError
 from aiglasses.protocol.bcframe import parse_bc_frame
 from aiglasses.protocol.uuids import GLASSES_NOTIFY
+from aiglasses.services.photo_fetch import BleThumbnailImageSource
 from aiglasses.services.thumbnail import (
     APPROVED_FIRST_REQUEST,
     MAX_CHUNKS,
     ThumbnailError,
+    ThumbnailResult,
     jpeg_size,
     parse_chunk,
     request_frame,
@@ -113,3 +116,51 @@ async def test_a_stalled_partial_frame_is_dropped_and_does_not_swallow_the_next(
         channel_module.FRAGMENT_GAP_S = saved
     assert g.channel.stats["dropped partial frame"].count == 1
     assert "cmd 0xfd" in g.channel.stats
+
+
+class FakeDevice:
+    def __init__(self, jpegs: list[bytes], *, fail: bool = False) -> None:
+        self.jpegs, self.fail = list(jpegs), fail
+        self.calls: list[str] = []
+
+    async def take_photo(self, *, confirm: bool) -> None:
+        self.calls.append(f"photo confirm={confirm}")
+
+    async def wait_for_ai_capture(self, timeout: float) -> None:
+        self.calls.append(f"wait {timeout}")
+        if self.fail:
+            raise GlassesError("no capture")
+
+    async def fetch_thumbnail(self) -> ThumbnailResult:
+        self.calls.append("fetch")
+        return ThumbnailResult(self.jpegs.pop(0), 1, 0.1)
+
+
+async def test_the_image_source_takes_a_photo_then_reads_the_thumbnail(tmp_path: Path) -> None:
+    device = FakeDevice([JPEG, JPEG[:-3] + b"\x01\xff\xd9"])
+    source = BleThumbnailImageSource(device, "photo", 30.0, tmp_path)  # type: ignore[arg-type]
+    assert await source.capture() == JPEG
+    assert device.calls == ["photo confirm=True", "fetch"]
+    assert len(list(tmp_path.glob("Thumb_*.jpg"))) == 1
+    assert await source.capture()  # a different picture is accepted
+
+
+async def test_a_repeated_thumbnail_is_refused_as_stale() -> None:
+    source = BleThumbnailImageSource(FakeDevice([JPEG, JPEG]), "photo", 30.0)  # type: ignore[arg-type]
+    await source.capture()
+    with pytest.raises(ImageUnavailable) as caught:
+        await source.capture()
+    assert "new picture" in caught.value.spoken
+
+
+async def test_wait_mode_waits_for_the_double_click_and_failures_are_spoken() -> None:
+    device = FakeDevice([JPEG])
+    assert await BleThumbnailImageSource(device, "wait", 12.0).capture() == JPEG  # type: ignore[arg-type]
+    assert device.calls == ["wait 12.0", "fetch"]
+    broken = BleThumbnailImageSource(FakeDevice([JPEG], fail=True), "wait", 1.0)  # type: ignore[arg-type]
+    with pytest.raises(ImageUnavailable) as caught:
+        await broken.capture()
+    assert "couldn't get the picture" in caught.value.spoken
+    damaged = BleThumbnailImageSource(FakeDevice([JPEG[:20]]), "photo", 1.0)  # type: ignore[arg-type]
+    with pytest.raises(ImageUnavailable, match="not a complete JPEG"):
+        await damaged.capture()

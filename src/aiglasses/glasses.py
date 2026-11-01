@@ -1,8 +1,10 @@
+import asyncio
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 
 from aiglasses.capabilities import CAPABILITIES
 from aiglasses.config import Settings
+from aiglasses.domain.errors import GlassesTimeoutError
 from aiglasses.domain.models import (
     BatteryStatus,
     Capability,
@@ -86,6 +88,19 @@ class Glasses:
     async def read_media_counts(self) -> MediaCounts:
         """Read-only request (CONFIRMED): photos, videos and audio recordings on the glasses."""
         return await self.control.read_media_counts()
+
+    async def wait_for_ai_capture(self, timeout: float) -> None:
+        """Return when the glasses report an AI capture (rear double click, "hey glasses")."""
+
+        async def until_capture() -> None:
+            async for event in self.events():
+                if event.kind == "image_capture_ready":
+                    return
+
+        try:
+            await asyncio.wait_for(until_capture(), timeout)
+        except asyncio.TimeoutError as exc:
+            raise GlassesTimeoutError(f"no capture within {timeout:.0f} s") from exc
 
     async def fetch_thumbnail(self) -> ThumbnailResult:
         """Read the latest AI-photo thumbnail over Bluetooth (needs `dry_run=False`)."""

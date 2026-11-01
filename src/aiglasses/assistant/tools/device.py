@@ -15,6 +15,7 @@ from aiglasses.domain.errors import ConfirmationRequired, GlassesError
 from aiglasses.domain.models import BatteryStatus, Confidence, MediaCounts
 from aiglasses.protocol.registry import load_commands
 from aiglasses.services.control import PhotoResult
+from aiglasses.services.thumbnail import ThumbnailResult
 
 NOT_CONNECTED = "The glasses are not connected."
 
@@ -55,6 +56,13 @@ class DeviceHolder:
     async def take_photo(self, *, confirm: bool) -> PhotoResult:
         result: PhotoResult = await self._need().take_photo(confirm=confirm)
         return result
+
+    async def fetch_thumbnail(self) -> ThumbnailResult:
+        result: ThumbnailResult = await self._need().fetch_thumbnail()
+        return result
+
+    async def wait_for_ai_capture(self, timeout: float) -> None:
+        await self._need().wait_for_ai_capture(timeout)
 
 
 class ReadBattery:
