@@ -122,6 +122,7 @@ class WifiDirectRun:
     peer_prefix: str
     http: Callable[[str, Path], Any]
     take_photo: Callable[[], Awaitable[PhotoResult]] | None = None
+    pc_hosts: bool = False  # the PC advertises as group owner and the glasses join it
 
     async def run(self) -> RunReport:
         report = RunReport(self.variant)
@@ -138,6 +139,7 @@ class WifiDirectRun:
             return result
 
         session: WifiDirectSession | None = None
+        advertising = False
         try:
             await stage("preflight", self.adapter.prepare())
             report.band = self.adapter.band()
@@ -148,10 +150,14 @@ class WifiDirectRun:
                 photo = await stage("take photo", self.take_photo())
                 if photo.photos_added is not None and photo.photos_added < 1:
                     raise GlassesError("the media count did not rise")
+            advertising = self.pc_hosts
+            if advertising:
+                await stage("advertise (PC hosts)", self.adapter.advertise())
             self.ip.start()
             await stage("enable (BLE, once)", self.enable())
             session = WifiDirectSession(self.adapter, self.adapter, peer_prefix=self.peer_prefix)
-            await stage("find peer + join", session.__aenter__())
+            joining = "wait for glasses + join" if advertising else "find peer + join"
+            await stage(joining, session.__aenter__())
             address = await stage("read IP event", self.ip.wait(IP_WAIT_S))
             status = await stage("status", self.adapter.status())
             report.internet_during_group = bool(status.get("internet"))
@@ -168,15 +174,19 @@ class WifiDirectRun:
                 report.errors.append(f"Wi-Fi Direct peers seen: {len(seen)} {seen}")
             report.stopped_early = isinstance(exc, IpEventMissing)
             if isinstance(exc, asyncio.CancelledError):
-                await self._finish(session, report)
+                await self._finish(session, report, advertising)
                 raise
-        await self._finish(session, report)
+        await self._finish(session, report, advertising)
         return report
 
-    async def _finish(self, session: WifiDirectSession | None, report: RunReport) -> None:
+    async def _finish(
+        self, session: WifiDirectSession | None, report: RunReport, advertising: bool
+    ) -> None:
         """Always: stop listening, leave the group, restore Wi-Fi, and record the result."""
         await self.ip.stop()
         if session is None:
+            if advertising:
+                await self.adapter.disconnect()
             return
         started = time.perf_counter()
         await session.__aexit__(None, None, None)

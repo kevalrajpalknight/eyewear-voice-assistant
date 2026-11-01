@@ -61,6 +61,9 @@ class HelperWifiDirect:
         info = await self._helper.request("preflight")
         self._profile, self._band = info.get("profile"), info.get("band")
 
+    async def advertise(self) -> None:
+        await self._helper.request("advertise")
+
     # HostNetwork
     def current_profile(self) -> str | None:
         return self._profile

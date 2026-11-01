@@ -166,7 +166,7 @@ wifi_direct_app = typer.Typer(
 )
 
 
-def _run_wifi_direct(variant: str) -> None:
+def _run_wifi_direct(variant: str, pc_hosts: bool) -> None:
     import asyncio
 
     from aiglasses.glasses import Glasses
@@ -195,6 +195,7 @@ def _run_wifi_direct(variant: str) -> None:
                     save_dir=ble.captures_dir / "photos",
                     peer_prefix=ble.name_prefix.rstrip("_"),
                     http=GlassesHttpClient,
+                    pc_hosts=pc_hosts,
                     take_photo=(lambda: glasses.take_photo(confirm=True))
                     if variant == "full"
                     else None,
@@ -212,18 +213,24 @@ def _run_wifi_direct(variant: str) -> None:
 
 
 @wifi_direct_app.command("connect")
-def wifi_direct_connect() -> None:
+def wifi_direct_connect(
+    pc_hosts: bool = typer.Option(False, help="The PC advertises as group owner; the glasses join"),
+) -> None:
     """A: enable -> find peer -> join -> read IP -> status -> disconnect -> restore. No HTTP."""
-    _run_wifi_direct("connect")
+    _run_wifi_direct("connect", pc_hosts)
 
 
 @wifi_direct_app.command("existing")
-def wifi_direct_existing() -> None:
+def wifi_direct_existing(
+    pc_hosts: bool = typer.Option(False, help="The PC advertises as group owner; the glasses join"),
+) -> None:
     """B: A plus the file list and ONE existing photo (verify JPEG, save under captures/photos)."""
-    _run_wifi_direct("existing")
+    _run_wifi_direct("existing", pc_hosts)
 
 
 @wifi_direct_app.command("full")
-def wifi_direct_full() -> None:
+def wifi_direct_full(
+    pc_hosts: bool = typer.Option(False, help="The PC advertises as group owner; the glasses join"),
+) -> None:
     """C: photo -> count rise -> enable -> join -> list -> download newest -> restore."""
-    _run_wifi_direct("full")
+    _run_wifi_direct("full", pc_hosts)

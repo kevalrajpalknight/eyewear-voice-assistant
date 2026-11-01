@@ -183,3 +183,30 @@ async def test_any_other_frame_and_dry_run_refuse_before_writing(tmp_path: Path)
             approved_frame=APPROVED_WIFI_DIRECT_FRAME
         )
     assert device.writes == []
+
+
+async def test_pc_hosts_mode_advertises_before_the_enable_write_and_stops_on_early_failure(
+    tmp_path: Path,
+) -> None:
+    order: list[str] = []
+    helper = FakeHelper()
+    run, _ = build("connect", tmp_path, helper=helper)
+    run.pc_hosts = True
+
+    async def enable() -> None:
+        order.append(helper.commands[-1])
+
+    run.enable = enable
+    report = await run.run()
+    assert order == ["advertise"] and not report.errors
+    assert report.stages[1].name == "advertise (PC hosts)"
+
+    broken = FakeHelper()
+
+    async def refused() -> None:
+        raise GlassesError("write refused")
+
+    run2, _ = build("connect", tmp_path, helper=broken)
+    run2.pc_hosts, run2.enable = True, refused
+    bad = await run2.run()
+    assert "write refused" in bad.errors[0] and "disconnect" in broken.commands

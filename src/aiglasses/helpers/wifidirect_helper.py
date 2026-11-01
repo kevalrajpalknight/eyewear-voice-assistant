@@ -17,6 +17,7 @@ import subprocess
 import sys
 from typing import Any
 
+ADVERTISE_START_S = 5.0
 PROBE = ("one.one.one.one", 443)
 PROBE_TIMEOUT_S = 3.0
 RESTORE_ATTEMPTS = 3
@@ -28,6 +29,9 @@ UNPAIR_TIMEOUT_S = 10.0
 class FakeBackend:
     def __init__(self) -> None:
         self.connected = False
+
+    async def advertise(self) -> None:
+        return None
 
     async def preflight(self) -> dict[str, Any]:
         return {"profile": "fake-home", "band": "2.4 GHz"}
@@ -88,6 +92,11 @@ class WinrtBackend:
         self._info: Any = None
         self._prefix = ""
         self.seen: list[str] = []
+        self._publisher: Any = None
+        self._listener: Any = None
+        self._token: Any = None
+        self._requests: asyncio.Queue[Any] | None = None
+        self._request: Any = None
 
     async def preflight(self) -> dict[str, Any]:
         for block in interface_blocks():
@@ -95,7 +104,57 @@ class WinrtBackend:
                 return {"profile": block.get("profile"), "band": block.get("band")}
         return {"profile": None, "band": None}
 
+    async def advertise(self) -> None:
+        """PC hosts: advertise as an autonomous group owner and queue connection requests."""
+        from winrt.windows.devices.wifidirect import (
+            WiFiDirectAdvertisementListenStateDiscoverability,
+            WiFiDirectAdvertisementPublisher,
+            WiFiDirectAdvertisementPublisherStatus,
+            WiFiDirectConfigurationMethod,
+            WiFiDirectConnectionListener,
+        )
+
+        loop = asyncio.get_running_loop()
+        requests: asyncio.Queue[Any] = asyncio.Queue()
+        listener = WiFiDirectConnectionListener()
+
+        def requested(sender: Any, args: Any) -> None:
+            loop.call_soon_threadsafe(requests.put_nowait, args.get_connection_request())
+
+        self._token = listener.add_connection_requested(requested)
+        publisher = WiFiDirectAdvertisementPublisher()
+        advertisement = publisher.advertisement
+        advertisement.is_autonomous_group_owner_enabled = True
+        advertisement.listen_state_discoverability = (
+            WiFiDirectAdvertisementListenStateDiscoverability.NORMAL
+        )
+        advertisement.supported_configuration_methods.append(
+            WiFiDirectConfigurationMethod.PUSH_BUTTON
+        )
+        self._listener, self._publisher, self._requests = listener, publisher, requests
+        publisher.start()
+        for _ in range(int(ADVERTISE_START_S / 0.25)):
+            if publisher.status == WiFiDirectAdvertisementPublisherStatus.STARTED:
+                return
+            if publisher.status == WiFiDirectAdvertisementPublisherStatus.ABORTED:
+                break
+            await asyncio.sleep(0.25)
+        raise RuntimeError(f"advertisement {publisher.status.name}")
+
+    async def _wait_for_request(self, timeout: float) -> str | None:
+        assert self._requests is not None
+        try:
+            self._request = await asyncio.wait_for(self._requests.get(), timeout)
+        except asyncio.TimeoutError:
+            self.seen = []
+            return None
+        self._info = self._request.device_information
+        self.seen = [str(self._info.name)[:12]]
+        return str(self._info.id)
+
     async def find_peer(self, prefix: str, timeout: float) -> str | None:
+        if self._requests is not None:
+            return await self._wait_for_request(timeout)
         from winrt.windows.devices.enumeration import DeviceInformation
         from winrt.windows.devices.wifidirect import WiFiDirectDevice, WiFiDirectDeviceSelectorType
 
@@ -165,14 +224,22 @@ class WinrtBackend:
         selector = WiFiDirectDevice.get_device_selector(
             WiFiDirectDeviceSelectorType.DEVICE_INTERFACE
         )
-        interfaces = await asyncio.wait_for(
-            DeviceInformation.find_all_async_aqs_filter(selector), timeout
+        interfaces = (
+            []
+            if self._request is not None
+            else await asyncio.wait_for(
+                DeviceInformation.find_all_async_aqs_filter(selector), timeout
+            )
         )
-        match = next((i for i in interfaces if str(i.name).startswith(self._prefix)), None)
-        if match is None:
-            raise RuntimeError("paired, but no device interface appeared")
+        if self._request is not None:
+            device_id = str(self._request.device_information.id)
+        else:
+            match = next((i for i in interfaces if str(i.name).startswith(self._prefix)), None)
+            if match is None:
+                raise RuntimeError("paired, but no device interface appeared")
+            device_id = str(match.id)
         self._device = await asyncio.wait_for(
-            WiFiDirectDevice.from_id_async(str(match.id), parameters), timeout
+            WiFiDirectDevice.from_id_async(device_id, parameters), timeout
         )
         pairs = self._device.get_connection_endpoint_pairs()
         ip = str(pairs[0].remote_host_name.canonical_name) if len(pairs) else None
@@ -182,6 +249,16 @@ class WinrtBackend:
         device, self._device = self._device, None
         if device is not None:
             device.close()
+        request, self._request = self._request, None
+        if request is not None:
+            request.close()
+        publisher, self._publisher = self._publisher, None
+        if publisher is not None:
+            publisher.stop()
+        listener, self._listener = self._listener, None
+        if listener is not None and self._token is not None:
+            listener.remove_connection_requested(self._token)
+        self._requests = None
         info, self._info = self._info, None
         if info is not None:  # forget the pairing so the next run starts clean
             try:
@@ -218,6 +295,8 @@ async def handle(backend: Any, request: dict[str, Any]) -> dict[str, Any]:
     elif command == "find_peer":
         peer = await backend.find_peer(request["prefix"], float(request["timeout"]))
         reply = {"peer": peer, "seen": getattr(backend, "seen", [])[:8]}
+    elif command == "advertise":
+        await backend.advertise()
     elif command == "connect":
         reply = await backend.connect(
             request["peer"], int(request["group_owner_intent"]), float(request["timeout"])
