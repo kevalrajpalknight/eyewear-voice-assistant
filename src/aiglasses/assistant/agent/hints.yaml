@@ -1,0 +1,25 @@
+# Words that make a first tool call certain (data). The small local model is unreliable at
+# deciding by itself that it must LOOK, SEARCH or CHECK THE WEATHER, so when these words are said
+# the first model step is forced to call that tool; later steps are free. The first group that
+# matches wins, so the camera comes before search ("check this snack online" looks first).
+# Matched on the lower-cased words with punctuation removed.
+hints:
+  - chain: [describe_scene, search_web]
+    patterns:
+      - '\b(?:look at|check|scan|read|identify) (?:this|that|these|those|the) (?:snack|product|packet|package|bottle|box|item|food|medicine)\b.*\b(?:healthy|safe|good for|reviews?|online|ingredients|price|worth|cheaper|buy)\b'
+      - '\b(?:is|are) (?:this|that|these|those) (?:snack|product|packet|package|bottle|item|food)s? (?:any |really |very )?(?:good|healthy|safe|worth|fresh)\b'
+      - '\b(?:check|find|search) (?:this|that|these|those)\b.*\b(?:online|reviews?|price|ingredients)\b'
+      - '\b(?:reviews?|ingredients|price) (?:of|for|on) (?:this|that|these|those)\b'
+  - tool: describe_scene
+    patterns:
+      - '\b(?:look at|read|scan|identify|recogni[sz]e|what colou?r|how many|what brand|which brand)\b.*\b(?:this|these|that|those|label|packet|package|bottle|box|snack|product|item|thing|in my hand|in front of me|holding|pointing)\b'
+      - '\bhelp me (?:decide|choose|pick|cook|find) .*\b(?:these|this|those|that)\b'
+      - '\b(?:check|find|tell me about|review) (?:this|that|these|those) (?:snack|product|packet|package|bottle|item|thing)\b'
+      - '\b(?:holding|pointing at|looking at|in my hand|in front of me)\b'
+  - tool: get_weather
+    patterns:
+      - '\b(?:weather|forecast|temperature|umbrella|raining|rain|snowing|how (?:hot|cold|warm)|is it (?:hot|cold|warm|sunny))\b'
+  - tool: search_web
+    patterns:
+      - '\b(?:search|look up|google|latest|news|price|prices|who won|score|scores|reviews?|online|trending)\b'
+      - '\bwhat is the (?:price|rate)\b'

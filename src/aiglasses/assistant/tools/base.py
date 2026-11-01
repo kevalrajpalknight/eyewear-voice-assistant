@@ -54,6 +54,8 @@ class ToolContext:
     announce: Callable[[str], Awaitable[None]] = field(default=lambda text: _noop())
     tainted: bool = False
     calls: int = 0
+    requested: set[str] = field(default_factory=set)  # tools the user's own words called for
+    narrated: set[str] = field(default_factory=set)  # tools whose start was already announced
     log: list[tuple[str, str]] = field(default_factory=list)  # (tool, outcome category)
 
 
@@ -98,6 +100,9 @@ class ToolRegistry:
 
     def register(self, tool: Tool) -> None:
         self._tools[tool.name] = tool
+
+    def get(self, name: str) -> Tool:
+        return self._tools[name]
 
     def risk(self, name: str) -> Risk | None:
         tool = self._tools.get(name)
@@ -158,7 +163,8 @@ class ToolRegistry:
                 False, f"{name} refused: untrusted content is in this turn", "tainted",
                 "I won't do that right now.",
             )  # fmt: skip
-        if tool.risk in NEEDS_REQUEST and not self.intents.requests(tool.name, ctx.utterance):
+        asked = name in ctx.requested or self.intents.requests(tool.name, ctx.utterance)
+        if tool.risk in NEEDS_REQUEST and not asked:
             return ToolOutcome(
                 False, f"{name} refused: you did not ask for it", "not_requested",
                 "Tell me directly if you want that.",
@@ -170,7 +176,7 @@ class ToolRegistry:
         except ValidationError:
             return ToolOutcome(False, f"bad arguments for {name}", "args")
         ctx.calls += 1
-        if tool.announcement:
+        if tool.announcement and name not in ctx.narrated:
             await ctx.announce(self.fillers.pick(tool.name) or tool.announcement)
         try:
             result = await asyncio.wait_for(tool.run(args, ctx), timeout_s)

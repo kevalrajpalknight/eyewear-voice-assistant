@@ -82,7 +82,8 @@ class LocalLlm:
         prompt_cache: bool = True,
         client: httpx.AsyncClient | None = None,
     ) -> None:
-        self._url = base_url.rstrip("/") + ROUTE
+        self.base_url = base_url.rstrip("/")
+        self._url = self.base_url + ROUTE
         self._health = base_url.rstrip("/") + "/health"
         self._first_token_timeout = first_token_timeout_s
         self._cache = prompt_cache

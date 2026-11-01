@@ -94,6 +94,7 @@ failures: `FALLBACK_LLM_ERROR`, `FALLBACK_NO_SPEECH`, `FALLBACK_TTS_ERROR`.
 
 ## Logging and privacy
 `LOG_LEVEL` (`INFO`), `LOG_TRANSCRIPTS` (`false`: logs hold lengths and timings only), `SHOW_TRANSCRIPTS` (`true`: print `you:` and `EVA:` lines on screen only),
+`AGENT_ENGINE` (`agent`: the LangChain agent; `lanes`: the older fixed lanes), `AGENT_LOCAL_MAX_TOKENS` (`220`), `LOCAL_STEP_TIMEOUT_S` (`20`),
 `INPUT_MODE` (`button` or `mic`: with `mic` a microphone listens all the time, the wake phrase starts a
 conversation and the assistant sleeps again after `LISTEN_IDLE_SLEEP_S` (`3`) of quiet), `WAKE_LEARNED_PATH` (names learned from your voice by `assistant wake-train`), `MIC_DEVICE` (part of an
 input device name; empty = system default), `DUPLEX_BARGE_IN` (`true`: speaking over the assistant stops it),
@@ -122,7 +123,7 @@ set text to always say that instead), `SEARCH_CONTEXT_CHARS` (`700`: how much se
 `SEARCH_FALLBACK` (`wikipedia` or `off`: a second source after one retry of the first) and `SEARCH_FALLBACK_URL`. `ROUTER_MODE=local_first` enables the lanes.
 
 ## Agent loop and tools
-`AGENT_MAX_STEPS` (`3`, at most 10), `AGENT_TIME_BUDGET_S` (`8`), `TOOLS_ENABLED` (comma list;
+`AGENT_MAX_STEPS` (`6`, at most 10), `AGENT_TIME_BUDGET_S` (`60`), `TOOLS_ENABLED` (comma list;
 default only read-only tools), `TOOL_MAX_CALLS_PER_TURN` (`3`), `TOOL_TIMEOUT_S` (`10`),
 `ALLOW_RECORDING_TOOLS` (`false`), `CAMERA_OPEN_ASKS_FIRST` (`false`: "open the camera" takes a photo at once; `true` asks first), `PHOTO_MIN_INTERVAL_S` (`10`), `PHOTO_MAX_PER_SESSION` (`10`),
 `INTENTS_PATH` (empty = the shipped intents file), `TURN_END_SILENCE_MS` (`300`).

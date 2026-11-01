@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 
+from aiglasses.assistant.agent.turn import TurnReport
 from aiglasses.assistant.clauses import ClauseStream
 from aiglasses.assistant.cleaner import clean_reply
 from aiglasses.assistant.echo import Debug, TurnLog
@@ -33,7 +34,6 @@ from aiglasses.assistant.interfaces import (
     TextToSpeech,
     TtsOptions,
 )
-from aiglasses.assistant.lanes import TurnReport
 from aiglasses.assistant.llm_client import LlmError
 from aiglasses.assistant.memory import Exchange, Memory
 from aiglasses.assistant.router import RouteDecision, RoutedLlmClient

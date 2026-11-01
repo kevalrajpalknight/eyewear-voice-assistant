@@ -14,6 +14,8 @@ from rich.console import Console
 from rich.markup import escape
 
 from aiglasses.assistant import local_server
+from aiglasses.assistant.agent import AgentClient
+from aiglasses.assistant.agent.models import build_cloud_model, build_local_model
 from aiglasses.assistant.app import AssistantApp, load_persona, run_forever
 from aiglasses.assistant.conversation import AssistantTurnRecord, ConversationPipeline
 from aiglasses.assistant.echo import Debug, TurnLog
@@ -89,6 +91,19 @@ def build_llm(
     if assistant.router_mode == "local_first" and not no_router:
         if parts is None:
             raise ConfigError("ROUTER_MODE=local_first needs the local parts (internal error)")
+        if assistant.agent_engine == "agent":
+            return AgentClient(
+                assistant,
+                local_model=build_local_model(
+                    parts.local.base_url
+                    if parts.local is not None
+                    else f"http://127.0.0.1:{assistant.local_llm_port}",
+                    assistant,
+                ),
+                cloud_model=build_cloud_model(assistant),
+                registry=parts.registry, intents=parts.registry.intents,
+                rules=EscalationRules.load(), memory=parts.memory,
+            )  # fmt: skip
         return LocalFirstClient(
             assistant, local=parts.local, cloud=main, registry=parts.registry,
             intents=parts.registry.intents, rules=EscalationRules.load(), memory=parts.memory,
@@ -269,7 +284,7 @@ async def run_assistant(
         memory=memory if local_mode else None,
     )  # fmt: skip
     app = AssistantApp(pipeline, assistant)
-    if isinstance(llm, LocalFirstClient):
+    if isinstance(llm, LocalFirstClient | AgentClient):
         await llm.prime(pipeline._messages("hello")[0].content)
     try:
         if wav is not None:

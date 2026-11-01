@@ -146,7 +146,7 @@ def build_chat_model(role: LlmRole) -> Any:
     return factory(role)
 
 
-def _to_langchain(messages: list[Message]) -> list[Any]:
+def to_langchain(messages: list[Message]) -> list[Any]:
     from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
     converted: list[Any] = []
@@ -239,7 +239,7 @@ class LangChainLlmClient:
     async def _events(
         self, model: Any, messages: list[Message], *, with_tools: bool
     ) -> AsyncIterator[str | ToolCall]:
-        prepared = _to_langchain(messages)
+        prepared = to_langchain(messages)
         loop = asyncio.get_running_loop()
         attempt = 0
         self.last_finish_reason = None

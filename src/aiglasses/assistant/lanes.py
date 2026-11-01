@@ -13,9 +13,9 @@ import json
 import logging
 import time
 from collections.abc import AsyncIterator, Callable
-from dataclasses import dataclass, field
 from typing import Any
 
+from aiglasses.assistant.agent.turn import TurnReport
 from aiglasses.assistant.escalation import EscalationRules
 from aiglasses.assistant.intents import Intents, normalise
 from aiglasses.assistant.interfaces import TIME_MARKER, LlmClient, Message, ToolCall
@@ -61,20 +61,6 @@ class Escalate(Exception):
         super().__init__(category)
         self.category, self.reason = category, reason or category
         self.context = context  # e.g. search results the cloud should not have to repeat
-
-
-@dataclass
-class TurnReport:
-    lane: int = 0  # 0 rules, 1 local model, 2 cloud
-    action: str = ""
-    category: str = ""  # why it escalated, or what answered
-    steps: int = 0
-    local_first_token_s: float | None = None
-    local_total_s: float | None = None
-    cloud_first_token_s: float | None = None
-    tools: list[tuple[str, str]] = field(default_factory=list)  # (tool, outcome category)
-    skip_memory: bool = False
-    notes: list[str] = field(default_factory=list)
 
 
 def categorize(reason: str) -> str:

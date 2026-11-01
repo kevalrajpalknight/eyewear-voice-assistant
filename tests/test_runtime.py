@@ -216,7 +216,10 @@ async def test_local_first_with_no_local_server_falls_back_to_the_cloud_cleanly(
         monkeypatch.setattr(module, "build_tts", lambda s: tts)
     monkeypatch.setattr(runtime, "LangChainLlmClient", lambda role: cloud)
     settings = assistant(
-        router_mode="local_first", local_llm_port=59999, tools_enabled="read_battery"
+        router_mode="local_first",
+        agent_engine="lanes",
+        local_llm_port=59999,
+        tools_enabled="read_battery",
     )
     await runtime.run_assistant(
         ble(tmp_path), settings, output="null", force_role=None, no_router=False, wav=wav
