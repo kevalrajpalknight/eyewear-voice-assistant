@@ -4,11 +4,11 @@ import pytest
 
 from aiglasses.assistant.clauses import ClauseStream
 from aiglasses.assistant.diagnose import diagnose
-from aiglasses.assistant.fakes import FakeCloudLlm, FakeLlm, FakeTts
+from aiglasses.assistant.fakes import FakeLlm, FakeTts
 from aiglasses.assistant.intents import Intents, normalise
 from aiglasses.assistant.speech_chunks import split_speech
 from aiglasses.settings import AssistantSettings
-from tests.test_lanes import Rig, answer, utterance
+from tests.test_conversation import utterance
 
 
 def settings(**values: Any) -> AssistantSettings:
@@ -102,50 +102,6 @@ async def test_the_time_soft_cap_waits_for_a_sentence_end_and_is_logged() -> Non
     record = await rig.pipeline.run_turn(utterance(), 1)
     assert record.truncation == "time_soft_cap" and rig.tts.spoken[-2].endswith(".")
     assert rig.tts.spoken[-1] == rig.settings.wrap_up_line
-
-
-async def test_a_barge_in_is_recorded_as_the_cause() -> None:
-    import asyncio
-
-    rig = Rig([answer("One sentence here. " * 3)], said="tell me a long story")
-    rig.tts = FakeTts(delay=0.5)
-    rig.pipeline.tts = rig.tts
-    task = asyncio.create_task(rig.pipeline.run_turn(utterance(), 1))
-    await asyncio.sleep(0.2)
-    task.cancel()
-    with pytest.raises(asyncio.CancelledError):
-        await task
-    assert rig.records[-1].truncation == "barge_in"
-
-
-# --- search -----------------------------------------------------------------------------------
-
-
-async def test_an_explicit_search_request_searches_even_when_the_local_model_is_down() -> None:
-    cloud = FakeCloudLlm([("Here is what I found.",)])
-    rig = Rig([], said="search for the best pizza in Mumbai", cloud=cloud, local_up=False)
-    record = await rig.turn()
-    assert (
-        rig.search.queries == ["the best pizza in mumbai"] and record.route_reason == "local_down"
-    )
-    note = cloud.requests[0][0].content
-    assert "Web results already fetched" in note and "Heavy rain expected" in note
-    assert "Here is what I found" in rig.spoken
-
-
-async def test_search_results_survive_a_slow_local_model() -> None:
-    from aiglasses.assistant.local_llm import LocalUnavailable
-
-    cloud = FakeCloudLlm([("It will rain tonight.",)])
-    rig = Rig(
-        [LocalUnavailable("no first token in time")], said="what is the news today", cloud=cloud
-    )
-    record = await rig.turn()
-    assert rig.search.queries and record.route_reason == "local_slow"
-    assert "Web results already fetched" in cloud.requests[0][0].content
-
-
-# --- camera and identify intents --------------------------------------------------------------
 
 
 @pytest.mark.parametrize(

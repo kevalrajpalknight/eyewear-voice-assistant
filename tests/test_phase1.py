@@ -2,11 +2,9 @@ import httpx
 import pytest
 
 from aiglasses.assistant.conversation import AssistantTurnRecord  # noqa: F401
-from aiglasses.assistant.escalation import EscalationRules
 from aiglasses.assistant.fakes import FakeLlm
 from aiglasses.assistant.fragments import Fragments
 from aiglasses.assistant.intents import Intents, normalise
-from aiglasses.assistant.local_llm import Step
 from aiglasses.assistant.search import (
     FakeSearch,
     FallbackSearch,
@@ -16,24 +14,6 @@ from aiglasses.assistant.search import (
 )
 from aiglasses.assistant.wake import learn_names, read_learned, save_learned
 from tests.test_conversation import Rig, utterance
-from tests.test_lanes import Rig as LaneRig
-
-
-def test_a_greeting_with_a_time_word_is_not_a_fact_question() -> None:
-    rules = EscalationRules.load()
-    assert not rules.time_sensitive("How are you doing today?")
-    assert not rules.time_sensitive("have a good day")
-    assert rules.time_sensitive("who won the match today")
-    assert rules.time_sensitive("what is the latest news")
-
-
-def test_claims_and_vague_queries_are_recognised() -> None:
-    rules = EscalationRules.load()
-    assert rules.claims_action("I've taken a photo for you, so you should see it now.")
-    assert rules.claims_action("I searched and found nothing")
-    assert not rules.claims_action("The capital of France is Paris.")
-    assert rules.vague_query("this product") and rules.vague_query("it")
-    assert not rules.vague_query("farmlite oats chocolate cookies")
 
 
 @pytest.mark.parametrize(
@@ -88,24 +68,6 @@ async def test_the_microphone_ignores_sounds_and_answers_thanks_without_the_mode
     thanks = await rig.pipeline.run_turn(utterance(), 2)
     assert thanks.outcome == "spoken" and rig.llm.requests == []
     assert any(w in " ".join(rig.tts.spoken) for w in ("welcome", "Anytime", "help", "problem"))
-
-
-async def test_a_local_reply_that_claims_a_photo_without_a_tool_goes_to_the_cloud() -> None:
-    rig = LaneRig(
-        [Step(action="answer", text="I've taken a photo for you, so you can see it now.")],
-        said="what is this product can you take the picture",
-        tools_enabled="read_battery,forget_all_that",
-    )
-    record = await rig.turn()
-    assert record.tier == 2 and record.route_reason == "claimed_action"
-
-
-async def test_a_search_with_no_real_subject_is_not_run() -> None:
-    rig = LaneRig(
-        [Step(action="answer", text="Which product do you mean?")], said="search this product"
-    )
-    await rig.turn()
-    assert rig.search.queries == []
 
 
 async def test_search_retries_once_then_uses_the_second_source() -> None:

@@ -101,12 +101,6 @@ async def diagnose(
         elif not found.handler:
             if rules.research(phrase):
                 found.checks.append("research request -> cloud")
-            if rules.time_sensitive(phrase):
-                found.checks.append(
-                    "time-sensitive -> search_web first"
-                    if "search_web" in settings.enabled_tools
-                    else "time-sensitive and search_web is NOT enabled -> cloud"
-                )
             found.lane = (
                 "cloud" if any("cloud" in c for c in found.checks) else "local model decides"
             )

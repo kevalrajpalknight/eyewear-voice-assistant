@@ -17,7 +17,7 @@ from aiglasses.assistant.tools.base import NoArgs, Risk, ToolContext, ToolRegist
 from aiglasses.assistant.tools.device import ReadBattery, TakePhoto
 from aiglasses.assistant.tools.memory_tools import ForgetAllThat
 from aiglasses.settings import AssistantSettings
-from tests.test_lanes import Device
+from tests.agent_fakes import Device
 
 ALL_TOOLS = "read_battery,describe_scene,forget_all_that,take_photo"
 

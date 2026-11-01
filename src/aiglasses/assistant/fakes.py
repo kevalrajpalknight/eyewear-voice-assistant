@@ -15,7 +15,6 @@ from aiglasses.assistant.interfaces import (
     Transcript,
     TtsOptions,
 )
-from aiglasses.assistant.local_llm import LocalLlm, Step, StepTiming
 
 
 class FakeStt:
@@ -111,34 +110,6 @@ class FakeSink:
     async def stop(self) -> None:
         self.stops += 1
         self._stopped.set()
-
-
-class FakeLocalLlm(LocalLlm):
-    """A scripted stand-in for the local server. Each script item is a Step, or an exception to
-    raise. Records the messages and tool lists of every call."""
-
-    def __init__(self, script: Sequence[Step | Exception], *, up: bool = True) -> None:
-        self._script = list(script)
-        self._up = up
-        self.calls: list[tuple[list[Message], list[str]]] = []
-
-    async def available(self) -> bool:
-        return self._up
-
-    async def step(
-        self,
-        messages: list[Message],
-        tools: list[str],
-        *,
-        max_tokens: int,
-        time_left_s: float,
-        text_max_chars: int | None = None,
-    ) -> tuple[Step, StepTiming]:
-        self.calls.append((list(messages), list(tools)))
-        item = self._script.pop(0)
-        if isinstance(item, Exception):
-            raise item
-        return item, StepTiming(0.05, 0.1)
 
 
 class FakeCloudLlm:

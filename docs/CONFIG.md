@@ -94,7 +94,7 @@ failures: `FALLBACK_LLM_ERROR`, `FALLBACK_NO_SPEECH`, `FALLBACK_TTS_ERROR`.
 
 ## Logging and privacy
 `LOG_LEVEL` (`INFO`), `LOG_TRANSCRIPTS` (`false`: logs hold lengths and timings only), `SHOW_TRANSCRIPTS` (`true`: print `you:` and `EVA:` lines on screen only),
-`AGENT_ENGINE` (`agent`: the LangChain agent; `lanes`: the older fixed lanes), `AGENT_LOCAL_MAX_TOKENS` (`220`), `LOCAL_STEP_TIMEOUT_S` (`20`),
+`AGENT_LOCAL_MAX_TOKENS` (`220`), `LOCAL_STEP_TIMEOUT_S` (`20`),
 `INPUT_MODE` (`button` or `mic`: with `mic` a microphone listens all the time, the wake phrase starts a
 conversation and the assistant sleeps again after `LISTEN_IDLE_SLEEP_S` (`3`) of quiet), `WAKE_LEARNED_PATH` (names learned from your voice by `assistant wake-train`), `MIC_DEVICE` (part of an
 input device name; empty = system default), `DUPLEX_BARGE_IN` (`true`: speaking over the assistant stops it),
@@ -115,11 +115,10 @@ wrapped up with `WRAP_UP_LINE`. `FIRST_CHUNK_MIN_WORDS` (`8`) sets how early spe
 ## Local model (llama.cpp)
 `LOCAL_LLM_BIN_DIR` (`tools/llama.cpp`), `LOCAL_LLM_MODEL` (a name from the registry; empty means no
 local model), `LOCAL_LLM_THREADS` (empty = physical cores), `LOCAL_LLM_CTX` (`4096` tokens),
-`LOCAL_LLM_PORT` (`8081`, bound to 127.0.0.1), `LOCAL_LLM_BATCH` (`512`), `LOCAL_LLM_MAX_TOKENS` (`120` tokens per local step), `LOCAL_LLM_PRELOAD`
-(`true`), `LOCAL_LLM_PROMPT_CACHE` (`true`), `LOCAL_FIRST_TOKEN_TIMEOUT_S` (`6`), `MODELS_DIR`
+`LOCAL_LLM_PORT` (`8081`, bound to 127.0.0.1), `LOCAL_LLM_BATCH` (`512`), `LOCAL_LLM_PRELOAD`
+(`true`), `LOCAL_LLM_PROMPT_CACHE` (`true`), `MODELS_DIR`
 (`models`), `MODEL_REGISTRY_PATH` (the shipped `models.yaml`), `MODEL_DOWNLOAD_BUDGET_GB` (`8`),
-`ESCALATION_FILLER` (empty: a random phrase from `fillers.yaml`, also used when a tool starts;
-set text to always say that instead), `SEARCH_CONTEXT_CHARS` (`700`: how much search text the local model reads),
+`SEARCH_CONTEXT_CHARS` (`700`: how much search text the local model reads),
 `SEARCH_FALLBACK` (`wikipedia` or `off`: a second source after one retry of the first) and `SEARCH_FALLBACK_URL`. `ROUTER_MODE=local_first` enables the lanes.
 
 ## Agent loop and tools

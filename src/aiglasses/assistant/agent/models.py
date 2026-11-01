@@ -3,7 +3,7 @@
 from typing import Any
 
 from aiglasses.assistant.llm_client import build_chat_model
-from aiglasses.assistant.local_llm import NO_THINKING
+from aiglasses.assistant.local_server import NO_THINKING
 from aiglasses.settings import AssistantSettings
 
 

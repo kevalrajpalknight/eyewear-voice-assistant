@@ -13,7 +13,6 @@ import typer
 
 from aiglasses.assistant import engines, registry, runtime, session
 from aiglasses.assistant.fakes import FakeLlm, FakeStt, FakeTts
-from aiglasses.assistant.fillers import Fillers
 from aiglasses.assistant.recorder import Sentence
 from aiglasses.assistant.router import RoutedLlmClient
 from aiglasses.assistant.speaker import NullSink, SubprocessSpeakerSink
@@ -203,32 +202,6 @@ async def test_bench_record_glue_saves_takes_and_reports(
     monkeypatch.setattr(typer, "confirm", lambda *a, **k: False)
     await session.run_bench_record(ble(tmp_path), tmp_path / "out", [Sentence("a", "short", "Hi.")])
     assert (tmp_path / "out" / "a.wav").exists()
-
-
-async def test_local_first_with_no_local_server_falls_back_to_the_cloud_cleanly(
-    tmp_path: Path, wav: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from aiglasses.assistant.fakes import FakeCloudLlm
-
-    cloud, stt, tts = FakeCloudLlm([("The cloud answered.",)]), FakeStt("hello there"), FakeTts()
-    for module in (runtime, session):
-        monkeypatch.setattr(module, "build_stt", lambda s, normalize=False: stt)
-        monkeypatch.setattr(module, "build_tts", lambda s: tts)
-    monkeypatch.setattr(runtime, "LangChainLlmClient", lambda role: cloud)
-    settings = assistant(
-        router_mode="local_first",
-        agent_engine="lanes",
-        local_llm_port=59999,
-        tools_enabled="read_battery",
-    )
-    await runtime.run_assistant(
-        ble(tmp_path), settings, output="null", force_role=None, no_router=False, wav=wav
-    )
-    spoken = " ".join(tts.spoken)
-    assert any(p in spoken for p in Fillers.load().phrases("thinking"))
-    assert "The cloud answered" in spoken
-    row = json.loads((tmp_path / "logs" / "assistant_turns.jsonl").read_text().splitlines()[-1])
-    assert row["tier"] == 2 and row["route_reason"] == "local_down" and row["route_role"] == "cloud"
 
 
 async def test_pressing_q_stops_the_work_and_finished_work_returns_its_result(monkeypatch) -> None:  # type: ignore[no-untyped-def]

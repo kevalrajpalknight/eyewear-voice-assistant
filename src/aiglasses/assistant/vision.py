@@ -11,7 +11,7 @@ from typing import ClassVar, Protocol
 import httpx
 from pydantic import BaseModel
 
-from aiglasses.assistant.local_llm import NO_THINKING
+from aiglasses.assistant.local_server import NO_THINKING
 from aiglasses.assistant.tools.base import NoArgs, Risk, ToolContext, ToolRefused, ToolResult
 from aiglasses.domain.errors import GlassesError, NotSupportedError
 from aiglasses.settings import AssistantSettings

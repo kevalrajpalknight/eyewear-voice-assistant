@@ -23,10 +23,8 @@ from aiglasses.assistant.escalation import EscalationRules
 from aiglasses.assistant.glossary import Correction
 from aiglasses.assistant.intents import Intents
 from aiglasses.assistant.interfaces import LlmClient, SpeechToText, TextToSpeech
-from aiglasses.assistant.lanes import LocalFirstClient
 from aiglasses.assistant.listener import EnergyVad, MicListener, MicStream
 from aiglasses.assistant.llm_client import CloudVision, LangChainLlmClient
-from aiglasses.assistant.local_llm import LocalLlm
 from aiglasses.assistant.local_server import LocalServer
 from aiglasses.assistant.memory import Memory
 from aiglasses.assistant.models import Registry
@@ -63,7 +61,7 @@ class LocalFirstParts:
 
     memory: Memory
     registry: ToolRegistry
-    local: LocalLlm | None
+    base_url: str
 
 
 def build_llm(
@@ -83,22 +81,12 @@ def build_llm(
     if assistant.router_mode == "local_first" and not no_router:
         if parts is None:
             raise ConfigError("ROUTER_MODE=local_first needs the local parts (internal error)")
-        if assistant.agent_engine == "agent":
-            return AgentClient(
-                assistant,
-                local_model=build_local_model(
-                    parts.local.base_url
-                    if parts.local is not None
-                    else f"http://127.0.0.1:{assistant.local_llm_port}",
-                    assistant,
-                ),
-                cloud_model=build_cloud_model(assistant),
-                registry=parts.registry, intents=parts.registry.intents,
-                rules=EscalationRules.load(), memory=parts.memory,
-            )  # fmt: skip
-        return LocalFirstClient(
-            assistant, local=parts.local, cloud=main, registry=parts.registry,
-            intents=parts.registry.intents, rules=EscalationRules.load(), memory=parts.memory,
+        return AgentClient(
+            assistant,
+            local_model=build_local_model(parts.base_url, assistant),
+            cloud_model=build_cloud_model(assistant),
+            registry=parts.registry, intents=parts.registry.intents,
+            rules=EscalationRules.load(), memory=parts.memory,
         )  # fmt: skip
     fast = LangChainLlmClient(assistant.llm_role("fast")) if assistant.fast_configured else None
     classifier = None
@@ -256,11 +244,7 @@ async def run_assistant(
     if local_mode:
         server = await _start_local_server(ble, assistant)
         base_url = server.base_url if server else f"http://127.0.0.1:{assistant.local_llm_port}"
-        local = LocalLlm(
-            base_url, first_token_timeout_s=assistant.local_first_token_timeout_s,
-            prompt_cache=assistant.local_llm_prompt_cache,
-        )  # fmt: skip
-        parts = LocalFirstParts(memory, _registry(assistant, holder, memory, base_url), local)
+        parts = LocalFirstParts(memory, _registry(assistant, holder, memory, base_url), base_url)
     llm = build_llm(assistant, force_role=force_role, no_router=no_router, parts=parts)
     for warning in assistant.warnings():
         console.print(f"[yellow]{warning}[/]")
@@ -276,7 +260,7 @@ async def run_assistant(
         memory=memory if local_mode else None,
     )  # fmt: skip
     app = AssistantApp(pipeline, assistant)
-    if isinstance(llm, LocalFirstClient | AgentClient):
+    if isinstance(llm, AgentClient):
         await llm.prime(pipeline._messages("hello")[0].content)
     try:
         if wav is not None:

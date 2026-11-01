@@ -34,6 +34,11 @@ class PortInUse(GlassesError):
     pass
 
 
+# Gemma 4 sometimes 'thinks' for the whole token limit and then answers nothing; the server flag
+# --reasoning off does not stop that, this request field does.
+NO_THINKING = {"thinking_budget_tokens": 0}
+
+
 class ServerStartError(GlassesError):
     pass
 

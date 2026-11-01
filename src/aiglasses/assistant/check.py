@@ -151,8 +151,7 @@ def local_report(assistant: AssistantSettings, console: Console) -> list[str]:
         f"Local model: {name or 'NOT set'}; port {assistant.local_llm_port}; context "
         f"{assistant.local_llm_ctx}; batch {assistant.local_llm_batch}; threads "
         f"{threads}; "
-        f"prompt cache {'on' if assistant.local_llm_prompt_cache else 'off'}; first token limit "
-        f"{assistant.local_first_token_timeout_s:g} s"
+        f"prompt cache {'on' if assistant.local_llm_prompt_cache else 'off'}"
     )
     exe = assistant.local_llm_bin_dir / local_server.EXECUTABLE
     console.print(f"llama.cpp: {'installed' if exe.exists() else 'NOT installed'} ({exe})")

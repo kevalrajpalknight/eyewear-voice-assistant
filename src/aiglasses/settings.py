@@ -163,18 +163,13 @@ class AssistantSettings(BaseSettings):
     local_llm_ctx: int = Field(4096, gt=0)
     local_llm_port: int = Field(8081, gt=0, lt=65536)
     local_llm_batch: int = Field(512, gt=0)
-    local_llm_max_tokens: int = Field(120, gt=0)  # per local step; one step is a short JSON
     local_llm_preload: bool = True
     local_llm_prompt_cache: bool = True
-    local_first_token_timeout_s: float = Field(10.0, gt=0)
     models_dir: Path = Path("models")
     model_registry_path: Path = Path("src/aiglasses/assistant/models.yaml")
     model_download_budget_gb: float = Field(8.0, gt=0)
-    escalation_filler: str | None = None  # None: a random phrase from fillers.yaml
 
     # Agent loop and tools
-    # agent: the LangChain agent decides tools and escalation; lanes: the older hand-written lanes
-    agent_engine: Literal["agent", "lanes"] = "agent"
     agent_local_max_tokens: int = Field(220, gt=0)  # one local step: a sentence or a tool call
     local_step_timeout_s: float = Field(20.0, gt=0)  # one local model call, prompt included
     agent_max_steps: int = Field(6, ge=1, le=10)
