@@ -218,8 +218,8 @@ async def test_diagnose_traces_phrases_without_touching_anything() -> None:
     assert (
         by_phrase["open the camera"].tool == "take_photo" and by_phrase["open the camera"].enabled
     )
-    assert by_phrase["identify this object"].stopped_at.startswith("error")
-    assert "fetch the photo" in by_phrase["identify this object"].spoken
+    assert by_phrase["identify this object"].tool == "describe_scene"
+    assert by_phrase["identify this object"].stopped_at.startswith("ok")
     assert by_phrase["tell me a joke"].lane == "local model decides"
     off = await diagnose(settings(tools_enabled="get_time"), ("take a photo",))
     assert off[0].enabled is False and off[0].stopped_at.startswith("disabled")

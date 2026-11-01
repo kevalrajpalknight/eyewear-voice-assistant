@@ -13,7 +13,7 @@ from aiglasses.assistant.router import DEFAULT_HANDLERS, LocalState
 from aiglasses.assistant.search import FakeSearch, SearchHit
 from aiglasses.assistant.tools.base import ToolContext
 from aiglasses.assistant.tools.factory import build_registry
-from aiglasses.assistant.vision import FakeVision, GlassesWifiImageSource
+from aiglasses.assistant.vision import FakeImageSource, FakeVision
 from aiglasses.domain.models import BatteryStatus, MediaCounts
 from aiglasses.services.control import PhotoResult
 from aiglasses.settings import AssistantSettings
@@ -69,7 +69,7 @@ async def diagnose(
     registry = build_registry(
         traced, device=_FakeDevice(), memory=memory, intents=intents,
         search=FakeSearch([SearchHit("A result", "A snippet")]),
-        image_source=GlassesWifiImageSource(), vision=FakeVision(),
+        image_source=FakeImageSource(b"fake image"), vision=FakeVision(),
     )  # fmt: skip
     state = LocalState(timezone=settings.assistant_timezone)
     results = []
