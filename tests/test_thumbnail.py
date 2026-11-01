@@ -80,3 +80,36 @@ async def test_dry_run_sends_nothing(tmp_path: Path) -> None:
     with pytest.raises(GlassesError, match="dry run"):
         await glasses(device, tmp_path, dry_run=True).fetch_thumbnail()
     assert device.writes == []
+
+
+async def test_a_chunk_split_over_several_notifications_is_reassembled(tmp_path: Path) -> None:
+    class Splitting(ThumbnailDevice):
+        def emit_split(self, frame: bytes) -> None:
+            for start in range(0, len(frame), 7):
+                self.emit(GLASSES_NOTIFY, frame[start : start + 7])
+
+        def _later(self, delay: float, frame: bytes) -> None:
+            import asyncio
+
+            asyncio.get_running_loop().call_later(delay, self.emit_split, frame)
+
+    device = Splitting([JPEG[:12], JPEG[12:]])
+    result = await glasses(device, tmp_path).fetch_thumbnail()
+    assert result.jpeg == JPEG and result.chunks == 2
+
+
+async def test_a_stalled_partial_frame_is_dropped_and_does_not_swallow_the_next(
+    tmp_path: Path,
+) -> None:
+    from aiglasses.services import channel as channel_module
+
+    g = glasses(Device(), tmp_path)
+    frame = chunk_reply(1, 0, b"abcdef")
+    g.channel._on_data("u", frame[:8])
+    channel_module.FRAGMENT_GAP_S, saved = -1.0, channel_module.FRAGMENT_GAP_S
+    try:
+        g.channel._on_data("u", frame)
+    finally:
+        channel_module.FRAGMENT_GAP_S = saved
+    assert g.channel.stats["dropped partial frame"].count == 1
+    assert "cmd 0xfd" in g.channel.stats

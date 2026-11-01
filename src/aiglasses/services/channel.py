@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from aiglasses.domain.errors import GlassesTimeoutError, ProtocolError
 from aiglasses.domain.models import GlassesEvent
-from aiglasses.protocol.bcframe import BcFrame, parse_bc_frame
+from aiglasses.protocol.bcframe import HEADER_LEN, START_BYTE, BcFrame, parse_bc_frame
 from aiglasses.protocol.events import frame_to_event
 from aiglasses.protocol.registry import Command
 from aiglasses.protocol.uuids import GLASSES_NOTIFY
@@ -17,6 +17,8 @@ from aiglasses.transport.base import BleTransport
 
 log = logging.getLogger("aiglasses.channel")
 Matcher = Callable[[BcFrame], bool]
+MAX_FRAME_BYTES = 4096  # a longer declared length is not treated as a split frame
+FRAGMENT_GAP_S = 1.0  # a split frame must continue within this time or it is dropped
 
 
 @dataclass
@@ -37,6 +39,9 @@ class FrameChannel:
         self._waiters: list[tuple[Matcher, asyncio.Future[BcFrame]]] = []
         self._queues: list[asyncio.Queue[GlassesEvent]] = []
         self.stats: dict[str, FrameStat] = {}
+        self._partial = bytearray()
+        self._partial_total = 0
+        self._partial_at = 0.0
 
     async def start(self) -> None:
         async with self._lock:
@@ -56,7 +61,36 @@ class FrameChannel:
             stat.count += 1
             stat.last = moment
 
+    def _join_fragments(self, data: bytes, now: float) -> bytes | None:
+        """Reassemble a frame split over several notifications; None while it is incomplete.
+
+        Observed on this unit: a thumbnail chunk (1024 bytes) arrives as a BC header notification
+        followed by notifications of raw continuation bytes.
+        """
+        if self._partial and now - self._partial_at > FRAGMENT_GAP_S:
+            self._count("dropped partial frame", now)
+            self._partial.clear()
+        if self._partial:
+            self._partial += data
+            self._partial_at = now
+            if len(self._partial) < self._partial_total:
+                return None
+            whole = bytes(self._partial[: self._partial_total])
+            self._partial.clear()
+            return whole
+        if len(data) >= HEADER_LEN and data[0] == START_BYTE:
+            total = HEADER_LEN + int.from_bytes(data[2:4], "little")
+            if len(data) < total <= MAX_FRAME_BYTES:
+                self._partial += data
+                self._partial_total, self._partial_at = total, now
+                return None
+        return data
+
     def _on_data(self, _uuid: str, data: bytes) -> None:
+        joined = self._join_fragments(data, time.time())
+        if joined is None:
+            return
+        data = joined
         try:
             frame = parse_bc_frame(data)
         except ProtocolError as exc:
