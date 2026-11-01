@@ -58,6 +58,7 @@ class RunReport:
     saved: bool = False
     jpeg_ok: bool | None = None
     stopped_early: bool = False
+    events: list[str] = field(default_factory=list)
 
     def render(self, secrets: tuple[str, ...] = ()) -> str:
         yes = {True: "yes", False: "NO", None: "n/a"}
@@ -73,6 +74,8 @@ class RunReport:
             f"JPEG valid: {yes[self.jpeg_ok]}",
             f"Wi-Fi came back: {yes[self.wifi_back]}; internet after: {yes[self.internet_after]}",
             f"Errors: {'; '.join(self.errors) if self.errors else 'none'}",
+            f"BLE events after the enable write: {len(self.events) or 'none'}",
+            *(f"  {line}" for line in self.events),
         ]
         if self.wifi_back is False or self.internet_after is False:
             lines.append(MANUAL_RESTORE)
@@ -89,12 +92,18 @@ class IpWatcher:
     def __init__(self, events: AsyncIterator[GlassesEvent]) -> None:
         self._events = events
         self._task: asyncio.Task[str] | None = None
+        self._started = 0.0
+        self.log: list[str] = []
 
     def start(self) -> None:
+        self._started = time.perf_counter()
         self._task = asyncio.create_task(self._listen())
 
     async def _listen(self) -> str:
         async for event in self._events:
+            seen = time.perf_counter() - self._started
+            shown = "(masked)" if event.kind == "ip_address" else event.raw[:24].hex()
+            self.log.append(f"+{seen:5.2f}s {event.kind} {shown}")
             if event.kind == "ip_address":
                 return str(event.fields["ip"])
         raise IpEventMissing("the event stream ended without an address")
@@ -184,6 +193,7 @@ class WifiDirectRun:
     ) -> None:
         """Always: stop listening, leave the group, restore Wi-Fi, and record the result."""
         await self.ip.stop()
+        report.events = self.ip.log[:20]
         if session is None:
             if advertising:
                 await self.adapter.disconnect()
