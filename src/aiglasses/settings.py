@@ -101,6 +101,8 @@ class AssistantSettings(BaseSettings):
     tts_voice: str = "bf_isabella"
     tts_speed: float = Field(1.05, gt=0.25, le=3.0)
     tts_first_clause_max_words: int = Field(6, ge=2)
+    tts_sentence_pause_s: float = Field(0.3, ge=0.0, le=1.5)  # silence between sentences
+    tts_clause_pause_s: float = Field(0.12, ge=0.0, le=1.0)  # silence at commas
     tts_model_dir: Path = Path("bench/models")
     stt_model_dir: Path = Path("bench/models")
 
@@ -189,6 +191,11 @@ class AssistantSettings(BaseSettings):
 
     # Vision
     vision_provider: Literal["off", "local", "cloud"] = "off"
+    vision_allow_cloud: bool = False  # cloud vision only if this is true as well
+    wifi_direct_enabled: bool = (
+        False  # fetch photos over Wi-Fi Direct (needs the helper, unverified)
+    )
+    wifi_direct_helper_python: Path = Path("tools/wifidirect-env/Scripts/python.exe")
     vision_max_image_side: int = Field(768, gt=0)
 
     # Live calls (cloud or search) made through `assistant check`

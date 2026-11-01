@@ -38,14 +38,22 @@ from aiglasses.assistant.speaker import NullSink, SubprocessSpeakerSink
 from aiglasses.assistant.tools.base import ToolRegistry
 from aiglasses.assistant.tools.device import DeviceHolder
 from aiglasses.assistant.tools.factory import build_registry
-from aiglasses.assistant.vision import GlassesWifiImageSource, build_vision
+from aiglasses.assistant.vision import GlassesWifiImageSource, ImageSource, build_vision
 from aiglasses.assistant.wake import WakePhrases
 from aiglasses.config import Settings
-from aiglasses.domain.errors import ConfigError, GlassesError
+from aiglasses.domain.errors import ConfigError, GlassesError, NotSupportedError
 from aiglasses.glasses import Glasses
+from aiglasses.services.photo_fetch import (
+    HelperWifiDirect,
+    PhotoFetcher,
+    SubprocessHelper,
+    WifiDirectImageSource,
+    enable_not_approved,
+)
 from aiglasses.settings import AssistantSettings
 
 console = Console()
+HELPER_SCRIPT = Path(__file__).resolve().parents[1] / "helpers" / "wifidirect_helper.py"
 
 
 @dataclass
@@ -257,11 +265,33 @@ def _registry(
     enabled = assistant.enabled_tools
     search = build_search(assistant) if "search_web" in enabled else None
     vision = None
+    source: ImageSource = GlassesWifiImageSource()
+    if assistant.wifi_direct_enabled:
+        source = _wifi_direct_source(assistant, holder)
     if assistant.vision_provider == "local":
         vision = build_vision(assistant, base_url)
-    elif assistant.vision_provider == "cloud":
+    elif assistant.vision_provider == "cloud" and assistant.vision_allow_cloud:
         vision = CloudVision(assistant.llm_role("main"), assistant.vision_max_image_side)
     return build_registry(
         assistant, device=holder, memory=memory, intents=Intents.load(assistant.intents_path),
-        search=search, image_source=GlassesWifiImageSource(), vision=vision,
+        search=search, image_source=source, vision=vision,
     )  # fmt: skip
+
+
+class _NoIpEvents:
+    """The BLE IP event is not wired until the Wi-Fi Direct enable command is approved."""
+
+    async def wait_ip(self, timeout: float) -> str:
+        raise NotSupportedError("waiting for the glasses' IP is not wired yet")
+
+
+def _wifi_direct_source(assistant: AssistantSettings, holder: DeviceHolder) -> ImageSource:
+    helper = SubprocessHelper([str(assistant.wifi_direct_helper_python), "-I", str(HELPER_SCRIPT)])
+    adapter = HelperWifiDirect(helper)
+    fetcher = PhotoFetcher(
+        take_photo=lambda: holder.take_photo(confirm=True),
+        enable_discovery=enable_not_approved,  # a BLE write: needs the user's approval of the bytes
+        wifi=adapter, host=adapter, events=_NoIpEvents(), save_dir=Path("captures") / "photos",
+        peer_prefix="AIMB-G2",
+    )  # fmt: skip
+    return WifiDirectImageSource(fetcher)

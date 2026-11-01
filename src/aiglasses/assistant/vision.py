@@ -28,6 +28,14 @@ class VisionError(GlassesError):
     pass
 
 
+class ImageUnavailable(GlassesError):
+    """The image could not be fetched. `spoken` is the short line to say."""
+
+    def __init__(self, message: str, spoken: str) -> None:
+        super().__init__(message)
+        self.spoken = spoken
+
+
 class ImageSource(Protocol):
     async def capture(self) -> bytes:
         """Return one image (JPEG or PNG bytes)."""
@@ -134,6 +142,8 @@ class DescribeSceneTool:
             raise ToolRefused("vision is off", "Looking is switched off.")
         try:
             image = await self._source.capture()
+        except ImageUnavailable as exc:
+            raise ToolRefused(str(exc), exc.spoken) from exc
         except NotSupportedError as exc:
             raise ToolRefused(
                 "image source not supported",

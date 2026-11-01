@@ -229,3 +229,16 @@ def test_the_example_tool_list_enables_everything_the_task_names() -> None:
     names = set(settings().enabled_tools)
     assert {"search_web", "get_time", "get_weather", "take_photo", "read_battery",
             "read_media_counts", "forget_all_that", "describe_scene"} <= names  # fmt: skip
+
+
+def test_speech_normalisation_reads_units_abbreviations_and_symbols() -> None:
+    from aiglasses.assistant.cleaner import clean_reply
+
+    assert clean_reply("It is 12 km away at 30 km/h.") == (
+        "It is twelve kilometres away at thirty kilometres per hour."
+    )
+    assert clean_reply("Dr. Rao and Mr. Shah, e.g. today, vs. tomorrow.") == (
+        "Doctor Rao and Mister Shah, for example, today, versus tomorrow."
+    )
+    assert clean_reply("2 + 3 = 5 and yes/no") == "two plus three equals five and yes or no"
+    assert clean_reply("Mail me @ noon, about ~5 kg") == "Mail me at noon, about five kilograms"

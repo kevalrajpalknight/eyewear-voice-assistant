@@ -58,7 +58,9 @@ model exists only when `LLM_FAST_MODEL` is set.
 
 ## Text to speech
 `TTS_ENGINE` (`kokoro`), `TTS_VARIANT` (`int8` or `fp32`), `TTS_VOICE` (`bf_isabella`),
-`TTS_SPEED` (`1.05`), `TTS_FIRST_CLAUSE_MAX_WORDS` (`6`: fewer words, earlier first sound),
+`TTS_SPEED` (`1.05`; `1.0` is the voice's natural pace), `TTS_SENTENCE_PAUSE_S` (`0.3`) and
+`TTS_CLAUSE_PAUSE_S` (`0.12`) (silence between sentences and at commas), `TTS_VOICE` may be a blend
+such as `bf_isabella:0.6+bf_emma:0.4`, `TTS_FIRST_CLAUSE_MAX_WORDS` (`6`: fewer words, earlier first sound),
 `TTS_MODEL_DIR` (`bench/models`).
 
 ## Audio and session
@@ -130,7 +132,8 @@ them there.
 
 ## Vision
 `VISION_PROVIDER` (`off`, `local` or `cloud`; cloud sends the image to your provider),
-`VISION_MAX_IMAGE_SIDE` (`768` pixels).
+`VISION_ALLOW_CLOUD` (`false`; cloud vision also needs this), `WIFI_DIRECT_ENABLED` (`false`),
+`WIFI_DIRECT_HELPER_PYTHON` (the isolated helper's Python), `VISION_MAX_IMAGE_SIDE` (`768` pixels).
 
 ## Live calls and reasoning effort
 `LIVE_CALL_BUDGET` (`3`) is the lifetime number of real calls `assistant check` may make; reset it

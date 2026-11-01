@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
+import numpy as np
+
 from aiglasses.assistant.clauses import ClauseStream
 from aiglasses.assistant.cleaner import clean_reply
 from aiglasses.assistant.echo import Debug, TurnLog
@@ -41,6 +43,10 @@ from aiglasses.timefmt import stamps
 log = logging.getLogger("aiglasses.assistant")
 QUEUE_DEPTH = 3
 LENGTH_REASONS = ("length", "max_tokens", "MAX_TOKENS")  # the provider ran out of tokens
+
+
+def silence(seconds: float, rate: int = 24000) -> AudioChunk:
+    return AudioChunk(np.zeros(int(rate * seconds), dtype=np.int16), rate)
 
 
 class StageError(Exception):
@@ -291,6 +297,13 @@ class ConversationPipeline:
             if not cleaned:
                 return True
             record.clauses += 1
+            if spoken:  # a short silence between chunks, longer after a sentence
+                gap = (
+                    self.settings.tts_sentence_pause_s
+                    if spoken[-1].endswith((".", "?", "!"))
+                    else self.settings.tts_clause_pause_s
+                )
+                await queue.put(silence(gap))
             spoken.append(cleaned)
             async for audio in self.tts.synthesize_stream(cleaned, self.options):
                 if record.t_first_chunk is None:

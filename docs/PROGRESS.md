@@ -56,3 +56,27 @@ seen by me. To allow more calls, the user can reset or delete that file.
 ## Commit
 b980c7e holds M1 to M8 together (the pre-commit hook type-checks the whole tree, so the
 milestones could not be committed separately).
+
+## Round N (2026-11-01): search, camera, natural speech, EVA, Wi-Fi Direct helper
+| | State | Notes |
+|---|---|---|
+| N0 diagnose | done | `assistant diagnose`, docs/DIAGNOSIS.md (causes confirmed vs suspected) |
+| N1 search | done | explicit search intent, search first (even if local is down), results survive escalation, empty-cloud fallback, per-tool trace |
+| N2 camera | done | open the camera / snap / identify / what is this intents; plain "can't fetch the photo yet" |
+| N3a replies | done | soft limits at sentence ends, wrap-up line, finish-reason handling, cause of every early stop logged |
+| N3b prosody | done | whole-sentence chunks, pauses between chunks, more speech normalisation, voice blends |
+| N3c bake-off | partly | Kokoro (6 variants) and Piper (2 voices) rendered, WAVs and numbers in docs/TTS_BAKEOFF.md; Indic Parler and Pocket TTS NOT run (gated, over budget / too new) |
+| N4 EVA / wake | partly | identity, wake phrases, ack, `wake-test`, HFP probe built; hands-free modes not implemented (need your hardware tests) |
+| N5 Wi-Fi Direct | built with fakes | isolated env, helper, flow, tests; STOPPED before any real connection or the enable write |
+| N6 vision | partly | `describe_scene` wired to the fetcher; cloud vision needs `VISION_ALLOW_CLOUD`; local vision benchmark not run (no images in bench/data/images, RAM) |
+| N7 docs | done | CONFIG, README, design, latency notes updated |
+
+`.env` (edited with your permission; only these keys, no secret touched or printed): `TOOLS_ENABLED`
+(full list of eight tools) and `TTS_SPEED=1.0`.
+
+Decisions: wake phrases handled in the pipeline (always stripped; ignored only if `WAKE_REQUIRED`);
+EVA mis-hearings live in the wake list, not the glossary (the glossary skips words under four letters);
+chunk gaps are silence inserted by the pipeline; Piper is not wired into the assistant (judge by ear first).
+
+Open for you: listen to docs/TTS_BAKEOFF.md files; `wake-test`; approve (or not) the exact bytes in
+docs/WIFI_DIRECT_HELPER.md; put test images in bench/data/images for the vision benchmark.

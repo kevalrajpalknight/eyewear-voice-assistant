@@ -193,12 +193,33 @@ class KokoroTts:
         self._engine: Any = Kokoro(
             str(models_dir / "kokoro" / model), str(models_dir / "kokoro" / "voices-v1.0.bin")
         )
+        self._blends: dict[str, Any] = {}
+
+    def _voice(self, spec: str) -> Any:
+        """A voice id, or a blend such as `bf_isabella:0.6+bf_emma:0.4` (weights are normalised)."""
+        if "+" not in spec:
+            return spec
+        if spec not in self._blends:
+            parts = [p.partition(":") for p in spec.split("+")]
+            weights = [float(w) if w else 1.0 for _, _, w in parts]
+            styles = [self._engine.get_voice_style(name) for name, _, _ in parts]
+            total = sum(weights)
+            self._blends[spec] = sum(
+                w / total * style for w, style in zip(weights, styles, strict=True)
+            )
+        return self._blends[spec]
 
     async def synthesize_stream(self, text: str, options: TtsOptions) -> AsyncIterator[AudioChunk]:
-        lang = kokoro_language(options.voice, options.language)
+        first_voice = options.voice.split("+")[0].partition(":")[0]
+        lang = kokoro_language(first_voice, options.language)
         started = time.perf_counter()
+        pauses = {
+            key: float(options.extra[key])
+            for key in ("sentence_pause", "clause_pause")
+            if key in options.extra
+        }
         async for samples, rate in self._engine.create_stream(
-            text, voice=options.voice, speed=options.speed, lang=lang
+            text, voice=self._voice(options.voice), speed=options.speed, lang=lang, **pauses
         ):
             pcm = np.clip(samples * 32767.0, -32768, 32767).astype(np.int16)
             yield AudioChunk(pcm, int(rate), time.perf_counter() - started)

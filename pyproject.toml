@@ -90,7 +90,7 @@ files = ["src", "tests"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["psutil", "sounddevice", "soundfile", "moonshine_voice", "moonshine_voice.*", "faster_whisper", "kokoro_onnx", "sherpa_onnx"]
+module = ["winrt.*", "psutil", "sounddevice", "soundfile", "moonshine_voice", "moonshine_voice.*", "faster_whisper", "kokoro_onnx", "sherpa_onnx"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

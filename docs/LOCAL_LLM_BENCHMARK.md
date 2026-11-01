@@ -57,3 +57,9 @@ only comparable when both are measured on the same day on the same network.
 ## Recommendation
 None yet; the default stays your choice once the numbers exist. A prior to test: Qwen3 1.7B for
 lane 1 (smallest, quickest first token), Gemma 4 E2B if one server for chat and vision matters.
+
+## Vision candidates (N6) - not run
+Put test photos in `bench/data/images/` (gitignored) and free some RAM; then Gemma 4 E2B with its
+projector can be timed on them with `bench.local_llm_bench gemma-4-e2b-q4_k_m --vision`. Moondream,
+SmolVLM2 and Qwen small vision models were not downloaded (no images yet, and the model budget has
+0.6 GB left of 8 GB). The synthetic red-square check is the only vision test so far, and it was not run.

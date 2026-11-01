@@ -47,3 +47,31 @@ models:
     - filename: mmproj-BF16.gguf
       sha256: a402f10fb5780bf91d03a10cd89061139f522bee2e679b1291bbfdcd71d9547d
       size: 986833728
+  piper-en-gb-alba-medium:
+    repo: rhasspy/piper-voices
+    revision: c10ece1aade47bb51c153c893d14e5bf8e5b7117
+    license: MIT (voice dataset licence per its model card)
+    role: Piper English voice (TTS bake-off)
+    kind: tts
+    gated: false
+    filename: en/en_GB/alba/medium/en_GB-alba-medium.onnx
+    sha256: 401369c4a81d09fdd86c32c5c864440811dbdcc66466cde2d64f7133a66ad03b
+    size: 63201294
+    companions:
+    - filename: en/en_GB/alba/medium/en_GB-alba-medium.onnx.json
+      sha256: aa965a2f02ecced632c2694e1fc72bbff6d65f265fab567ca945918c73dd89f4
+      size: 4888
+  piper-en-gb-jenny-dioco-medium:
+    repo: rhasspy/piper-voices
+    revision: c10ece1aade47bb51c153c893d14e5bf8e5b7117
+    license: MIT (voice dataset licence per its model card)
+    role: Piper English voice (TTS bake-off)
+    kind: tts
+    gated: false
+    filename: en/en_GB/jenny_dioco/medium/en_GB-jenny_dioco-medium.onnx
+    sha256: 469c630d209e139dd392a66bf4abde4ab86390a0269c1e47b4e5d7ce81526b01
+    size: 63201294
+    companions:
+    - filename: en/en_GB/jenny_dioco/medium/en_GB-jenny_dioco-medium.onnx.json
+      sha256: a9a7a93a317c9a3cb6563e37eb057df9ef09c06188a8a4341b0fcb58cba54dd4
+      size: 4895

@@ -30,7 +30,14 @@ console = Console()
 
 
 def tts_options(assistant: AssistantSettings) -> TtsOptions:
-    return TtsOptions(voice=assistant.tts_voice, speed=assistant.tts_speed)
+    return TtsOptions(
+        voice=assistant.tts_voice,
+        speed=assistant.tts_speed,
+        extra={
+            "sentence_pause": str(assistant.tts_sentence_pause_s),
+            "clause_pause": str(assistant.tts_clause_pause_s),
+        },
+    )
 
 
 def load_glossary(assistant: AssistantSettings) -> Glossary | None:

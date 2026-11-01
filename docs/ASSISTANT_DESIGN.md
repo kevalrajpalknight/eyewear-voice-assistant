@@ -151,3 +151,20 @@ utterance -> STT -> LocalFirstClient
   and joining adds no waiting.
 - **Not verified live:** the whole loop with real glasses and a real cloud model; local speed
   numbers (see LOCAL_LLM_BENCHMARK.md).
+
+## Identity, wake phrases and speech (round N)
+- **EVA.** The persona uses `ASSISTANT_NAME` and `ASSISTANT_NAME_LONG`. A request that starts with
+  "EVA", "hey EVA", "hello EVA" or "EVA listen" (and common mis-hearings such as Ava, Eve, Evo) has the
+  phrase removed before routing; only the phrase gets "Yes?". `WAKE_REQUIRED=true` ignores speech
+  without it. For rear-click sessions the start already implies intent, so the default is off.
+- **Hands-free is not built.** `WAKE_MODE=glasses_phrase` needs the result of `aiglasses wake-test`
+  (does the glasses' own wake phrase start a BLE voice session?). `hfp_experimental` needs the result of
+  `wake-test --hfp` (can the headset microphone feed a continuous detector, and what does it do to the
+  speaker quality?). Both are read-only tests you run; neither mode is implemented. A follow-up listening
+  window needs a safe way to restart voice sessions: the app's heartbeat (`bc450200c2400701`) and exit
+  (`02 01 0B`) are INFERRED only and need your approval (docs/PROTOCOL.md).
+- **Speech.** Chunks are whole sentences (first chunk: a sentence, or a comma after 8 words), short
+  sentences merge, silence is inserted between chunks, numbers, units, abbreviations and symbols are
+  read out, and a reply is never cut mid-sentence (soft limits, wrap-up line).
+- **Photo to vision.** `describe_scene` -> `PhotoFetcher` (docs/WIFI_DIRECT_HELPER.md) -> `VisionClient`.
+  Until the enable write is approved it says plainly that it cannot fetch the photo.
