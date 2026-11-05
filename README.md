@@ -1,85 +1,134 @@
-# aiglasses
+# EVA — Eyewear Voice Assistant
 
-Python core library and CLI for AIMB-G2 AI glasses. Personal interoperability project, tested on Windows 11.
+**A friendly, experimental voice assistant for AIMB-G2 smart glasses.**
 
-## Quickstart (Windows / PowerShell)
+EVA connects the glasses to your Windows PC, explores their Bluetooth features, and provides the building blocks for a voice assistant. The project is designed for curious glasses owners and developers alike: you can start with simple device checks, or dive into the Python library and assistant code.
+
+> **A personal interoperability project — not an official product from the glasses' manufacturer.** Some features are verified on real hardware; others are experimental or still need testing. See [what works today](#what-works-today) before trying a feature.
+
+## What EVA can do
+
+| For glasses owners | For builders |
+|---|---|
+| Check whether the glasses are nearby and awake | Use an asynchronous Python library and command-line tools |
+| Read device details, battery level, and media counts | Explore the Bluetooth protocol and captured device behavior |
+| Listen to and decode a glasses voice recording | Experiment with speech recognition, text-to-speech, and language-model routing |
+| Try an experimental voice-assistant workflow | Extend the assistant with tools and alternate model providers |
+
+### The idea, in everyday terms
+
+1. **You speak** using the glasses' rear button.
+2. **Your PC turns speech into text** using a speech-recognition model.
+3. **EVA works out what to do** — for example, answer a simple question or use an enabled tool.
+4. **A voice reads the answer aloud** through the selected audio output.
+
+The glasses and PC communicate over Bluetooth. Depending on your settings and the feature being used, EVA may also connect to a model provider or an online search service.
+
+## What works today
+
+The project keeps a record of what has been verified, what is inferred, and what still needs testing. Highlights:
+
+- **Bluetooth discovery and device information:** confirmed on Windows 11.
+- **Battery and media counts:** confirmed read-only device checks.
+- **Voice decoding:** a recorded glasses voice stream has been decoded and listened to.
+- **Taking a photo:** supported as an explicit, one-photo action that asks for confirmation.
+- **Voice assistant:** the software and setup checks are available, but a complete live conversation with real glasses, a model provider, and audible output has not yet been verified end to end.
+
+For the detailed status and known limitations, see [Capabilities](docs/CAPABILITIES.md). For the assistant's design and verification gates, see [Assistant design](docs/ASSISTANT_DESIGN.md).
+
+## Try it on Windows
+
+### You will need
+
+- AIMB-G2 smart glasses
+- Windows 11 with Bluetooth turned on
+- [uv](https://docs.astral.sh/uv/) to install and run the project
+
+Before scanning, wake the glasses and disconnect them from the phone app.
+
+### 1. Install and find your glasses
+
+Open PowerShell in this project folder:
 
 ```powershell
 uv sync
 uv run aiglasses --help
-uv run aiglasses scan            # find the glasses, saves address to config.toml
-uv run aiglasses info            # device name / hardware / firmware (read-only)
-uv run aiglasses gatt-dump       # logs/gatt_dump.json
-uv run aiglasses listen --duration 60
-uv run aiglasses capabilities    # what is CONFIRMED on this unit
-uv run aiglasses photo           # ONE photo; asks you to confirm you are watching (you type the answer)
-uv run aiglasses ai-voice record # read-only: hold the rear click, saves a WAV under captures/
-uv run aiglasses voice candidates   # offline: decode the logged voice bursts to logs/decode_candidates/
-uv run aiglasses capture analyze captures\bugreport.zip   # Phase 3, see docs/CAPTURE.md
+uv run aiglasses scan
 ```
 
-Turn Bluetooth on in Windows and make sure the glasses are awake and not connected to a phone.
+### 2. Explore safely
 
-## Voice assistant quickstart
+These commands inspect the glasses or listen for events:
 
-Single-click the rear button, speak, hear the answer on the PC speakers. Speech is recognised
-locally; only the text of your request goes to the LLM provider you choose.
+```powershell
+uv run aiglasses info
+uv run aiglasses capabilities
+uv run aiglasses gatt-dump
+uv run aiglasses listen --duration 60
+uv run aiglasses ai-voice record
+uv run aiglasses voice candidates
+```
+
+`scan` saves the discovered address to `config.toml`. The voice recording command is read-only and saves a WAV file under `captures/`; the voice candidate command works offline with logged voice data.
+
+### 3. Try the experimental voice assistant
+
+Install the optional assistant dependencies, then configure a language-model provider:
 
 ```powershell
 uv sync --extra assistant --extra research --extra llm
-python -m bench.models                  # in bench/: download the speech models (checksummed)
-copy .env.example .env                  # then edit .env: LLM_PROVIDER, LLM_MODEL, LLM_API_KEY
-uv run aiglasses assistant check        # validates everything; secrets show only as set / NOT set
-uv run aiglasses assistant run          # glasses mic -> STT -> LLM -> TTS -> PC speakers
+Copy-Item .env.example .env
 ```
 
-Close the phone app first and keep the phone's Bluetooth off. The glasses end a voice session
-about 4.8 s after the click, so speak straight away and keep requests short; a second click soon
-after a cut-off request is joined to it. Changing provider, model, router, speech engine, voice or
-speed means editing `.env` only: see `docs/CONFIG.md`. `assistant run --wav file.wav --output null`
-runs one turn from a recording without sound; `assistant echo` repeats what it heard (no LLM).
-
-### Local model setup (optional, `ROUTER_MODE=local_first`)
+Edit `.env` with your provider, model, and API key, then check the setup before starting:
 
 ```powershell
-uv sync --extra assistant --extra research --extra llm --extra search
-uv run aiglasses models pull llama.cpp            # llama-server, sha256 checked, into tools/
-uv run aiglasses models list                      # sizes, licences, 8 GB download budget
-uv run aiglasses models pull qwen3-1.7b-q4_k_m    # into models/ (gitignored), sha256 checked
-# in .env: ROUTER_MODE=local_first   LOCAL_LLM_MODEL=qwen3-1.7b-q4_k_m   TOOLS_ENABLED=...
-uv run aiglasses assistant check                  # shows the resolved local settings
-uv run aiglasses assistant run                    # starts the local server itself (127.0.0.1)
+uv run aiglasses assistant check
+uv run aiglasses assistant run
 ```
 
-`aiglasses llm-server start|status|stop` runs the server on its own. The server cannot outlive the
-program (Windows job object). If it is down, requests go to the cloud model. Free some RAM first:
-a 1 to 4 GB model needs headroom. Details: `docs/ASSISTANT_DESIGN.md`, `docs/CONFIG.md`.
+The current quickstart uses the glasses' microphone and PC speakers. Local speech recognition is used; when a cloud language model is configured, the assistant sends it the recognized text, not the raw voice recording. Logs are designed not to retain transcripts by default. Review [Configuration](docs/CONFIG.md) for provider choices, privacy settings, optional local models, and other details. **The full live setup is experimental and has not been verified end to end**, so check [Capabilities](docs/CAPABILITIES.md) and [Assistant design](docs/ASSISTANT_DESIGN.md) first.
 
-## Library
+## Built with safety and evidence in mind
+
+- **No surprise writes:** Bluetooth commands pass through a write guard. Only confirmed commands or exact payloads approved for the session can be sent; dangerous update and reset operations are refused.
+- **Your choice to proceed:** photo capture asks for confirmation. Hardware tests that could change device state should only be done with the person using the glasses present.
+- **Measured versus unknown:** capability notes distinguish confirmed behavior from inferences and unverified features.
+- **Privacy-conscious defaults:** secrets are redacted in checks and logs; transcripts and audio are not saved by default.
+
+Read the [architecture and write-safety notes](docs/ARCHITECTURE.md) before adding or testing Bluetooth commands.
+
+## For developers
+
+The library can be used directly from Python:
 
 ```python
-async with Glasses.connect(Settings(), dry_run=False) as g:
-    print(await g.read_battery(), await g.read_device_info(), await g.read_media_counts())
-    async for event in g.events():            # typed 0x73 events and the 0x59 voice stream
+async with Glasses.connect(Settings(), dry_run=False) as glasses:
+    print(await glasses.read_battery())
+    print(await glasses.read_device_info())
+    print(await glasses.read_media_counts())
+
+    async for event in glasses.events():
         print(event.kind, event.fields)
-    # await g.take_photo(confirm=True)        # state-changing: only when the person present agrees
 ```
 
-Every request goes through WriteGuard; only the three confirmed reads and the confirmed photo are sendable.
+The code is organized in layers: the command-line interface and glasses facade sit above services, safety checks, protocol code, and transports. The assistant is separated into speech, listening, conversation, language-model, and tool packages. See [Architecture](docs/ARCHITECTURE.md) for the map.
 
-## Development
+To run the project checks:
 
 ```powershell
-uv run nox                       # lint, typecheck, tests
-uv run pre-commit install
+uv run nox
 ```
 
-## Safety
+## Project guide
 
-Nothing is ever written to the glasses unless the exact payload came from an observed capture of the
-official app (`protocol/commands.yaml`) or you approve it in-session. Firmware/OTA-looking commands are always
-refused. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- [Capabilities and verification status](docs/CAPABILITIES.md)
+- [Architecture and write safety](docs/ARCHITECTURE.md)
+- [Assistant design and testing gates](docs/ASSISTANT_DESIGN.md)
+- [Configuration, providers, and privacy options](docs/CONFIG.md)
+- [Protocol notes](docs/PROTOCOL.md)
+- [Capture and analysis guide](docs/CAPTURE.md)
 
-## Status
+---
 
-Phases 0 (scaffold), 1 (read-only BLE core) and 2 (Bluetooth audio) complete; Phase 3 tooling is ready and waits for your phone capture. See [docs/CAPABILITIES.md](docs/CAPABILITIES.md) and [docs/PROTOCOL.md](docs/PROTOCOL.md).
+**EVA is a work in progress.** If you are new to smart-glasses development, start with the Windows quickstart and the capability table. If you are a developer, the architecture and protocol notes are the best place to begin.
